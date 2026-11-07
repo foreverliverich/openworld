@@ -250,7 +250,7 @@ python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_wo
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765). The client projects committed
 world entities, displays persisted organism physiology, advances the runtime,
-commits World Builder and Body Forge actions, and inspects the event journal.
+exposes all six toolbox domains (Body Forge, World Builder, Tool Fabricator, Life Generator, Movement Lab and Research Lab), and inspects the event journal.
 The browser uses a Three.js CDN import; Python, SQLite and the simulation remain
 local. Current body creation still produces a rigid prototype, not an articulated
 animal. The full implementation status and next integration queue are maintained
