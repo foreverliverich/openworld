@@ -232,3 +232,32 @@ updated physiology is committed back into those fields in the same transaction.
 The fields do not yet deform geometry, and the cognitive variables are a compact
 state model rather than a trained cognitive architecture. Those are subsequent
 research and implementation milestones.
+
+
+## Run the integrated browser application
+
+The repository now includes a local HTTP/API adapter and a Three.js client over the
+same authoritative RealityEngine, organism kernel, autonomous agent, runtime and
+six-domain toolbox. It does not create a parallel renderer-owned simulation.
+
+From the repository root:
+
+```bash
+python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_world.sqlite3
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). The client projects committed
+world entities, displays persisted organism physiology, advances the runtime,
+commits World Builder and Body Forge actions, and inspects the event journal.
+The browser uses a Three.js CDN import; Python, SQLite and the simulation remain
+local. Current body creation still produces a rigid prototype, not an articulated
+animal. The full implementation status and next integration queue are maintained
+in [docs/IMPLEMENTATION_LEDGER.md](docs/IMPLEMENTATION_LEDGER.md).
+
+The HTTP service binds to loopback by default. Do not expose it beyond the local
+machine until authentication, origin/CSRF protections and a security review are
+implemented. Run the API integration tests with:
+
+```bash
+python -m unittest discover -s tests -p "test_http_server.py" -v
+```
