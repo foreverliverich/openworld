@@ -316,9 +316,12 @@ class RealityEngine:
         for other in others:
             if self._overlaps(candidate, other, self.config.contact_tolerance * 0.1):
                 raise InvalidWorldAction(f"Placement intersects entity {other.entity_id}")
-        if not self._has_support(candidate, others):
+        # Dynamic bodies may be spawned airborne and then resolve contacts
+        # through the fixed-step physics integrator. Static construction must
+        # have support at commit time.
+        if not candidate.dynamic and not self._has_support(candidate, others):
             raise InvalidWorldAction(
-                "Placement is unsupported; place it on the ground or on a supporting entity"
+                "Static construction is unsupported; place it on the ground or on a supporting entity"
             )
 
     def _event_hash(self, previous_hash: str, event_body: dict[str, Any]) -> str:
