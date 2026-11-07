@@ -35,7 +35,7 @@ class OrganismKernelTests(unittest.TestCase):
         persisted = self.world.get_organism_state()
         self.assertEqual(persisted["schema_version"], 1)
         self.assertIn("body", persisted)
-        self.assertEqual(persisted, self.organism.state.to_dict())
+        self.assertEqual(ISCEOrganismState.from_dict(persisted), self.organism.state)
         local = self.world.field_at(self.organism.state.position)
         self.assertAlmostEqual(local["energy"], self.organism.state.body.energy)
         self.assertAlmostEqual(local["stress"], self.organism.state.body.stress)
