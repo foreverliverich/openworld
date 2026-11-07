@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Mapping, Optional, Tuple
 
 SCHEMA_VERSION = 1
@@ -155,6 +155,7 @@ class ResourceState:
 @dataclass(frozen=True)
 class OrganismState:
     organism_id: str
+    position: Tuple[float, float, float] = (0.0, 1.0, 0.0)
     body: BodyState = field(default_factory=BodyState)
     interoception: InteroceptiveState = field(default_factory=InteroceptiveState)
     sensorimotor: SensorimotorState = field(default_factory=SensorimotorState)
@@ -171,6 +172,14 @@ class OrganismState:
             raise ISCEError(f"Unsupported state schema: {self.schema_version}")
         if self.temporal.tick < 0 or self.temporal.organism_time < 0:
             raise ISCEError("Temporal counters cannot be negative")
+        if len(self.position) != 3 or not all(math.isfinite(float(v)) for v in self.position):
+            raise ISCEError("position must contain three finite coordinates")
+
+    def with_goal(self, goal: Optional[str]) -> "OrganismState":
+        return replace(self, self_model=replace(self.self_model, active_goal=goal))
+
+    def at_position(self, position: Tuple[float, float, float]) -> "OrganismState":
+        return replace(self, position=tuple(float(v) for v in position))
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -182,6 +191,7 @@ class OrganismState:
             raise ISCEError("Unsupported or missing organism state schema_version")
         return cls(
             organism_id=str(data["organism_id"]),
+            position=tuple(float(v) for v in data.get("position", (0.0, 1.0, 0.0))),
             body=BodyState(**data["body"]),
             interoception=InteroceptiveState(**data["interoception"]),
             sensorimotor=SensorimotorState(**data["sensorimotor"]),
@@ -401,6 +411,7 @@ class ISCEKernel:
 
         next_state = OrganismState(
             organism_id=state.organism_id,
+            position=state.position,
             body=BodyState(energy, stress, integrity, fatigue,
                            abs(0.75 - energy) + abs(0.12 - stress)),
             interoception=InteroceptiveState(hunger, pain, arousal,
