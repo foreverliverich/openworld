@@ -753,7 +753,14 @@ class RealityEngine:
         self, state: dict[str, Any], field_values: dict[str, float], *,
         actor_id: str, expected_revision: Optional[int] = None,
     ) -> WorldResult:
-        """Atomically commit organism state and local morphogenic fields."""
+        """Atomically commit the single versioned ISCE state and local fields."""
+        required = {"organism_id", "schema_version", "position", "body",
+                    "interoception", "sensorimotor", "temporal",
+                    "self_model", "attention", "resources"}
+        if not required.issubset(state) or state.get("schema_version") != 1:
+            raise InvalidWorldAction(
+                "Only complete schema-v1 ISCE organism states may be committed"
+            )
         if set(field_values) - set(FIELD_NAMES):
             raise InvalidWorldAction("Organism tick contains an unknown field")
         for name, value in field_values.items():
