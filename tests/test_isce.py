@@ -90,6 +90,36 @@ class ISCEKernelTests(unittest.TestCase):
         changed = alternate.transition(self.initial, self.inputs).state
         self.assertNotEqual(baseline, changed)
 
+    def test_signed_edge_weights_produce_inhibitory_effects(self):
+        from chimera.isce import CausalEdge
+        canonical = CausalGraph.canonical()
+        inhibitory_edges = tuple(
+            CausalEdge(edge.source, edge.target,
+                       -abs(edge.weight) if edge.source == "body"
+                       and edge.target == "interoception" else edge.weight)
+            for edge in canonical.edges
+        )
+        inhibitory = ISCEKernel(
+            graph=CausalGraph(canonical.nodes, inhibitory_edges)
+        )
+        excitatory_state = self.kernel.transition(self.initial, self.inputs).state
+        inhibitory_state = inhibitory.transition(self.initial, self.inputs).state
+        self.assertNotEqual(
+            excitatory_state.interoception.precision,
+            inhibitory_state.interoception.precision,
+        )
+
+    def test_state_rejects_nonfinite_or_out_of_range_partitions(self):
+        from chimera.isce import BodyState
+        with self.assertRaises(ISCEError):
+            OrganismState("invalid", body=BodyState(energy=float("nan")))
+        with self.assertRaises(ISCEError):
+            OrganismState("invalid", body=BodyState(energy=1.5))
+
+    def test_kernel_rejects_noncanonical_partition_graph(self):
+        with self.assertRaises(ISCEError):
+            ISCEKernel(graph=CausalGraph(("body",), ()))
+
     def test_graph_rejects_unknown_edges(self):
         from chimera.isce import CausalEdge
         with self.assertRaises(ISCEError):
