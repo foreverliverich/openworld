@@ -11,7 +11,7 @@ model whose topology and weights are fingerprinted and checked on transitions.
 - Versioned, serializable intrinsic state with body/allostatic,
   interoceptive, sensorimotor, temporal, self-model, attention and resource
   partitions in one immutable state value.
-- Immutable directed causal graph with fixed edge weights and fingerprint.
+- Immutable directed causal graph with fixed edge weights and fingerprint; weighted incoming activations are propagated into the transition equations, and edge-weight changes are covered by a causal-effect test.
 - Pure deterministic transition function with finite/range validation.
 - Explicit measured-work input kept separate from simulated reserve units.
 - Bounded intervention API for CCPL experiments; interventions cannot mutate
