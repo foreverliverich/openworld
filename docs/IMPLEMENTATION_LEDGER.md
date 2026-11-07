@@ -53,7 +53,7 @@ The browser's Three.js dependency is loaded from a CDN. The simulation, state, S
 
 The new API integration test file is `tests/test_http_server.py`. The full suite is configured in `.github/workflows/chimera-tests.yml` to run on branch pushes and pull requests.
 
-**Do not mark tests passing until a GitHub Actions run reports success.** The authoring environment could not clone the repository directly, so local execution has not been claimed. Record the Actions run URL, commit SHA, job result and any failures here after the workflow completes.
+**Verified passing:** GitHub Actions run [42422927651](https://github.com/foreverliverich/openworld/actions/runs/42422927651) completed successfully for commit `35e19f74b855049a572f09b7641e2abcf6bd6c23`; the `unit-tests` job and `Run standard-library test suite` step both report success. The authoring environment could not clone the repository directly, so this verification is from the hosted CI runner, not a local execution.
 
 ## Next implementation queue (ordered by dependency)
 
@@ -103,4 +103,4 @@ The new API integration test file is `tests/test_http_server.py`. The full suite
 - Added `chimera/http_server.py`: local HTTP server around the single existing world/organism/agent/runtime/toolbox instance.
 - Added `web/index.html`: live Three.js projection of authoritative entities, physiology telemetry, object creation, body prototype creation and event-chain inspection.
 - Added `tests/test_http_server.py`: HTTP-level integration tests for health/static serving, state consistency, toolbox commit visibility, stale revision rejection, runtime tick and invalid tick limits.
-- Verification pending GitHub Actions; no test pass is claimed yet.
+- GitHub Actions full standard-library suite passed on commit `35e19f74b855049a572f09b7641e2abcf6bd6c23` (run `42422927651`).
