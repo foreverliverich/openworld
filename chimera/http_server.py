@@ -14,6 +14,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+from .somatic_kernel import generate_morph_package
 from urllib.parse import parse_qs, urlparse
 
 from . import (
@@ -176,6 +178,13 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self._read_json()
+            if self.path == "/api/somatic/morph":
+                description = payload.get("description")
+                current_label = payload.get("current_label", "")
+                if not isinstance(description, str) or not isinstance(current_label, str):
+                    raise ValueError("description and current_label must be strings")
+                package = generate_morph_package(description, current_label)
+                return self._json(200, {"package": package})
             if self.path == "/api/tick":
                 return self._json(200, self.app.tick(payload.get("ticks", 1)))
             if self.path == "/api/tool":
