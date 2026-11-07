@@ -36,7 +36,7 @@ Rapier is a candidate for the next physics adapter; it has not yet been wired in
 The canonical integration law is in [docs/TECQ-1KB-SEED-FOLD-BLUEPRINT.md](docs/TECQ-1KB-SEED-FOLD-BLUEPRINT.md), with a machine-readable companion at [docs/tecq-architecture-contract.json](docs/tecq-architecture-contract.json). Executable boundary checks live in `chimera/tecq/contract.py`; run their tests with:
 
 ```bash
-python -m unittest tests.test_tecq_contract -v
+python -m unittest discover -s tests -p "test_tecq_contract.py" -v
 ```
 
 These contracts preserve the 48-byte SomaticCell ABI, distinguish the compact identity seed from 4KB form genes and SEED2, and refuse to call a compact fold lossless without a complete external checkpoint. They do not claim that the TEC-Q solver or GPU implementation is complete.
