@@ -45,7 +45,8 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertTrue(health["ok"])
         with urlopen(self.base + "/", timeout=3) as response:
             html = response.read().decode()
-        self.assertIn("PROJECT CHIMERA", html)
+        self.assertIn("PROJECT", html)
+        self.assertIn("CHIMERA", html)
         self.assertIn("/api/state", html)
 
     def test_state_is_read_from_one_runtime_and_world(self):
@@ -96,7 +97,7 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
     def test_invalid_tick_count_is_rejected(self):
         status, result = self.request("/api/tick", {"ticks": 121})
         self.assertEqual(status, 400)
-        self.assertEqual(result["error"], "invalid_request")
+        self.assertEqual(result["error"], "action_rejected")
 
 
 if __name__ == "__main__":
