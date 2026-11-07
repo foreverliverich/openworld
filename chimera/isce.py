@@ -61,6 +61,8 @@ class CausalGraph:
     edges: Tuple[CausalEdge, ...]
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "nodes", tuple(self.nodes))
+        object.__setattr__(self, "edges", tuple(self.edges))
         if not self.nodes or len(set(self.nodes)) != len(self.nodes):
             raise ISCEError("Graph nodes must be non-empty and unique")
         known = set(self.nodes)
@@ -297,6 +299,10 @@ class ISCEKernel:
                  stress_recovery_rate: float = 0.025,
                  fatigue_recovery_rate: float = 0.018):
         self.graph = graph or CausalGraph.canonical()
+        required_nodes = {"body", "interoception", "sensorimotor", "temporal",
+                          "self_model", "attention", "resources"}
+        if set(self.graph.nodes) != required_nodes:
+            raise ISCEError("ISCE graph must define the seven canonical state partitions")
         self.basal_metabolic_rate = _finite("basal_metabolic_rate", basal_metabolic_rate)
         self.stress_recovery_rate = _finite("stress_recovery_rate", stress_recovery_rate)
         self.fatigue_recovery_rate = _finite("fatigue_recovery_rate", fatigue_recovery_rate)
@@ -347,6 +353,8 @@ class ISCEKernel:
     def transition(self, state: OrganismState, inputs: TransitionInput,
                    intervention: Optional[Intervention] = None) -> TransitionResult:
         inputs.validate()
+        if not isinstance(state, OrganismState):
+            raise ISCEError("state must be an ISCE OrganismState")
         if state.schema_version != SCHEMA_VERSION:
             raise ISCEError("State schema does not match this kernel")
         if intervention is not None and not isinstance(intervention, Intervention):
