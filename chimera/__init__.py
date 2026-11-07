@@ -12,9 +12,12 @@ from .reality_engine import (
     WorldResult,
 )
 from .organism_kernel import OrganismKernel, OrganismState
+from .autonomous_agent import AutonomousWorldAgent, AgentStep
+from .runtime import AutonomousRuntime, RuntimeFrame
 
 __all__ = [
     "ActionType", "Entity", "InvalidWorldAction", "RealityEngine",
     "RevisionConflict", "Vec3", "WorldConfig", "WorldError", "WorldResult",
-    "OrganismKernel", "OrganismState",
+    "OrganismKernel", "OrganismState", "AutonomousWorldAgent", "AgentStep",
+    "AutonomousRuntime", "RuntimeFrame",
 ]
