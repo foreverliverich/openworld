@@ -1,23 +1,16 @@
 const FORM = Object.freeze({ humanoid: 0, quadruped: 1, insect: 2, custom: 3 });
 
-const vertexShader = `#version 300 es
-precision highp float;
+const vertexShader = `precision highp float;
 in vec3 position;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
 out vec3 vLocalPosition;
 void main() {
   vLocalPosition = position;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 
-const fragmentShader = `#version 300 es
-precision highp float;
+const fragmentShader = `precision highp float;
 in vec3 vLocalPosition;
 out vec4 outColor;
-uniform mat4 modelMatrix;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
 uniform vec3 uCameraLocal;
 uniform float uFromForm;
 uniform float uToForm;
@@ -121,10 +114,8 @@ float mapBody(vec3 p) {
   float a=formDistance(warped,uFromForm);
   float b=formDistance(warped,uToForm);
   float d=mix(a,b,clamp(uMorph,0.0,1.0));
-  float skin=fBmUnused(p);
   return d;
 }
-float fBmUnused(vec3 p) { return (fbm(p*34.0)-0.5)*0.0025; }
 vec3 calcNormal(vec3 p) {
   const float e=0.0015;
   return normalize(vec3(
