@@ -15,6 +15,42 @@ This file is the durable engineering handoff. Update it in the same change as ev
 - Reconciliation and standing-decision documents are present on the current branch. GitHub Actions run [42424720110](https://github.com/foreverliverich/openworld/actions/runs/42424720110) passed the unit-tests job and standard-library test step for commit 2a7fd19f9cbfbd8c56fe39e8dbd5339e86e14192. This is documentation verification only, not evidence that missing body/ISCE/TEC-Q systems have been implemented.
 - Next engineering gate: implement the independently testable ISCE state-owner kernel and its deterministic transition/CCPL contract, then migrate current OrganismKernel state into it without adding a third owner. Preserve Somatic Core P0 visual body gate as a protected parallel product requirement. Follow both documents and keep their separate P0–P4 numbering intact. The full historical source-to-code reconciliation is maintained in [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); use it as the governing gap map and preserve its P0–P7 gates.
 
+## ISCE V-OMEGA P1 first executable kernel gate
+
+Added `chimera/isce.py` as an independent CPU-first state-transition kernel.
+The first executable state is one immutable, versioned value containing body,
+interoception, sensorimotor, temporal continuity, self-model, attention and
+internal resource partitions. The kernel is exported from `chimera` as
+`ISCEKernel` and `ISCEOrganismState` so it does not collide with the legacy
+`OrganismState` type.
+
+Verified kernel behavior covered by `tests/test_isce.py`:
+- identical initial state and inputs produce identical state/digest;
+- graph topology and structural weights remain fixed across transitions;
+- weighted graph propagation participates in the transition equations, and
+  changing an edge weight changes the resulting state;
+- bounded interventions alter the target state and propagate through the
+  fixed graph on subsequent transitions;
+- state serialization round-trips; previous-state digest and organism time
+  establish explicit temporal linkage;
+- non-finite inputs, unsupported interventions and invalid graph edges reject;
+- action readiness derives from intrinsic viability and reserve state.
+
+The canonical graph is an explicitly versioned first executable model, not a
+claim that every historical ISCE mechanism or the complete original graph has
+been recovered. Measured work units are kept distinct from simulated internal
+reserve units; no joule calibration is claimed.
+
+**Gate status: partial / first kernel slice implemented.** This does not yet
+complete V-OMEGA P1. Persistence and journal adapter, legacy
+`OrganismKernel` state migration, single-owner enforcement, restart/wake
+tests, full ICCR five-condition suite, intervention sham/double/mediation
+battery and causal-closure/commutation tests remain open. The existing
+`OrganismKernel` still owns the currently persisted organism state until that
+migration is implemented; ISCE is not yet wired into the running game/runtime.
+
+Implementation details and exact limits: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KERNEL_IMPLEMENTATION.md).
+
 ## System ownership invariants
 
 1. `RealityEngine` and its SQLite database are the sole authority for persistent world entities, transforms, physics, fields, revisions and world events.
