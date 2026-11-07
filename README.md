@@ -1,0 +1,131 @@
+# Chimera Open World — Reality Engine foundation
+
+This repository is the persistent world substrate for Project Chimera. It is not
+a chatbot avatar controller and it is not a renderer-owned game scene.
+
+## Core invariant
+
+**The database-backed world state is authoritative.** Cognition proposes edits;
+the Reality Engine validates and commits them; physics changes state; perception
+reads the committed state; memory can record the resulting observation. Rendering
+is a projection of that state and cannot silently invent world changes.
+
+## Current implementation
+
+`chimera/reality_engine.py` is a standard-library Python implementation:
+
+- SQLite WAL persistence with durable transactions.
+- Monotonic world revision and optimistic concurrency checks.
+- Atomic multi-part structure construction.
+- Stable entity IDs, material labels, mass, transforms, dimensions and metadata.
+- AABB intersection checks and static support checks.
+- Fixed-step gravity and ground/platform contact for dynamic box bodies.
+- Four persistent scalar fields: energy, stress, memory and cohesion.
+- Local observations, snapshots and a SHA-256 chained event journal.
+
+The first physics model is intentionally explicit and bounded: axis-aligned box
+colliders, simple gravity and vertical support contacts. It is not a full rigid
+body engine, deformable tissue solver, fluid solver or voxel terrain system.
+Rapier is a candidate for the next physics adapter; it has not yet been wired in.
+
+## Quick start
+
+Python 3.10+; no third-party package is required for the core.
+
+```bash
+python -m chimera.reality_engine
+python -m unittest discover -s tests -v
+```
+
+The demo creates a foundation, constructs a supported block and injects a memory
+field. It prints an observation and verifies the event hash chain.
+
+## Construction API
+
+A multi-part structure is committed as one transaction. Parts are processed in
+blueprint order, so a later part can be supported by an earlier part.
+
+```python
+from chimera.reality_engine import RealityEngine, WorldConfig
+
+world = RealityEngine(WorldConfig(database="world.sqlite3"))
+
+result = world.create_structure({
+    "name": "organism_shelter",
+    "parts": [
+        {
+            "kind": "foundation",
+            "position": [0, 0.5, 0],
+            "size": [4, 1, 4],
+            "material": "stone",
+            "mass": 80,
+            "dynamic": False
+        },
+        {
+            "kind": "wall",
+            "position": [0, 1.5, -1.5],
+            "size": [4, 2, 0.25],
+            "material": "wood",
+            "mass": 15,
+            "dynamic": False
+        }
+    ]
+}, actor_id="chimera", expected_revision=world.revision())
+
+observation = world.observe(center=(0, 1, 0), radius=12)
+print(result)
+print(observation)
+world.close()
+```
+
+The example above is a blueprint illustration. The static wall placement must
+satisfy the support and non-intersection rules of the current box model; build
+and validate each proposed blueprint against the actual world before treating it
+as a successful design.
+
+## Event and state contract
+
+Every accepted mutation:
+1. checks the caller's expected revision when supplied;
+2. validates the action against current committed entities;
+3. commits entity/field changes and an event in the same SQLite transaction;
+4. increments the global world revision exactly once.
+
+A rejected action changes neither entities nor revision. This supports causal
+auditability and stale-plan rejection. The event journal is hash chained to make
+tampering detectable. It is not yet a complete replay engine: field diffusion
+and every physics substep are not currently encoded as replay-complete deltas.
+
+## Next integration boundary
+
+The next layer must connect existing Chimera systems without creating a second
+source of truth:
+
+- `EnvironmentEngine`: adapter to/from canonical Reality Engine observations.
+- `SensoryProcessor`: convert committed observations and events into sensory
+  inputs.
+- `Somatic physiology`: constrain action selection using energy, stress,
+  integrity and repair state.
+- `SpatialMemory`: store grounded entities, relations and observed changes.
+- `LearningSystem`: store successful/failed construction methods as reusable
+  skills with outcome evidence.
+- `UnifiedConsciousnessIntegration` / autonomous coordinator: propose goals and
+  plans, never write directly to renderer state.
+- Three.js frontend: subscribe to revisioned world snapshots/deltas.
+
+Do not run a second physics simulation in the frontend. Do not claim that a
+blueprint was built until the Reality Engine has committed it and returned the
+new revision.
+
+## Current status and limitations
+
+This is a committed implementation foundation, not yet integrated into the
+existing uploaded FastAPI/Flask application. The uploaded code has multiple
+runtime entry points and websocket ports; those must be reconciled deliberately
+before connecting the frontend. The test suite is committed but has not been
+executed in this environment. Run the command above locally and fix any
+platform-specific issues before relying on it.
+
+The morphogenic fields currently diffuse as scalar state and do not yet deform
+geometry or directly drive cognition. That coupling is the next research and
+implementation milestone, not an already demonstrated feature.
