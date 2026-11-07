@@ -9,54 +9,62 @@ This file is the durable engineering handoff. Update it in the same change as ev
 
 - Recovered and mapped Somatic Core Stable WHITEPAPER-2, Engine of Latent Language 3.0, uploaded 2025 Python/web sources, the current openworld branch, and the historical V-OMEGA/ISCE standing decisions.
 - Binding choices: browser-home hybrid lifecycle; CPU-first deterministic ISCE kernel; kernel-first independent verification then embed; one organism-state owner; measured-cost computational metabolism; CCPL intervention battery; continuous and dormant lifecycle modes must not be conflated.
-- ISCE owns organism state. RealityEngine owns the external world. Current OrganismKernel is a partial predecessor, not a second final owner.
+- ISCE owns the authoritative intrinsic organism state. RealityEngine owns the external world and transactionally persists the ISCE state; OrganismKernel is now a compatibility controller/facade over ISCE, not a second physiology owner.
 - Keep Somatic Core body gates P0–P4 separate from V-OMEGA research priorities P1–P4.
 - Reconciliation artifacts: MASTER_SOURCE_RECONCILIATION_2026-11-07.md and ISCE_VOMEGA_STANDING_DECISIONS.md.
 - Reconciliation and standing-decision documents are present on the current branch. GitHub Actions run [42424720110](https://github.com/foreverliverich/openworld/actions/runs/42424720110) passed the unit-tests job and standard-library test step for commit 2a7fd19f9cbfbd8c56fe39e8dbd5339e86e14192. This is documentation verification only, not evidence that missing body/ISCE/TEC-Q systems have been implemented.
 - Next engineering gate: implement the independently testable ISCE state-owner kernel and its deterministic transition/CCPL contract, then migrate current OrganismKernel state into it without adding a third owner. Preserve Somatic Core P0 visual body gate as a protected parallel product requirement. Follow both documents and keep their separate P0–P4 numbering intact. The full historical source-to-code reconciliation is maintained in [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); use it as the governing gap map and preserve its P0–P7 gates.
 
-## ISCE V-OMEGA P1 first executable kernel gate
+## ISCE V-OMEGA P1 integration gate
 
-Added `chimera/isce.py` as an independent CPU-first state-transition kernel.
-The first executable state is one immutable, versioned value containing body,
-interoception, sensorimotor, temporal continuity, self-model, attention and
-internal resource partitions. The kernel is exported from `chimera` as
-`ISCEKernel` and `ISCEOrganismState` so it does not collide with the legacy
-`OrganismState` type.
+The independent kernel has now been integrated into the existing running
+organism path.
 
-Verified kernel behavior covered by `tests/test_isce.py`:
-- identical initial state and inputs produce identical state/digest;
-- graph topology and structural weights remain fixed across transitions;
-- weighted graph propagation participates in the transition equations, and
-  changing an edge weight changes the resulting state;
-- bounded interventions alter the target state and propagate through the
-  fixed graph on subsequent transitions;
-- state serialization round-trips; previous-state digest and organism time
-  establish explicit temporal linkage;
-- non-finite inputs, unsupported interventions and invalid graph edges reject;
-- action readiness derives from intrinsic viability and reserve state.
+- `chimera/isce.py`: versioned unified intrinsic state, embodied position,
+  fixed signed weighted graph, deterministic transitions, state/input
+  validation, intervention API, temporal predecessor digest and viability gate.
+- `chimera/organism_kernel.py`: compatibility facade backed exclusively by
+  ISCE. No duplicate legacy flat physiology state or separate physiology
+  transition law remains.
+- `chimera/reality_engine.py`: accepts only complete schema-v1 ISCE writes;
+  atomically persists the ISCE state, local morphogenic fields, world revision
+  and hash-chained event. Legacy flat payloads remain readable for conversion,
+  but cannot be written through the new commit API.
+- `chimera/autonomous_agent.py` and `chimera/runtime.py`: read and advance the
+  same ISCE state; the runtime and API use the unified spatial anchor.
+- Browser/API snapshot keeps former flat organism fields as computed read-only
+  aliases. Those values are projections, not additional stored state.
+- Legacy database payloads are mapped into the ISCE schema on load and are
+  persisted in the new schema on the next successful tick. A production-grade
+  migration backup/interruption marker remains open.
 
-GitHub Actions run [42425235336](https://github.com/foreverliverich/openworld/actions/runs/42425235336) passed the complete standard-library suite: 45 tests.
+Tests now cover deterministic transitions, graph-weight and signed inhibitory
+effects, graph invariance, bounded interventions, state schema/range checks,
+legacy conversion, legacy-write rejection, restart persistence, failed
+revision atomicity, world-field coupling, agent/runtime and HTTP API.
 
-The canonical graph is an explicitly versioned first executable model, not a
-claim that every historical ISCE mechanism or the complete original graph has
-been recovered. Measured work units are kept distinct from simulated internal
-reserve units; no joule calibration is claimed.
+**Verification:** GitHub Actions run
+[42426093835](https://github.com/foreverliverich/openworld/actions/runs/42426093835)
+passed the standard-library suite after the ownership migration and persistence
+guard (47 tests). The subsequent graph-hardening/test commit is being verified
+by the branch CI; do not claim that run as passing until its completed status
+is confirmed.
 
-**Gate status: partial / first kernel slice implemented.** This does not yet
-complete V-OMEGA P1. Persistence and journal adapter, legacy
-`OrganismKernel` state migration, single-owner enforcement, restart/wake
-tests, full ICCR five-condition suite, intervention sham/double/mediation
-battery and causal-closure/commutation tests remain open. The existing
-`OrganismKernel` still owns the currently persisted organism state until that
-migration is implemented; ISCE is not yet wired into the running game/runtime.
+**Gate status: integrated kernel / V-OMEGA P1 partial.** ISCE is now the one
+intrinsic state owner in the running Python runtime, and RealityEngine commits
+that state atomically. Full ICCR five-condition acceptance, complete causal
+closure/commutation, CCPL sham/double/mediation experiments, production
+migration interruption recovery, browser worker clock/lifecycle, measured
+hardware telemetry and the single governed action gateway remain open.
+The seven-node canonical graph remains an explicitly versioned executable
+starting model, not proof that the full historical graph has been recovered.
 
-Implementation details and exact limits: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KERNEL_IMPLEMENTATION.md).
+Implementation detail: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KERNEL_IMPLEMENTATION.md).
 
 ## System ownership invariants
 
 1. `RealityEngine` and its SQLite database are the sole authority for persistent world entities, transforms, physics, fields, revisions and world events.
-2. `OrganismKernel` is the sole owner of the persisted organism physiology/cognitive state currently implemented. Its state and local morphogenic field write are committed atomically through `RealityEngine`.
+2. `ISCEOrganismState` and `ISCEKernel` own intrinsic organism state and transitions. `OrganismKernel` is only a compatibility controller; `RealityEngine` stores and atomically commits ISCE state with world-field projections and the event journal.
 3. `AutonomousRuntime` owns fixed-step advancement. A browser renderer must never run a second physics simulation or mutate its own copy of world state.
 4. `AutonomousWorldAgent` is currently a deterministic baseline policy. It is not a trained general intelligence.
 5. LLM/planner outputs, future sensory systems and tool calls must propose typed actions. Governance and `RealityEngine` validate and commit them.
@@ -67,7 +75,7 @@ Implementation details and exact limits: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KE
 | Area | Source | Current implementation | Not yet implemented |
 |---|---|---|---|
 | World authority | `chimera/reality_engine.py` | SQLite WAL, revision checks, atomic structures, AABB collision/support, fixed-step gravity, scalar fields, snapshots, observations, hash-chained events | Articulated/deformable mechanics, fluid/terrain, complete deterministic replay |
-| Physiology | `chimera/organism_kernel.py` | Persisted energy, stress, integrity, fatigue, memory-strength, curiosity, prediction error, confidence and allostatic error; two-way local field coupling | Vascular/metabolic transport, tissue repair mechanics, organ-specific physiology, body-derived strain/sensing |
+| Physiology / ISCE | `chimera/isce.py`, `chimera/organism_kernel.py` | One versioned ISCE state; deterministic fixed-graph transitions; allostasis, interoception, sensorimotor, temporal, self-model, attention, reserve; legacy state conversion; atomic world-field persistence | Full ICCR/CCPL validation, vascular/metabolic transport, tissue repair mechanics, organ-specific physiology, body-derived strain/sensing |
 | Agent | `chimera/autonomous_agent.py` | Deterministic shelter/workbench/rest/observe baseline | General goal generation, learned policy, sensory grounding, action selection through executable toolbox |
 | Runtime | `chimera/runtime.py` | One clock, physics tick, agent step and observation | Event bus, continuous runtime service, scheduling/multiple organism lifecycle |
 | Toolbox | `chimera/toolbox.py` | Six named domains; validated world mutations and inspection | Executable tool drivers, grasp/use/repair/build skills, autonomous capability discovery |
@@ -105,27 +113,27 @@ The new API integration test file is `tests/test_http_server.py`. The full suite
 
 ## Next implementation queue (ordered by dependency)
 
-### A. Make the browser application robust
+### A. Close causal validation and migration safety\n- Implement CCPL baseline/sham/single/double intervention and mediation harness.\n- Test ICCR physical support, intervention tracking, relabeling invariance, individuation and dynamical closure.\n- Add state-transition commutation and complete causal-closure tests.\n- Add durable migration backup/marker and interrupted-migration recovery tests.\n\n### B. Make the browser application robust
 - Confirm CI and fix API integration tests.
 - Add a clean shutdown and database path handling.
 - Add bounded event polling/deltas rather than repeatedly transferring every entity.
 - Add explicit request validation and typed response schemas.
 - Add browser tests for object creation, stale revision rejection, tick progression and reload persistence.
 
-### B. Close perception/action connectivity
+### C. Close perception/action connectivity
 - Define versioned event envelopes with event ID, causation ID, correlation ID, actor, world revision, simulation time, source subsystem and typed payload.
 - Add a sensory adapter that converts committed entity geometry, contacts and world fields into organism-relative sensory channels.
 - Add a single action gateway: planner proposal -> capability/permission validation -> revision check -> RealityEngine commit -> observation -> prediction error.
 - Route the six toolbox domains through that gateway. A capability label is not executable until it has a tested driver and observable effect.
 
-### C. Replace prototype body representation with actual mechanics
+### D. Replace prototype body representation with actual mechanics
 - Establish a versioned anatomy/rig schema and body-part hierarchy.
 - Add joint constraints and actuator limits; couple motor commands to physical body state.
 - Derive proprioception, collision/strain and movement outcomes from the same mechanics.
 - Feed those measurements back to organism physiology and memory.
 - Keep renderer as a projection of body state; no display-only motion that disagrees with physics.
 
-### D. Implement TEC-Q without violating the original contract
+### E. Implement TEC-Q without violating the original contract
 - Recover the original 48-byte ABI field map from source/history before defining offsets.
 - Keep extensions in versioned sidecar/SoA buffers.
 - Build a deterministic CPU reference implementation for the 15,000-cell experiment first, including bonds, neighborhoods/spatial hashing, quaternion orientation, angular velocity/torque, energy/stress/memory/cohesion, nervous activation/refractory state and swarm intent.
