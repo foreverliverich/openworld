@@ -22,6 +22,8 @@ The current branch has a working world substrate and connected browser/API slice
 
 This is a source reconciliation, not a claim that every historical source tree has been recovered. Missing dependencies must be recovered from full repository/history before their internals can be faithfully integrated.
 
+**Binding addendum:** the subsequently recovered user-adopted V-OMEGA / ISCE decisions, single-owner correction, CPU-first/browser-home ruling, measured-cost metabolism, CCPL battery, worker lifecycle semantics and historical game-build evidence are recorded in [docs/ISCE_VOMEGA_STANDING_DECISIONS.md](ISCE_VOMEGA_STANDING_DECISIONS.md). That addendum supersedes ambiguous organism-state ownership language below.
+
 ## 2. Source inventory and disposition
 
 ### 2.1 Somatic Core Stable — WHITEPAPER-2.md
