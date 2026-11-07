@@ -182,3 +182,7 @@ class OrganismKernel:
             "kernel_version": "isce/0.1.0",
             "migration_pending": self._migration_pending,
         }
+
+
+# Backwards-compatible public type name; it is the ISCE state, not a second schema.
+OrganismState = ISCEOrganismState
