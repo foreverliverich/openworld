@@ -48,11 +48,10 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{fon
   <div><label>Position Z</label><input name="z" type="number" step=".1" value="0"></div><div><label>Size (uniform)</label><input name="size" type="number" step=".1" min=".1" value="1"></div>
   <div class="wide"><button class="primary" type="submit">Commit object to world</button></div>
  </form></section>
- <section class="section"><h2>Body Forge</h2><form id="bodyForm">
-  <div class="wide"><label>Body form</label><select name="form"><option value="humanoid">Humanoid prototype</option><option value="quadruped">Quadruped prototype</option><option value="insect">Insect prototype</option><option value="custom">Custom morphology</option></select></div>
-  <div><label>Height</label><input name="height" type="number" min=".2" step=".1" value="1.8"></div><div><label>Width</label><input name="width" type="number" min=".1" step=".1" value=".6"></div>
-  <div class="wide"><button type="submit">Create body prototype</button></div>
- </form><p class="note">This commits a physical prototype entity. Articulated joints, tissue deformation and TEC-Q-driven locomotion are not yet implemented.</p></section>
+ <section class="section"><h2>Somatic Core · Living morphology</h2>
+  <p class="note">The former rigid Body Forge control is retired. Creature anatomy is rendered as a WebGL2 signed-distance field with continuous A/B morphing, diffusion detail and soft biological shading.</p>
+  <p><a href="/web/somatic.html" style="color:#69d5bd">Open Somatic Core morphogenesis →</a></p>
+ </section>
  <section class="section"><h2>Tool Fabricator</h2><form id="toolForm">
   <div class="wide"><label>Tool name</label><input name="name" value="stone_hammer" required></div>
   <div class="wide"><label>Capabilities (comma-separated)</label><input name="capabilities" value="strike,break,shape" required></div>
@@ -111,7 +110,6 @@ $('#tick').onclick=async()=>{try{$('#tick').disabled=true;const r=await api('/ap
 $('#observe').onclick=()=>refresh().catch(e=>log(e.message));
 $('#events').onclick=async()=>{try{const r=await api('/api/events?after_revision=0&limit=100');log({chain_valid:r.chain_valid,revision:r.revision,events:r.events})}catch(e){log(e.message)}};
 $('#objectForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'world_builder',action:'create_object',expected_revision:lastRevision,arguments:{kind:f.get('kind'),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n,n],material:'stone',dynamic:true}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
-$('#bodyForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),h=Number(f.get('height')),w=Number(f.get('width'));try{const r=await api('/api/tool',{tool:'body_forge',action:'create_body',expected_revision:lastRevision,arguments:{form:f.get('form'),position:[-3,h/2,0],size:[w,h,w*.45],material:'organic_composite',dynamic:true,anatomy:{source:'body_forge',dimensions:{width:w,height:h,depth:w*.45},articulation:'not_yet_solved'}}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
 $('#toolForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'tool_fabricator',action:'fabricate',expected_revision:lastRevision,arguments:{name:f.get('name'),capabilities:f.get('capabilities').split(',').map(v=>v.trim()).filter(Boolean),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n,n],material:'wood',dynamic:true,specification:{fabricated_in:'browser_toolbox'}}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
 $('#lifeForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'life_generator',action:'spawn',expected_revision:lastRevision,arguments:{species:f.get('species'),identity:f.get('identity'),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n*1.5,n],material:'biomorphic',dynamic:true}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
 $('#moveForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);try{const r=await api('/api/tool',{tool:'movement_lab',action:'move',expected_revision:lastRevision,arguments:{entity_id:f.get('entity_id'),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))]}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
