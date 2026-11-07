@@ -12,12 +12,11 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping, Optional, Tuple
 
 SCHEMA_VERSION = 1
 KERNEL_VERSION = "0.1.0"
-_EPS = 1e-12
 
 
 class ISCEError(ValueError):
@@ -275,6 +274,35 @@ class ISCEKernel:
     def graph_fingerprint(self) -> str:
         return self._graph_fingerprint
 
+    def _graph_inputs(self, state: OrganismState) -> dict[str, float]:
+        """Propagate current node activations over the fixed directed graph."""
+        activations = {
+            "body": _clamp(state.body.energy * state.body.integrity
+                           * (1.0 - state.body.stress)),
+            "interoception": _clamp(state.interoception.precision
+                                    * (1.0 - state.interoception.pain)),
+            "sensorimotor": _clamp(state.sensorimotor.motor_readiness),
+            "temporal": _clamp(state.temporal.organism_time
+                               / (state.temporal.organism_time + 1.0)),
+            "self_model": _clamp(0.5 * state.self_model.confidence
+                                 + 0.5 * state.self_model.memory_strength),
+            "attention": _clamp(state.attention.focus),
+            "resources": _clamp(state.resources.reserve),
+        }
+        weighted: dict[str, list[tuple[float, float]]] = {
+            node: [] for node in self.graph.nodes
+        }
+        for edge in self.graph.edges:
+            weighted[edge.target].append(
+                (activations[edge.source], abs(edge.weight))
+            )
+        result = {node: activations[node] for node in self.graph.nodes}
+        for target, contributions in weighted.items():
+            total = sum(weight for _, weight in contributions)
+            if total > 0.0:
+                result[target] = sum(value * weight for value, weight in contributions) / total
+        return result
+
     def transition(self, state: OrganismState, inputs: TransitionInput,
                    intervention: Optional[Intervention] = None) -> TransitionResult:
         inputs.validate()
@@ -286,6 +314,7 @@ class ISCEKernel:
         b, i, m = state.body, state.interoception, state.sensorimotor
         sm, a, r = state.self_model, state.attention, state.resources
         dt = inputs.dt
+        graph_input = self._graph_inputs(state)
 
         # The internal resource law is distinct from hardware measurements.
         work = inputs.measured_work_units
@@ -296,6 +325,7 @@ class ISCEKernel:
             - inputs.mechanical_strain * 0.035
             + inputs.environmental_energy * 0.012 * dt
             + (0.025 * dt if inputs.resting else 0.0)
+            + (graph_input["body"] - 0.5) * 0.001 * dt
         )
         stress = _clamp(
             b.stress + inputs.mechanical_strain * 0.22
@@ -303,6 +333,7 @@ class ISCEKernel:
             + inputs.prediction_error * 0.035
             - (0.05 if inputs.resting else self.stress_recovery_rate) * dt
             - inputs.environmental_cohesion * 0.012 * dt
+            + (0.5 - graph_input["interoception"]) * 0.002 * dt
         )
         fatigue = _clamp(b.fatigue + inputs.mechanical_strain * 0.10 * dt
                          - (0.05 if inputs.resting else self.fatigue_recovery_rate) * dt)
@@ -315,7 +346,10 @@ class ISCEKernel:
         pain = _clamp(i.pain + max(0.0, inputs.mechanical_strain - 0.65) * 0.08
                       - (0.02 * dt if inputs.resting else 0.002 * dt))
         hunger = _clamp(i.hunger + max(0.0, 0.75 - energy) * 0.015 * dt)
-        precision = _clamp(i.precision + (1.0 - smoothed_error - i.precision) * 0.05)
+        precision = _clamp(
+            i.precision + (1.0 - smoothed_error - i.precision) * 0.05
+            + (graph_input["interoception"] - i.precision) * 0.02
+        )
         arousal = _clamp(0.7 * i.arousal + 0.3 * stress)
 
         motor_readiness = _clamp(
@@ -332,8 +366,14 @@ class ISCEKernel:
         curiosity = _clamp(sm.curiosity + inputs.novelty * 0.025
                            - 0.004 * dt + inputs.prediction_error * 0.012)
         confidence = _clamp(1.0 - smoothed_error)
-        urgency = _clamp(0.65 * a.urgency + 0.35 * (stress + allostatic_error * 0.25))
-        focus = _clamp(0.7 * a.focus + 0.3 * (urgency * 0.6 + precision * 0.4))
+        urgency = _clamp(
+            0.65 * a.urgency + 0.33 * (stress + allostatic_error * 0.25)
+            + 0.02 * graph_input["attention"]
+        )
+        focus = _clamp(
+            0.7 * a.focus + 0.3 * (urgency * 0.6 + precision * 0.4)
+            + (graph_input["attention"] - a.focus) * 0.01
+        )
 
         next_values: dict[str, float] = {
             "body.energy": energy, "body.stress": stress,
