@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .embodiment import make_body_model
 from .reality_engine import InvalidWorldAction, RealityEngine
 
 
@@ -135,10 +136,16 @@ class ChimeraToolbox:
         anatomy = a.get("anatomy", {})
         if not isinstance(anatomy, dict):
             raise ToolboxError("anatomy must be an object")
+        size = self._vec(a, "size")
+        body_model = make_body_model(
+            form, size, previous_form="humanoid",
+            start_time=self.world.simulation_time(),
+            duration=float(a.get("morph_duration", 1.2)),
+        )
         result = self.world.create_primitive(
             kind="body_prototype",
             position=self._vec(a, "position"),
-            size=self._vec(a, "size"),
+            size=size,
             actor_id=actor,
             material=str(a.get("material", "organic_composite")),
             mass=float(a.get("mass", 1.0)),
@@ -147,7 +154,8 @@ class ChimeraToolbox:
                 "tool_domain": "body_forge",
                 "form": form,
                 "anatomy": anatomy,
-                "articulation_status": "prototype_rigid_body",
+                "body_model": body_model,
+                "articulation_status": "unarticulated_analytic_sdf",
             },
             expected_revision=rev,
         )
