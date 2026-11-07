@@ -97,6 +97,7 @@ class OrganismKernel:
         prediction_error: float = 0.0,
         novelty: float = 0.0,
         outcome: Optional[str] = None,
+        resting: bool = False,
         expected_revision: Optional[int] = None,
     ) -> WorldResult:
         """
@@ -130,18 +131,19 @@ class OrganismKernel:
             - action_energy_cost
             - mechanical_strain * 0.035
             + local["energy"] * 0.012 * dt
+            + (0.025 * dt if resting else 0.0)
         )
         stress = _clamp(
             s.stress
             + mechanical_strain * 0.22
             + local["stress"] * 0.045 * dt
             + prediction_error * 0.035
-            - self.stress_recovery_rate * dt
+            - (0.05 if resting else self.stress_recovery_rate) * dt
             - local["cohesion"] * 0.012 * dt
         )
         fatigue = _clamp(
             s.fatigue + mechanical_strain * 0.10 * dt
-            - self.fatigue_recovery_rate * dt
+            - (0.05 if resting else self.fatigue_recovery_rate) * dt
         )
 
         repair_rate = 0.012 if energy > 0.55 and stress < 0.45 else 0.0
