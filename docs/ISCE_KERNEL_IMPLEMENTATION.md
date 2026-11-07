@@ -89,7 +89,11 @@ Run locally with:
 python -m unittest discover -s tests -v
 ```
 
-The CI workflow on the branch is the authoritative verification record. A
-passing test suite establishes these code contracts only; it does not establish
-sentience, biological equivalence, full causal closure or a complete embodied
-animal body.
+The CI workflow on the branch is the authoritative verification record.
+GitHub Actions run [42426104513](https://github.com/foreverliverich/openworld/actions/runs/42426104513)
+passed all 50 standard-library tests after graph/state hardening. The current
+branch documentation/ledger commit also passed CI in run
+[42426169592](https://github.com/foreverliverich/openworld/actions/runs/42426169592).
+A passing test suite establishes these code contracts only; it does not
+establish sentience, biological equivalence, full causal closure or a complete
+embodied animal body.
