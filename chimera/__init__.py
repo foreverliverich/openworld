@@ -14,12 +14,12 @@ from .reality_engine import (
 from .organism_kernel import OrganismKernel, OrganismState
 from .autonomous_agent import AutonomousWorldAgent, AgentStep
 from .runtime import AutonomousRuntime, RuntimeFrame
+from .toolbox import ChimeraToolbox, ToolboxError, ToolDefinition
 
 __all__ = [
     "ActionType", "Entity", "InvalidWorldAction", "RealityEngine",
     "RevisionConflict", "Vec3", "WorldConfig", "WorldError", "WorldResult",
     "OrganismKernel", "OrganismState", "AutonomousWorldAgent", "AgentStep",
-    "AutonomousRuntime", "RuntimeFrame",
+    "AutonomousRuntime", "RuntimeFrame", "ChimeraToolbox", "ToolboxError",
+    "ToolDefinition",
 ]
-
-from .toolbox import ChimeraToolbox, ToolboxError, ToolDefinition
