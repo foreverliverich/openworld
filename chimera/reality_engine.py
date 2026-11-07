@@ -76,8 +76,23 @@ class Vec3:
         return (self.x, self.y, self.z)
 
     @classmethod
-    def from_value(cls, value: Iterable[float]) -> "Vec3":
-        x, y, z = value
+    def from_value(cls, value: Iterable[float] | dict[str, float]) -> "Vec3":
+        """Normalize tuple/list coordinates and persisted {x, y, z} vectors.
+
+        OrganismState serializes Vec3 as a named mapping for durable JSON
+        storage; accepting that representation here keeps the database and
+        runtime vector contracts consistent without changing the stored schema.
+        """
+        if isinstance(value, dict):
+            try:
+                x, y, z = value["x"], value["y"], value["z"]
+            except KeyError as exc:
+                raise ValueError("Vector mappings require x, y and z") from exc
+        else:
+            try:
+                x, y, z = value
+            except (TypeError, ValueError) as exc:
+                raise ValueError("A vector must contain exactly three components") from exc
         return cls(float(x), float(y), float(z))
 
 
