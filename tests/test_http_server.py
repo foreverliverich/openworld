@@ -48,6 +48,8 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertIn("PROJECT", html)
         self.assertIn("CHIMERA", html)
         self.assertIn("/api/state", html)
+        for tool_name in ("World Builder", "Body Forge", "Tool Fabricator", "Life Generator", "Movement Lab", "Research Lab"):
+            self.assertIn(tool_name, html)
 
     def test_state_is_read_from_one_runtime_and_world(self):
         status, state = self.request("/api/state")
