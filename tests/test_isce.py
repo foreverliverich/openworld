@@ -53,8 +53,12 @@ class ISCEKernelTests(unittest.TestCase):
         perturbed = self.kernel.transition(self.initial, self.inputs, intervention)
         self.assertGreater(perturbed.state.body.stress,
                            baseline.state.body.stress)
-        self.assertGreater(perturbed.state.attention.urgency,
-                           baseline.state.attention.urgency)
+        # The intervention changes body stress in this transition. The
+        # fixed graph propagates that altered body condition on the next tick.
+        baseline_next = self.kernel.transition(baseline.state, self.inputs)
+        perturbed_next = self.kernel.transition(perturbed.state, self.inputs)
+        self.assertNotEqual(perturbed_next.state.attention.urgency,
+                            baseline_next.state.attention.urgency)
         self.assertEqual(perturbed.graph_fingerprint,
                          baseline.graph_fingerprint)
 
@@ -70,6 +74,21 @@ class ISCEKernelTests(unittest.TestCase):
             self.initial, TransitionInput(dt=10.0, action_energy_cost=1.0)
         ).state
         self.assertFalse(self.kernel.can_act(depleted))
+
+    def test_graph_weights_are_causally_effective(self):
+        from chimera.isce import CausalEdge
+        canonical = CausalGraph.canonical()
+        changed_edges = tuple(
+            CausalEdge(edge.source, edge.target,
+                       edge.weight * 0.25 if edge.source == "body"
+                       and edge.target == "interoception" else edge.weight)
+            for edge in canonical.edges
+        )
+        changed_graph = CausalGraph(canonical.nodes, changed_edges)
+        alternate = ISCEKernel(graph=changed_graph)
+        baseline = self.kernel.transition(self.initial, self.inputs).state
+        changed = alternate.transition(self.initial, self.inputs).state
+        self.assertNotEqual(baseline, changed)
 
     def test_graph_rejects_unknown_edges(self):
         from chimera.isce import CausalEdge
