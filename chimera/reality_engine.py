@@ -393,6 +393,93 @@ class RealityEngine:
                 self._rollback()
                 raise
 
+    def create_structure(
+        self, blueprint: dict[str, Any], *, actor_id: str,
+        expected_revision: Optional[int] = None,
+    ) -> WorldResult:
+        """
+        Commit a multi-part construction as one world transaction.
+
+        Blueprint format:
+        {
+          "name": "shelter",
+          "parts": [
+            {"kind":"foundation", "position":[0,0.5,0],
+             "size":[4,1,4], "material":"stone", "mass":80,
+             "dynamic":False, "metadata":{}}
+          ]
+        }
+
+        Parts are validated in listed order, so later parts may be supported by
+        earlier parts. No partial structure is committed on failure.
+        """
+        name = str(blueprint.get("name", "constructed_structure"))
+        parts = blueprint.get("parts")
+        if not isinstance(parts, list) or not parts:
+            raise InvalidWorldAction("A structure blueprint requires a non-empty parts list")
+        if len(parts) > 10_000:
+            raise InvalidWorldAction("Structure blueprint exceeds 10000 parts")
+
+        action_id = str(uuid.uuid4())
+        structure_id = str(uuid.uuid4())
+        now = time.time()
+        candidates: list[Entity] = []
+        for index, part in enumerate(parts):
+            try:
+                entity = Entity(
+                    entity_id=str(uuid.uuid4()),
+                    kind=str(part["kind"]),
+                    position=Vec3.from_value(part["position"]),
+                    size=Vec3.from_value(part["size"]),
+                    mass=float(part.get("mass", 1.0)),
+                    material=str(part.get("material", "default")),
+                    dynamic=bool(part.get("dynamic", False)),
+                    velocity=Vec3(0.0, 0.0, 0.0),
+                    creator_id=str(actor_id),
+                    created_at=now,
+                    metadata={**dict(part.get("metadata", {})),
+                              "structure_id": structure_id,
+                              "part_index": index,
+                              "structure_name": name},
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise InvalidWorldAction(
+                    f"Invalid structure part at index {index}: {exc}"
+                ) from exc
+            candidates.append(entity)
+
+        with self._lock:
+            self._begin()
+            try:
+                self._check_revision(expected_revision)
+                existing = self._load_entities()
+                if len(existing) + len(candidates) > self.config.max_entities:
+                    raise InvalidWorldAction("World entity capacity would be exceeded")
+                staged = list(existing)
+                for candidate in candidates:
+                    self._validate_placement(candidate, staged)
+                    staged.append(candidate)
+                for candidate in candidates:
+                    self._store_entity(candidate)
+                revision = self._advance_revision()
+                payload = {
+                    "structure_id": structure_id,
+                    "name": name,
+                    "parts": [part.to_dict() for part in candidates],
+                    "part_count": len(candidates),
+                }
+                self._append_event(action_id, revision, ActionType.CREATE,
+                                   actor_id, structure_id, payload)
+                self._commit()
+                return WorldResult(
+                    action_id, revision, "create_structure", structure_id, True,
+                    {"name": name, "part_count": len(candidates),
+                     "entity_ids": [part.entity_id for part in candidates]},
+                )
+            except Exception:
+                self._rollback()
+                raise
+
     def move_entity(
         self, entity_id: str, position: Iterable[float], *, actor_id: str,
         expected_revision: Optional[int] = None,
