@@ -175,8 +175,31 @@ class OrganismKernel:
         return result
 
     def snapshot(self) -> dict:
+        # Compatibility projection for existing browser/API clients. These
+        # aliases are derived on read; ISCE remains the only stored state.
+        state = self.state
+        organism = state.to_dict()
+        organism.update({
+            "position": {
+                "x": state.position[0], "y": state.position[1],
+                "z": state.position[2],
+            },
+            "energy": state.body.energy,
+            "stress": state.body.stress,
+            "integrity": state.body.integrity,
+            "fatigue": state.body.fatigue,
+            "memory_strength": state.self_model.memory_strength,
+            "curiosity": state.self_model.curiosity,
+            "prediction_error": state.interoception.prediction_error,
+            "confidence": state.self_model.confidence,
+            "allostatic_error": state.body.allostatic_error,
+            "age_seconds": state.temporal.organism_time,
+            "tick": state.temporal.tick,
+            "active_goal": state.self_model.active_goal,
+            "last_outcome": state.self_model.last_outcome,
+        })
         return {
-            "organism": self.state.to_dict(),
+            "organism": organism,
             "can_act": self.can_act,
             "world_revision": self.world.revision(),
             "kernel_version": "isce/0.1.0",
