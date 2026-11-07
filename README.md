@@ -86,6 +86,50 @@ satisfy the support and non-intersection rules of the current box model; build
 and validate each proposed blueprint against the actual world before treating it
 as a successful design.
 
+## Autonomous organism runtime
+
+`OrganismKernel` is the first coupled organism-state mechanism. The local
+world fields feed back into energy/stress/memory regulation; the resulting
+organism state is then written back into the same spatial field cell. The state
+and field write share one SQLite transaction and one world revision.
+
+`AutonomousWorldAgent` supplies a transparent baseline developmental policy:
+it detects the absence of a shelter, builds a six-part shelter, then builds a
+five-part workbench, then observes the environment and consolidates a memory
+signal. Low energy triggers a genuine rest-regulation tick. These are executable
+baseline behaviors, not learned general intelligence.
+
+`AutonomousRuntime` owns fixed-step simulation advancement and can run
+asynchronously without a renderer:
+
+```python
+import asyncio
+from chimera import (
+    RealityEngine, WorldConfig, OrganismKernel,
+    AutonomousWorldAgent, AutonomousRuntime,
+)
+
+async def main():
+    world = RealityEngine(WorldConfig(database="chimera.sqlite3"))
+    organism = OrganismKernel(world, "chimera")
+    agent = AutonomousWorldAgent(world, organism)
+    runtime = AutonomousRuntime(world, agent)
+
+    stop = asyncio.Event()
+    try:
+        await runtime.run(stop, max_ticks=300)
+        print(runtime.snapshot())
+    finally:
+        world.close()
+
+asyncio.run(main())
+```
+
+The runtime's current developmental policy is intentionally small and
+inspectable. The next step is to replace hard-coded milestone selection with
+goal formation from the existing latent-language, learning, spatial-memory and
+somatic systems, while keeping the same validated world-action boundary.
+
 ## Event and state contract
 
 Every accepted mutation:
