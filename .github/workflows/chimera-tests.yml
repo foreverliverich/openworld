@@ -1,0 +1,24 @@
+name: Chimera core tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "tecq-causal-morphogenesis"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run standard-library test suite
+        run: python -m unittest discover -s tests -v
