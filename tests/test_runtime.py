@@ -38,7 +38,7 @@ class AutonomousRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("first_workbench", {
             e.metadata.get("structure_name") for e in self.world.entities()
         })
-        self.assertEqual(self.organism.state.tick, 3)
+        self.assertEqual(self.organism.state.temporal.tick, 3)
 
 
 if __name__ == "__main__":
