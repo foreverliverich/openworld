@@ -44,11 +44,10 @@ legacy conversion, legacy-write rejection, restart persistence, failed
 revision atomicity, world-field coupling, agent/runtime and HTTP API.
 
 **Verification:** GitHub Actions run
-[42426093835](https://github.com/foreverliverich/openworld/actions/runs/42426093835)
-passed the standard-library suite after the ownership migration and persistence
-guard (47 tests). The subsequent graph-hardening/test commit is being verified
-by the branch CI; do not claim that run as passing until its completed status
-is confirmed.
+[42426104513](https://github.com/foreverliverich/openworld/actions/runs/42426104513)
+passed all 50 standard-library tests after graph/state hardening. The current
+ledger/documentation commit also passed CI in run
+[42426169592](https://github.com/foreverliverich/openworld/actions/runs/42426169592).
 
 **Gate status: integrated kernel / V-OMEGA P1 partial.** ISCE is now the one
 intrinsic state owner in the running Python runtime, and RealityEngine commits
