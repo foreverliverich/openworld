@@ -3,7 +3,17 @@
 Last verified repository branch: `tecq-causal-morphogenesis`
 Repository: `foreverliverich/openworld`
 
-This file is the durable engineering handoff. Update it in the same change as every material implementation or verification result. Do not use conversational summaries as the sole source of project status. The uploaded legacy source/transport audit is maintained in [docs/LEGACY_SOURCE_INTEGRATION_AUDIT.md](LEGACY_SOURCE_INTEGRATION_AUDIT.md). The master source reconciliation is [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); the adopted ISCE/V-OMEGA standing decisions and corrections are [docs/ISCE_VOMEGA_STANDING_DECISIONS.md](ISCE_VOMEGA_STANDING_DECISIONS.md). Follow both documents and keep their separate P0–P4 numbering intact. The full historical source-to-code reconciliation is maintained in [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); use it as the governing gap map and preserve its P0–P7 gates.
+This file is the durable engineering handoff. Update it in the same change as every material implementation or verification result. Do not use conversational summaries as the sole source of project status. The uploaded legacy source/transport audit is maintained in [docs/LEGACY_SOURCE_INTEGRATION_AUDIT.md](LEGACY_SOURCE_INTEGRATION_AUDIT.md). The master source reconciliation is [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); the adopted ISCE/V-OMEGA standing decisions and corrections are [docs/ISCE_VOMEGA_STANDING_DECISIONS.md](ISCE_VOMEGA_STANDING_DECISIONS.md).
+
+## Reconciliation checkpoint — 2026-11-07
+
+- Recovered and mapped Somatic Core Stable WHITEPAPER-2, Engine of Latent Language 3.0, uploaded 2025 Python/web sources, the current openworld branch, and the historical V-OMEGA/ISCE standing decisions.
+- Binding choices: browser-home hybrid lifecycle; CPU-first deterministic ISCE kernel; kernel-first independent verification then embed; one organism-state owner; measured-cost computational metabolism; CCPL intervention battery; continuous and dormant lifecycle modes must not be conflated.
+- ISCE owns organism state. RealityEngine owns the external world. Current OrganismKernel is a partial predecessor, not a second final owner.
+- Keep Somatic Core body gates P0–P4 separate from V-OMEGA research priorities P1–P4.
+- Reconciliation artifacts: MASTER_SOURCE_RECONCILIATION_2026-11-07.md and ISCE_VOMEGA_STANDING_DECISIONS.md.
+- Documentation commit chain completed on this branch. CI run [42424602432](https://github.com/foreverliverich/openworld/actions/runs/42424602432) passed the unit-tests job for head commit 227aff7aa04aeea66f11e9d2b43ffcffa81b8aaa. This is documentation verification only, not evidence that missing body/ISCE/TEC-Q systems have been implemented.
+- Next engineering gate: implement the independently testable ISCE state-owner kernel and its deterministic transition/CCPL contract, then migrate current OrganismKernel state into it without adding a third owner. Preserve Somatic Core P0 visual body gate as a protected parallel product requirement. Follow both documents and keep their separate P0–P4 numbering intact. The full historical source-to-code reconciliation is maintained in [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); use it as the governing gap map and preserve its P0–P7 gates.
 
 ## System ownership invariants
 
