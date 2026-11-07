@@ -36,6 +36,8 @@ Verified kernel behavior covered by `tests/test_isce.py`:
 - non-finite inputs, unsupported interventions and invalid graph edges reject;
 - action readiness derives from intrinsic viability and reserve state.
 
+GitHub Actions run [42425235336](https://github.com/foreverliverich/openworld/actions/runs/42425235336) passed the complete standard-library suite: 45 tests.
+
 The canonical graph is an explicitly versioned first executable model, not a
 claim that every historical ISCE mechanism or the complete original graph has
 been recovered. Measured work units are kept distinct from simulated internal
