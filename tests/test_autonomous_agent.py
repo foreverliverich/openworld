@@ -3,6 +3,7 @@
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 
 from chimera.autonomous_agent import AutonomousWorldAgent
 from chimera.organism_kernel import OrganismKernel
@@ -37,14 +38,17 @@ class AutonomousAgentTests(unittest.TestCase):
         third = self.agent.step()
         self.assertEqual(third.goal, "inspect_world_and_consolidate_memory")
         self.assertEqual(third.action, "observe_and_consolidate")
-        self.assertGreater(self.organism.state.memory_strength, 0.0)
+        self.assertGreater(self.organism.state.self_model.memory_strength, 0.0)
         self.assertTrue(self.world.verify_event_chain())
 
     def test_agent_recovers_when_energy_is_low(self):
-        self.organism.state.energy = 0.2
+        self.organism.state = replace(
+            self.organism.state,
+            body=replace(self.organism.state.body, energy=0.2),
+        )
         step = self.agent.step()
         self.assertEqual(step.goal, "recover_and_regulate")
-        self.assertGreater(self.organism.state.energy, 0.2)
+        self.assertGreater(self.organism.state.body.energy, 0.2)
 
 
 if __name__ == "__main__":
