@@ -1,12 +1,13 @@
 """Tests for ISCE-owned organism state and world-field causal coupling."""
 
+import json
 import os
 import tempfile
 import unittest
 
 from chimera.isce import OrganismState as ISCEOrganismState
 from chimera.organism_kernel import OrganismKernel
-from chimera.reality_engine import RealityEngine, WorldConfig
+from chimera.reality_engine import InvalidWorldAction, RealityEngine, WorldConfig
 
 
 class OrganismKernelTests(unittest.TestCase):
@@ -72,11 +73,18 @@ class OrganismKernelTests(unittest.TestCase):
             "allostatic_error": 0.12, "age_seconds": 19.0, "tick": 7,
             "active_goal": "legacy-goal", "last_outcome": "legacy-outcome",
         }
-        self.world.commit_organism_tick(
-            legacy, {"energy": 0.61, "stress": 0.31, "memory": 0.44,
-                     "cohesion": 0.74},
-            actor_id="test-organism", expected_revision=self.world.revision(),
+        # Simulate a database created by the pre-ISCE release. Legacy
+        # payloads are readable for migration but rejected by new write APIs.
+        self.world._db.execute(
+            "INSERT INTO organism_state(singleton,payload) VALUES(1,?)",
+            (json.dumps(legacy, sort_keys=True),),
         )
+        with self.assertRaises(InvalidWorldAction):
+            self.world.commit_organism_tick(
+                legacy, {"energy": 0.61, "stress": 0.31, "memory": 0.44,
+                         "cohesion": 0.74},
+                actor_id="test-organism",
+            )
         migrated = OrganismKernel(self.world, "test-organism")
         self.assertTrue(migrated.snapshot()["migration_pending"])
         self.assertEqual(migrated.state.temporal.tick, 7)
