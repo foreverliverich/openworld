@@ -89,8 +89,11 @@ class AutonomousWorldAgent:
             return "create_workbench" if state.energy >= 0.35 else "recover_and_regulate"
         return "inspect_world_and_consolidate_memory"
 
-    def step(self) -> AgentStep:
+    def step(self, dt: float | None = None) -> AgentStep:
         """Perform one autonomous decision/action/observation/learning cycle."""
+        dt = self.world.config.fixed_dt if dt is None else float(dt)
+        if dt <= 0:
+            raise ValueError("dt must be positive")
         goal = self.choose_goal()
         self.organism.set_goal(goal)
 
@@ -101,7 +104,7 @@ class AutonomousWorldAgent:
                 expected_revision=self.world.revision(),
             )
             self.organism.tick(
-                dt=1.0, action_energy_cost=0.12, mechanical_strain=0.35,
+                dt=dt, action_energy_cost=0.12, mechanical_strain=0.35,
                 prediction_error=0.25, novelty=0.9,
                 outcome="shelter_committed",
                 expected_revision=result.revision,
@@ -116,7 +119,7 @@ class AutonomousWorldAgent:
                 expected_revision=self.world.revision(),
             )
             self.organism.tick(
-                dt=1.0, action_energy_cost=0.07, mechanical_strain=0.2,
+                dt=dt, action_energy_cost=0.07, mechanical_strain=0.2,
                 prediction_error=0.2, novelty=0.65,
                 outcome="workbench_committed",
                 expected_revision=result.revision,
@@ -126,7 +129,7 @@ class AutonomousWorldAgent:
 
         if goal == "recover_and_regulate":
             result = self.organism.tick(
-                dt=5.0, action_energy_cost=0.0, mechanical_strain=0.0,
+                dt=dt, action_energy_cost=0.0, mechanical_strain=0.0,
                 prediction_error=0.05, novelty=0.0,
                 outcome="rest_regulation", resting=True,
                 expected_revision=self.world.revision(),
