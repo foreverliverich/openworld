@@ -59,6 +59,7 @@ class ActionType(str, Enum):
     REMOVE = "remove"
     FIELD_INJECT = "field_inject"
     PHYSICS_STEP = "physics_step"
+    ORGANISM_TICK = "organism_tick"
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,11 @@ class RealityEngine:
             payload TEXT NOT NULL,
             previous_hash TEXT NOT NULL,
             event_hash TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS organism_state (
+            singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+            payload TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS field_cells (
@@ -720,6 +726,69 @@ class RealityEngine:
                 UPDATE field_cells SET energy=?,stress=?,memory=?,cohesion=?
                 WHERE ix=? AND iy=? AND iz=?
             """, (v["energy"],v["stress"],v["memory"],v["cohesion"],ix,iy,iz))
+
+    def get_organism_state(self) -> Optional[dict[str, Any]]:
+        """Read the persisted organism state, if one has been initialized."""
+        row = self._db.execute(
+            "SELECT payload FROM organism_state WHERE singleton=1"
+        ).fetchone()
+        return json.loads(row["payload"]) if row else None
+
+    def commit_organism_tick(
+        self, state: dict[str, Any], field_values: dict[str, float], *,
+        actor_id: str, expected_revision: Optional[int] = None,
+    ) -> WorldResult:
+        """Atomically commit organism state and local morphogenic fields."""
+        if set(field_values) - set(FIELD_NAMES):
+            raise InvalidWorldAction("Organism tick contains an unknown field")
+        for name, value in field_values.items():
+            if not math.isfinite(float(value)) or not -1.0 <= float(value) <= 1.0:
+                raise InvalidWorldAction(f"Invalid normalized field value: {name}")
+        position = Vec3.from_value(state["position"])
+        cell_size = self.config.field_cell_size
+        cell = (round(position.x/cell_size), round(position.y/cell_size),
+                round(position.z/cell_size))
+        action_id = str(uuid.uuid4())
+        with self._lock:
+            self._begin()
+            try:
+                self._check_revision(expected_revision)
+                previous = self.get_organism_state()
+                self._db.execute(
+                    "INSERT INTO organism_state(singleton,payload) VALUES(1,?) "
+                    "ON CONFLICT(singleton) DO UPDATE SET payload=excluded.payload",
+                    (json.dumps(state, sort_keys=True),),
+                )
+                existing = self._db.execute(
+                    "SELECT * FROM field_cells WHERE ix=? AND iy=? AND iz=?", cell
+                ).fetchone()
+                values = {name: (float(existing[name]) if existing else 0.0)
+                          for name in FIELD_NAMES}
+                values.update({name: float(value) for name, value in field_values.items()})
+                self._db.execute("""
+                    INSERT INTO field_cells(ix,iy,iz,energy,stress,memory,cohesion)
+                    VALUES(?,?,?,?,?,?,?)
+                    ON CONFLICT(ix,iy,iz) DO UPDATE SET
+                      energy=excluded.energy, stress=excluded.stress,
+                      memory=excluded.memory, cohesion=excluded.cohesion
+                """, (cell[0], cell[1], cell[2], values["energy"], values["stress"],
+                      values["memory"], values["cohesion"]))
+                revision = self._advance_revision()
+                payload = {
+                    "organism_state_before": previous,
+                    "organism_state_after": state,
+                    "field_cell": cell,
+                    "field_values": values,
+                }
+                self._append_event(action_id, revision, ActionType.ORGANISM_TICK,
+                                   actor_id, str(state.get("organism_id", actor_id)), payload)
+                self._commit()
+                return WorldResult(action_id, revision, ActionType.ORGANISM_TICK.value,
+                                   str(state.get("organism_id", actor_id)), True,
+                                   {"state": state, "field_values": values, "cell": cell})
+            except Exception:
+                self._rollback()
+                raise
 
     def observe(self, center: Iterable[float] = (0, 0, 0),
                 radius: float = 20.0) -> dict[str, Any]:
