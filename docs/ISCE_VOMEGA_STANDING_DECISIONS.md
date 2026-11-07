@@ -206,6 +206,8 @@ The adopted implementation order is narrower:
 
 Use one deterministic owner per mutable buffer/partition. Workers exchange typed messages or versioned shared-memory records with explicit ownership and synchronization. Atomics protect shared coordination; they do not make simultaneous multi-writer state updates deterministic by themselves.
 
+**Browser deployment gates:** SharedArrayBuffer is available only when the page is cross-origin isolated (COOP/COEP headers). If the hosting path cannot provide those headers, use workers with transferable buffers as the fallback; do not silently disable core functionality. Atomics.wait is worker-only and must never block the UI/main thread. These are deployment and runtime requirements, not reasons to move the product off the browser.
+
 ## 7. SomaticCell, OmniKernel and GPU/particle experiments — reconcile by scope
 
 - Preserve the 48-byte SomaticCell base ABI (12 float32) exactly; do not invent the original field meanings. Recover the actual source map before decoding fields.
@@ -232,6 +234,28 @@ The historical WGSL/particle work was graded as an experimental self-organizing 
 - A radial containment force without damping risks oscillation; density-triggered claims must match the actual implemented condition.
 - The proposed homeostatic pressure rule is a containment hypothesis, not a complete learning law.
 - A prior soul-core delta rule (prediction error: α × [observed − expected]) was reported as a stronger bounded learning mechanism; it is not present in the current openworld branch and must be independently recovered and verified before reuse.
+
+### 48-byte packing proposals — preserve the competing layouts, do not silently choose
+
+The archive contains a 3 × 16-byte packing proposal:
+- bytes 0–15: position vec3 at offset 0 + radius f32 at offset 12;
+- bytes 16–31: velocity vec3 at offset 16 + entropy_mass f32 at offset 28;
+- bytes 32–47: color_phase vec3 at offset 32 + strain_index f32 at offset 44.
+
+A later experimental neural-fluid reinterpretation proposes:
+- bytes 0–15: position vec3 + activation f32;
+- bytes 16–31: velocity vec3 + latent_weight f32;
+- bytes 32–47: color_phase vec3 + token_id f32.
+
+Both demonstrate a 48-byte / three-vec4-lane packing idea. They are not the same schema. The current branch contract intentionally validates byte length without inventing slot meanings. Recover the exact original production SomaticCell definition and golden buffers before selecting the canonical ABI or mapping either proposal into it. The statement that 48-byte alignment alone maximizes PCIe throughput is not established; benchmark the actual browser/device and distinguish discrete PCIe from unified-memory systems.
+
+### Holographic Brain / MERA / Ryu–Takayanagi and Logic Compiler proposal
+
+The archive also proposes a WGSL "Holographic Brain" that uses MERA tensor networks, a Ryu–Takayanagi-style boundary-area calculation and decimation of interior Hyper-SDF volumes, plus a Logic Compiler translating vortex/toroidal operations into WGSL. Preserve this as a research proposal, not an implemented brain. A scalar calculation such as boundary_area/(4G) does not by itself implement a MERA tensor network, entanglement entropy, a 4D boundary solver or a validated causal readout. The current openworld tree contains no Holographic Brain shader or Logic Compiler. The earlier source review in the archive reports TEC-Q-labelled families as scaffolds/random/metadata; re-audit exact source before promoting any of these claims.
+
+### 4D Hyper-SDF and GPU visual substrate
+
+The 4D Hyper-SDF raymarcher is a later research direction. Somatic Core Stable P0 still requires the documented WebGL2 SDF body and dual-SDF morph contract. A 4D extension may be layered behind a capability-tested feature gate only after P0 passes; it must not replace the production SDF path or make the browser depend on WebGPU. The historical F123 Somatic OS remix is reported as a million-splat WebGPU donor, but it is not present in the inspected openworld branch and must be recovered and tested before reuse.
 
 ## 8. Axiomatic Self-Resolution and morphology write-back
 
