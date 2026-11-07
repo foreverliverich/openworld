@@ -24,7 +24,7 @@ This file is the durable engineering handoff. Update it in the same change as ev
 | Runtime | `chimera/runtime.py` | One clock, physics tick, agent step and observation | Event bus, continuous runtime service, scheduling/multiple organism lifecycle |
 | Toolbox | `chimera/toolbox.py` | Six named domains; validated world mutations and inspection | Executable tool drivers, grasp/use/repair/build skills, autonomous capability discovery |
 | TEC-Q contract | `chimera/tecq/contract.py`, `docs/tecq-architecture-contract.json` | Machine-readable architecture constraints and boundary tests | Bonded-cell solver, torsional mechanics, phase dynamics, swarm coupling, GPU/WGSL and 15k-cell execution |
-| Browser/API integration | `chimera/http_server.py`, `web/index.html` | Added local HTTP API, same-process world/runtime/toolbox, revision-aware mutations, live Three.js projection of committed entities, physiology dashboard and event inspection | Anatomical rig, skin/tissue deformation, camera/sensor embodiment, GPU cell visualization, authentication for non-loopback exposure |
+| Browser/API integration | `chimera/http_server.py`, `web/index.html` | Added local HTTP API, same-process world/runtime/toolbox, revision-aware mutations, live Three.js projection of committed entities, physiology dashboard, event inspection and browser forms for all six toolbox domains | Anatomical rig, skin/tissue deformation, camera/sensor embodiment, GPU cell visualization, authentication for non-loopback exposure |
 | Seed/Fold | `docs/TECQ-1KB-SEED-FOLD-BLUEPRINT.md` | Contracts and invariants | Original codec recovery, round-trip implementation, full content-addressed checkpoint/wake |
 
 ## Browser integration added in this change
