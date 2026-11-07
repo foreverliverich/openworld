@@ -96,6 +96,49 @@ satisfy the support and non-intersection rules of the current box model; build
 and validate each proposed blueprint against the actual world before treating it
 as a successful design.
 
+## Creation toolbox
+
+`ChimeraToolbox` exposes the existing six-domain game/toolbox direction through one callable API. It does not create a second world model: every persistent mutation is delegated to the same `RealityEngine` transaction boundary.
+
+| Tool | Working actions in this branch |
+|---|---|
+| Body Forge | Create and inspect persistent body/anatomy prototypes |
+| World Builder | Create objects, atomically build structures, inspect the world |
+| Tool Fabricator | Fabricate and inspect persistent tool-item entities with declared capabilities |
+| Life Generator | Spawn and inspect organism prototype entities with identity/species/genome references |
+| Movement Lab | Move entities through world validation and advance fixed-step physics |
+| Research Lab | Observe entities, read local fields, inspect event history and export snapshots |
+
+The first implementation deliberately distinguishes **a world entity** from a fully articulated body, executable tool, or independently running agent. Body prototypes are currently rigid primitive representations; fabricated tools are persistent items whose capabilities are metadata, not yet executable device drivers; Life Generator creates an organism prototype, not a separately scheduled autonomous organism. These are honest extension seams, not simulated completion.
+
+Example:
+
+```python
+from chimera import ChimeraToolbox, RealityEngine, WorldConfig
+
+world = RealityEngine(WorldConfig(database="chimera.sqlite3"))
+tools = ChimeraToolbox(world, actor_id="player")
+
+result = tools.execute(
+    "world_builder", "create_object",
+    {
+        "kind": "stone",
+        "position": [0, 0.5, 0],
+        "size": [1, 1, 1],
+        "material": "granite",
+        "dynamic": False
+    }
+)
+print(result)  # accepted flag, entity ID and committed world revision
+world.close()
+```
+
+Tool definitions are discoverable with `tools.manifest()`. Every mutation supports an expected world revision; stale plans are rejected instead of overwriting newer state. Run the toolbox tests with:
+
+```bash
+python -m unittest discover -s tests -p "test_toolbox.py" -v
+```
+
 ## Autonomous organism runtime
 
 `OrganismKernel` is the first coupled organism-state mechanism. The local
