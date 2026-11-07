@@ -219,12 +219,14 @@ new revision.
 
 ## Current status and limitations
 
-This is a committed implementation foundation, not yet integrated into the
-existing uploaded FastAPI/Flask application. The uploaded code has multiple
-runtime entry points and websocket ports; those must be reconciled deliberately
-before connecting the frontend. The test suite is committed but has not been
-executed in this environment. Run the command above locally and fix any
-platform-specific issues before relying on it.
+The new browser frontend is connected to the Chimera RealityEngine through
+`chimera/http_server.py`; it does not yet replace or consolidate the separate
+legacy uploaded Flask, FastAPI and Flask-SocketIO applications. Those original
+entry points and their WebSocket protocols still require a source-by-source
+integration audit before their existing capabilities can be unified. The full
+standard-library suite has passed on the hosted GitHub Actions runner; see
+[docs/IMPLEMENTATION_LEDGER.md](docs/IMPLEMENTATION_LEDGER.md) for the exact
+verified commit and remaining implementation queue.
 
 The organism kernel now has a real two-way coupling with local scalar fields:
 environmental fields modulate energy/stress/memory regulation, and the organism's
