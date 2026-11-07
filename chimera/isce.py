@@ -298,9 +298,12 @@ class ISCEKernel:
             )
         result = {node: activations[node] for node in self.graph.nodes}
         for target, contributions in weighted.items():
-            total = sum(weight for _, weight in contributions)
-            if total > 0.0:
-                result[target] = sum(value * weight for value, weight in contributions) / total
+            if contributions:
+                # Structural weights remain behaviorally effective: do not
+                # normalize a single incoming edge away.
+                result[target] = _clamp(
+                    sum(value * weight for value, weight in contributions)
+                )
         return result
 
     def transition(self, state: OrganismState, inputs: TransitionInput,
