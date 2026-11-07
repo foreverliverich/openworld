@@ -44,11 +44,14 @@ class ChimeraApplication:
         self._mutation_lock = threading.RLock()
 
     def state(self) -> dict[str, Any]:
-        snapshot = self.runtime.snapshot()
-        snapshot["entities"] = [entity.to_dict() for entity in self.world.entities()]
-        snapshot["toolbox"] = self.toolbox.manifest()
-        snapshot["event_chain_valid"] = self.world.verify_event_chain()
-        return snapshot
+        # A single API response must describe one committed revision, not a
+        # mixture of pre- and post-mutation reads from concurrent HTTP workers.
+        with self._mutation_lock:
+            snapshot = self.runtime.snapshot()
+            snapshot["entities"] = [entity.to_dict() for entity in self.world.entities()]
+            snapshot["toolbox"] = self.toolbox.manifest()
+            snapshot["event_chain_valid"] = self.world.verify_event_chain()
+            return snapshot
 
     def tick(self, count: int = 1) -> dict[str, Any]:
         if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= 120:
@@ -85,11 +88,12 @@ class ChimeraApplication:
         return {"result": result, "state": self.state()}
 
     def events(self, after_revision: int = 0, limit: int = 250) -> dict[str, Any]:
-        return {
-            "events": self.world.event_history(after_revision=after_revision, limit=limit),
-            "revision": self.world.revision(),
-            "chain_valid": self.world.verify_event_chain(),
-        }
+        with self._mutation_lock:
+            return {
+                "events": self.world.event_history(after_revision=after_revision, limit=limit),
+                "revision": self.world.revision(),
+                "chain_valid": self.world.verify_event_chain(),
+            }
 
     def close(self) -> None:
         self.world.close()
