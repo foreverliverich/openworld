@@ -22,6 +22,9 @@ is a projection of that state and cannot silently invent world changes.
 - Fixed-step gravity and ground/platform contact for dynamic box bodies.
 - Four persistent scalar fields: energy, stress, memory and cohesion.
 - Local observations, snapshots and a SHA-256 chained event journal.
+- `OrganismKernel`: allostatic physiology and compact cognitive variables read
+  local fields and atomically write the resulting organism state back into the
+  same world revision.
 
 The first physics model is intentionally explicit and bounded: axis-aligned box
 colliders, simple gravity and vertical support contacts. It is not a full rigid
@@ -63,7 +66,7 @@ result = world.create_structure({
         },
         {
             "kind": "wall",
-            "position": [0, 1.5, -1.5],
+            "position": [0, 2.0, -1.5],
             "size": [4, 2, 0.25],
             "material": "wood",
             "mass": 15,
@@ -126,6 +129,9 @@ before connecting the frontend. The test suite is committed but has not been
 executed in this environment. Run the command above locally and fix any
 platform-specific issues before relying on it.
 
-The morphogenic fields currently diffuse as scalar state and do not yet deform
-geometry or directly drive cognition. That coupling is the next research and
-implementation milestone, not an already demonstrated feature.
+The organism kernel now has a real two-way coupling with local scalar fields:
+environmental fields modulate energy/stress/memory regulation, and the organism's
+updated physiology is committed back into those fields in the same transaction.
+The fields do not yet deform geometry, and the cognitive variables are a compact
+state model rather than a trained cognitive architecture. Those are subsequent
+research and implementation milestones.
