@@ -174,6 +174,31 @@ class OrganismState:
             raise ISCEError("Temporal counters cannot be negative")
         if len(self.position) != 3 or not all(math.isfinite(float(v)) for v in self.position):
             raise ISCEError("position must contain three finite coordinates")
+        for name, value in (
+            ("body.energy", self.body.energy), ("body.stress", self.body.stress),
+            ("body.integrity", self.body.integrity), ("body.fatigue", self.body.fatigue),
+            ("body.allostatic_error", self.body.allostatic_error),
+            ("interoception.hunger", self.interoception.hunger),
+            ("interoception.pain", self.interoception.pain),
+            ("interoception.arousal", self.interoception.arousal),
+            ("interoception.prediction_error", self.interoception.prediction_error),
+            ("interoception.precision", self.interoception.precision),
+            ("sensorimotor.motor_readiness", self.sensorimotor.motor_readiness),
+            ("sensorimotor.proprioceptive_error", self.sensorimotor.proprioceptive_error),
+            ("sensorimotor.last_action_cost", self.sensorimotor.last_action_cost),
+            ("sensorimotor.last_action_success", self.sensorimotor.last_action_success),
+            ("self_model.confidence", self.self_model.confidence),
+            ("self_model.memory_strength", self.self_model.memory_strength),
+            ("self_model.curiosity", self.self_model.curiosity),
+            ("attention.focus", self.attention.focus),
+            ("attention.urgency", self.attention.urgency),
+            ("resources.reserve", self.resources.reserve),
+        ):
+            _unit(name, value)
+        if not math.isfinite(self.temporal.organism_time):
+            raise ISCEError("organism_time must be finite")
+        if not math.isfinite(self.resources.cumulative_work_units) or self.resources.cumulative_work_units < 0:
+            raise ISCEError("cumulative_work_units must be finite and non-negative")
 
     def with_goal(self, goal: Optional[str]) -> "OrganismState":
         return replace(self, self_model=replace(self.self_model, active_goal=goal))
@@ -304,16 +329,19 @@ class ISCEKernel:
         }
         for edge in self.graph.edges:
             weighted[edge.target].append(
-                (activations[edge.source], abs(edge.weight))
+                (activations[edge.source], edge.weight)
             )
         result = {node: activations[node] for node in self.graph.nodes}
         for target, contributions in weighted.items():
             if contributions:
-                # Structural weights remain behaviorally effective: do not
-                # normalize a single incoming edge away.
-                result[target] = _clamp(
-                    sum(value * weight for value, weight in contributions)
+                # Intrinsic activation is a unit self-loop. Incoming structural
+                # weights retain sign and magnitude; normalization prevents
+                # degree alone from saturating every target at one.
+                denominator = 1.0 + sum(abs(weight) for _, weight in contributions)
+                numerator = activations[target] + sum(
+                    value * weight for value, weight in contributions
                 )
+                result[target] = _clamp(numerator / denominator)
         return result
 
     def transition(self, state: OrganismState, inputs: TransitionInput,
@@ -368,6 +396,7 @@ class ISCEKernel:
         motor_readiness = _clamp(
             m.motor_readiness + (energy - m.motor_readiness) * 0.08
             - stress * 0.025 - fatigue * 0.02
+            + (graph_input["sensorimotor"] - m.motor_readiness) * 0.02
         )
         proprioceptive_error = _clamp(
             0.7 * m.proprioceptive_error + 0.3 * inputs.mechanical_strain
@@ -376,9 +405,15 @@ class ISCEKernel:
             sm.memory_strength + inputs.prediction_error * 0.035
             + inputs.novelty * 0.025 + inputs.environmental_memory * 0.008 * dt
         )
-        curiosity = _clamp(sm.curiosity + inputs.novelty * 0.025
-                           - 0.004 * dt + inputs.prediction_error * 0.012)
-        confidence = _clamp(1.0 - smoothed_error)
+        curiosity = _clamp(
+            sm.curiosity + inputs.novelty * 0.025 - 0.004 * dt
+            + inputs.prediction_error * 0.012
+            + (graph_input["temporal"] - sm.curiosity) * 0.005
+        )
+        confidence = _clamp(
+            1.0 - smoothed_error
+            + (graph_input["self_model"] - sm.confidence) * 0.01
+        )
         urgency = _clamp(
             0.65 * a.urgency + 0.33 * (stress + allostatic_error * 0.25)
             + 0.02 * graph_input["attention"]
