@@ -143,7 +143,7 @@ class AutonomousWorldAgent:
         entity_count = observation["entity_count"]
         # A deterministic surprise proxy for this baseline: a change in observed
         # entity count relative to the organism's stored previous outcome.
-        previous = self.organism.state.last_outcome or ""
+        previous = self.organism.state.self_model.last_outcome or ""
         novelty = 0.15 if str(entity_count) not in previous else 0.02
         result = self.organism.tick(
             dt=dt, action_energy_cost=0.002, mechanical_strain=0.0,
