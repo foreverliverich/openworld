@@ -21,3 +21,5 @@ __all__ = [
     "OrganismKernel", "OrganismState", "AutonomousWorldAgent", "AgentStep",
     "AutonomousRuntime", "RuntimeFrame",
 ]
+
+from .toolbox import ChimeraToolbox, ToolboxError, ToolDefinition
