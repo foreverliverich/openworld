@@ -128,7 +128,7 @@ class AutonomousWorldAgent:
             result = self.organism.tick(
                 dt=5.0, action_energy_cost=0.0, mechanical_strain=0.0,
                 prediction_error=0.05, novelty=0.0,
-                outcome="rest_regulation",
+                outcome="rest_regulation", resting=True,
                 expected_revision=self.world.revision(),
             )
             return AgentStep(goal, "rest_regulation",
