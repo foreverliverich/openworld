@@ -11,7 +11,7 @@ Implemented:
 - AABB collision and support validation
 - deterministic fixed-step gravity/contact simulation
 - persistent morphogenic scalar fields (energy, stress, memory, cohesion)
-- snapshots, observations, and event replay into a fresh database
+- snapshots, grounded observations, and tamper-evident event history
 
 This is a deliberately bounded first substrate: axis-aligned box colliders and a
 regular field lattice. It does not claim deformable-body, fluid, or full terrain
@@ -529,10 +529,17 @@ class RealityEngine:
         x0, y0, z0, x1, y1, z1 = self._aabb(candidate)
         ground = self.config.bounds_min.y
         if y0 <= ground:
-            candidate = Entity(**{**asdict(candidate),
-                "position": asdict(Vec3(candidate.position.x,
-                    ground + candidate.size.y/2.0, candidate.position.z)),
-                "velocity": asdict(Vec3(0.0, 0.0, 0.0))})
+            candidate = Entity(
+                entity_id=candidate.entity_id, kind=candidate.kind,
+                position=Vec3(candidate.position.x,
+                               ground + candidate.size.y/2.0,
+                               candidate.position.z),
+                size=candidate.size, mass=candidate.mass,
+                material=candidate.material, dynamic=candidate.dynamic,
+                velocity=Vec3(0.0, 0.0, 0.0),
+                creator_id=candidate.creator_id,
+                created_at=candidate.created_at, metadata=candidate.metadata,
+            )
             return candidate
         # Resolve downward landing on the highest supporting horizontal surface.
         old_bottom = self._aabb(entity)[1]
@@ -546,10 +553,17 @@ class RealityEngine:
             if horizontal and vy <= 0 and old_bottom >= oy1-self.config.contact_tolerance and y0 <= oy1:
                 best_top = oy1 if best_top is None else max(best_top, oy1)
         if best_top is not None:
-            candidate = Entity(**{**asdict(candidate),
-                "position": asdict(Vec3(candidate.position.x,
-                    best_top + candidate.size.y/2.0, candidate.position.z)),
-                "velocity": asdict(Vec3(0.0, 0.0, 0.0))})
+            candidate = Entity(
+                entity_id=candidate.entity_id, kind=candidate.kind,
+                position=Vec3(candidate.position.x,
+                               best_top + candidate.size.y/2.0,
+                               candidate.position.z),
+                size=candidate.size, mass=candidate.mass,
+                material=candidate.material, dynamic=candidate.dynamic,
+                velocity=Vec3(0.0, 0.0, 0.0),
+                creator_id=candidate.creator_id,
+                created_at=candidate.created_at, metadata=candidate.metadata,
+            )
         return candidate
 
     def step(self, *, actor_id: str = "runtime",
