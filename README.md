@@ -286,6 +286,7 @@ checkpoints. Core mode remains lightweight and does not download model weights.
 Install the optional model dependencies and explicitly enable the cognition runtime:
 
 ```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements-latent.txt
 python -m chimera.http_server \
   --enable-latent-language \
