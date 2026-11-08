@@ -51,10 +51,13 @@ class MultimodalProjectionModel:
         ).to(device)
         self.audio_reconstructor = nn.Linear(audio_slot_dim, audio_dim).to(device)
         self.trained = False
+        self.audio_trained = False
         self.history: list[dict[str, float]] = []
 
     def project_audio_slot(self, audio_hidden):
         """Callable adapter for HuggingFaceAudioEncoder's 768→128 projection."""
+        if not self.audio_trained:
+            raise AlignmentTrainingError("Audio bottleneck must be trained with paired audio data")
         return self.audio_compressor(audio_hidden)
 
     def _batch(self, value: Any, width: int, name: str):
@@ -106,6 +109,9 @@ class MultimodalProjectionModel:
         for epoch in range(epochs):
             order = torch.randperm(text.shape[0], device=self.device)
             epoch_loss = 0.0
+            sum_text_image = 0.0
+            sum_text_audio = 0.0
+            sum_audio_reconstruction = 0.0
             steps = 0
             for start in range(0, text.shape[0], batch_size):
                 indices = order[start:start + batch_size]
@@ -130,16 +136,21 @@ class MultimodalProjectionModel:
                 torch.nn.utils.clip_grad_norm_(parameters, 1.0)
                 optimizer.step()
                 epoch_loss += float(total.detach().cpu())
+                sum_text_image += float(loss.detach().cpu())
+                sum_text_audio += float(audio_loss.detach().cpu())
+                sum_audio_reconstruction += float(reconstruction_loss.detach().cpu())
                 steps += 1
             history.append({
                 "epoch": float(epoch + 1),
                 "loss": epoch_loss / max(1, steps),
-                "text_image_loss": float(loss.detach().cpu()),
-                "text_audio_loss": float(audio_loss.detach().cpu()),
-                "audio_reconstruction_loss": float(reconstruction_loss.detach().cpu()),
+                "text_image_loss": sum_text_image / max(1, steps),
+                "text_audio_loss": sum_text_audio / max(1, steps),
+                "audio_reconstruction_loss": sum_audio_reconstruction / max(1, steps),
             })
         self.history.extend(history)
         self.trained = True
+        if audio is not None:
+            self.audio_trained = True
         return history
 
     def evaluate(self, pairs: Mapping[str, Any]) -> dict[str, float]:
@@ -148,6 +159,8 @@ class MultimodalProjectionModel:
         image = self._batch(pairs["image"], 512, "image")
         if text.shape[0] != image.shape[0] or text.shape[0] < 2:
             raise AlignmentTrainingError("Evaluation pairs must align and contain at least 2 rows")
+        if "audio" in pairs and len(pairs["audio"]) != text.shape[0]:
+            raise AlignmentTrainingError("Audio evaluation pairs must align row-for-row")
         self.text_projection.eval()
         self.image_projection.eval()
         with torch.inference_mode():
@@ -188,7 +201,7 @@ class MultimodalProjectionModel:
             "audio_projection": self.audio_projection.state_dict(),
             "audio_compressor": self.audio_compressor.state_dict(),
             "audio_reconstructor": self.audio_reconstructor.state_dict(),
-            "history": self.history,
+            "history": self.history, "audio_trained": self.audio_trained,
         }, path)
 
     def load_checkpoint(self, path: str) -> None:
@@ -203,4 +216,5 @@ class MultimodalProjectionModel:
         ):
             getattr(self, name).load_state_dict(checkpoint[name], strict=True)
         self.history = list(checkpoint.get("history", []))
+        self.audio_trained = bool(checkpoint.get("audio_trained", False))
         self.trained = True
