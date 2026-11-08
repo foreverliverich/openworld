@@ -38,7 +38,7 @@ This implementation follows the uploaded *Engine of Latent Language 3.0: Continu
 - Specialist calls run concurrently with deterministic result consolidation; latent and workspace maps are immutable snapshots.
 - Specialist implementations: emotion lexical baseline, explicit-intent baseline, read-only memory retrieval, social interaction metadata, temporal encoding, spatial scene composition and structured creative artifact generation.
 
-The specialist baselines are deliberately named as baselines. They are not substitutes for trained emotion/social models or a general-purpose reasoning model. The spatial composer creates validated symbolic scene blueprints and submits them through RealityEngine; it does not claim to produce photorealistic assets or run Blender/3D diffusion.
+The specialist baselines are deliberately named as baselines. They are not substitutes for trained emotion/social models or a general-purpose reasoning model. The spatial composer validates ground/support constraints and compiles supported on-top/next-to placements into RealityEngine structures. Nested containment remains a symbolic creative relation because the current primitive AABB collision model has no compound-mesh interior semantics; the specialist reports that constraint instead of submitting an invalid world action. It does not claim to produce photorealistic assets or run Blender/3D diffusion.
 
 ## Install model dependencies
 
