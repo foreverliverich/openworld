@@ -241,7 +241,6 @@ class TransitionInput:
     mechanical_strain: float = 0.0
     prediction_error: float = 0.0
     novelty: float = 0.0
-    sensory_salience: float = 0.0
     action_success: float = 0.5
     environmental_energy: float = 0.0
     environmental_stress: float = 0.0
@@ -250,6 +249,7 @@ class TransitionInput:
     resting: bool = False
     outcome: Optional[str] = None
     measured_work_units: float = 0.0
+    sensory_salience: float = 0.0
 
     def validate(self) -> None:
         dt = _finite("dt", self.dt)
