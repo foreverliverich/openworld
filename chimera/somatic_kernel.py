@@ -5,6 +5,7 @@ the renderer compiles it in an isolated WebGL program and retains the last good 
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -109,4 +110,82 @@ def generate_morph_package(description: str, current_label: str = "") -> dict[st
 
 def validate_morph_package(package: Any) -> dict[str, Any]:
     """Public validation boundary for packages returned to the browser for shader compilation."""
+    return _validate_package(package)
+
+
+def refine_morph_package(
+    current_state: dict[str, Any],
+    iteration: int,
+    image_snapshot: str | None = None,
+) -> dict[str, Any]:
+    """Generate one bounded visual refinement candidate; never commits world state."""
+    if not isinstance(iteration, int) or isinstance(iteration, bool) or not 1 <= iteration <= 10:
+        raise ValueError("refinement iteration must be between 1 and 10")
+    if not isinstance(current_state, dict) or not isinstance(current_state.get("sdfScript"), str):
+        raise ValueError("current morphology state is required for refinement")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
+    if not api_key:
+        raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY on the server.")
+    parts: list[dict[str, Any]] = [{
+        "text": (
+            "Visually refine this existing creature morphology. This is refinement iteration "
+            f"{iteration} of a hard maximum of 10. Preserve its identity and intended species; "
+            "improve anatomy, silhouette, proportions, organic transitions and surface detail. "
+            "Return a complete replacement package using the same schema and GLSL contract. "
+            "Do not regress into disconnected primitive parts. Current package: "
+            + json.dumps({
+                "label": current_state.get("label", ""),
+                "persona": current_state.get("persona", ""),
+                "sdfScript": current_state["sdfScript"],
+                "color": current_state.get("color", [0.5, 0.5, 0.5]),
+                "material": current_state.get("material", {}),
+            }, separators=(",", ":"))
+        )
+    }]
+    if image_snapshot is not None:
+        if not isinstance(image_snapshot, str) or len(image_snapshot) > 950_000:
+            raise ValueError("image snapshot must be a base64 data URL under 950 KB")
+        match = re.fullmatch(r"data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)", image_snapshot)
+        if not match:
+            raise ValueError("image snapshot must be PNG, JPEG or WebP base64 data")
+        try:
+            image_bytes = base64.b64decode(match.group(2), validate=True)
+        except (ValueError, base64.binascii.Error) as exc:
+            raise ValueError("image snapshot contains invalid base64") from exc
+        if not image_bytes or len(image_bytes) > 700_000:
+            raise ValueError("decoded image snapshot must be between 1 byte and 700 KB")
+        parts.append({
+            "inlineData": {
+                "mimeType": "image/" + match.group(1),
+                "data": match.group(2),
+            }
+        })
+    body = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.25,
+            "maxOutputTokens": 8192,
+        },
+    }
+    request = urllib.request.Request(
+        API_URL.format(model=MODEL) + "?key=" + api_key,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:1000]
+        raise RuntimeError(f"Gemini API returned HTTP {exc.code}: {detail}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(f"Gemini refinement request failed: {exc}") from exc
+    try:
+        text = result["candidates"][0]["content"]["parts"][0]["text"]
+        package = json.loads(text)
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Gemini did not return a valid refinement package") from exc
     return _validate_package(package)
