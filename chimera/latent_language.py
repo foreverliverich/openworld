@@ -857,7 +857,8 @@ class LatentLanguageCoordinator:
         if self.alignment_model is not None:
             aligned_modalities = {
                 name: [encoded_by_modality[name]]
-                for name in ("text", "image", "audio") if name in encoded_by_modality
+                for name in ("text", "image", "audio")
+                if name in encoded_by_modality and confidence_by_modality[name] > 0.0
             }
             if len(aligned_modalities) >= 2:
                 aligned = self.alignment_model.fuse_encoded_shared(
