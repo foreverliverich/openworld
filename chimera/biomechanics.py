@@ -65,8 +65,9 @@ class SegmentSpec:
     min_rotation_xyz: Optional[tuple[float, float, float]] = None
     max_rotation_xyz: Optional[tuple[float, float, float]] = None
     tendon_stiffness: float = 1200.0
-    tendon_damping: float = 18.0
+    tendon_damping: float = 2.5
     activation_tau: float = 0.045
+    angular_speed_limit: float = 18.0
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -89,7 +90,8 @@ class SegmentSpec:
         object.__setattr__(self, "min_rotation_xyz", low)
         object.__setattr__(self, "max_rotation_xyz", high)
         for key in ("length", "mass", "radius", "torque_limit", "kp", "kd",
-                    "tendon_stiffness", "tendon_damping", "activation_tau"):
+                    "tendon_stiffness", "tendon_damping", "activation_tau",
+                    "angular_speed_limit"):
             value = _finite(key, getattr(self, key))
             if value <= 0:
                 raise BiomechanicsError(f"{key} must be positive")
@@ -139,45 +141,45 @@ class SkeletonDefinition:
                         dof_mask=(True, True, True),
                         min_rotation_xyz=(-.65, -.45, -.45), max_rotation_xyz=(.65, .45, .45)),
             SegmentSpec("head", "neck", (0,.12,0), (0,1,0), .25, 5.0, .12,
-                        -.75, .75, 45.0, 90.0, 9.0),
+                        -.75, .75, 12.0, 30.0, 4.0),
             SegmentSpec("upper_arm_l", "spine", (-.19,.39,0), (0,-1,0), .31, 2.5, .065,
-                        -2.7, 2.7, 65.0, 120.0, 12.0,
+                        -2.7, 2.7, 45.0, 80.0, 10.0,
                         dof_mask=(True, True, True),
                         min_rotation_xyz=(-2.7, -1.9, -2.7), max_rotation_xyz=(2.7, 1.9, 2.7)),
             SegmentSpec("forearm_l", "upper_arm_l", (0,-.31,0), (0,-1,0), .27, 1.5, .052,
-                        -2.35, .12, 38.0, 90.0, 9.0),
+                        -2.35, .12, 18.0, 55.0, 8.0),
             SegmentSpec("hand_l", "forearm_l", (0,-.27,0), (0,-1,0), .10, .5, .04,
-                        -.85, .85, 12.0, 30.0, 3.0,
+                        -.85, .85, 3.0, 12.0, 2.0,
                         dof_mask=(True, False, True),
                         min_rotation_xyz=(-.85, 0.0, -.55), max_rotation_xyz=(.85, 0.0, .55)),
             SegmentSpec("upper_arm_r", "spine", (.19,.39,0), (0,-1,0), .31, 2.5, .065,
-                        -2.7, 2.7, 65.0, 120.0, 12.0,
+                        -2.7, 2.7, 45.0, 80.0, 10.0,
                         dof_mask=(True, True, True),
                         min_rotation_xyz=(-2.7, -1.9, -2.7), max_rotation_xyz=(2.7, 1.9, 2.7)),
             SegmentSpec("forearm_r", "upper_arm_r", (0,-.31,0), (0,-1,0), .27, 1.5, .052,
-                        -2.35, .12, 38.0, 90.0, 9.0),
+                        -2.35, .12, 18.0, 55.0, 8.0),
             SegmentSpec("hand_r", "forearm_r", (0,-.27,0), (0,-1,0), .10, .5, .04,
-                        -.85, .85, 12.0, 30.0, 3.0,
+                        -.85, .85, 3.0, 12.0, 2.0,
                         dof_mask=(True, False, True),
                         min_rotation_xyz=(-.85, 0.0, -.55), max_rotation_xyz=(.85, 0.0, .55)),
             SegmentSpec("thigh_l", "pelvis", (-.10,-.08,0), (0,-1,0), .42, 7.0, .10,
-                        -.95, 1.65, 180.0, 360.0, 38.0,
+                        -.95, 1.65, 120.0, 220.0, 25.0,
                         dof_mask=(True, True, True),
                         min_rotation_xyz=(-.95, -.78, -.72), max_rotation_xyz=(1.65, .78, .72)),
             SegmentSpec("shin_l", "thigh_l", (0,-.42,0), (0,-1,0), .42, 4.0, .075,
-                        -2.45, .12, 120.0, 280.0, 28.0),
+                        -2.45, .12, 70.0, 180.0, 20.0),
             SegmentSpec("foot_l", "shin_l", (0,-.42,0), (0,0,1), .20, 1.2, .065,
-                        -.65, .65, 32.0, 90.0, 9.0,
+                        -.65, .65, 15.0, 45.0, 6.0,
                         dof_mask=(True, False, True),
                         min_rotation_xyz=(-.65, 0.0, -.38), max_rotation_xyz=(.65, 0.0, .38)),
             SegmentSpec("thigh_r", "pelvis", (.10,-.08,0), (0,-1,0), .42, 7.0, .10,
-                        -.95, 1.65, 180.0, 360.0, 38.0,
+                        -.95, 1.65, 120.0, 220.0, 25.0,
                         dof_mask=(True, True, True),
                         min_rotation_xyz=(-.95, -.78, -.72), max_rotation_xyz=(1.65, .78, .72)),
             SegmentSpec("shin_r", "thigh_r", (0,-.42,0), (0,-1,0), .42, 4.0, .075,
-                        -2.45, .12, 120.0, 280.0, 28.0),
+                        -2.45, .12, 70.0, 180.0, 20.0),
             SegmentSpec("foot_r", "shin_r", (0,-.42,0), (0,0,1), .20, 1.2, .065,
-                        -.65, .65, 32.0, 90.0, 9.0,
+                        -.65, .65, 15.0, 45.0, 6.0,
                         dof_mask=(True, False, True),
                         min_rotation_xyz=(-.65, 0.0, -.38), max_rotation_xyz=(.65, 0.0, .38)),
         ))
@@ -797,6 +799,13 @@ class BiomechanicsEngine:
                 angular_velocity[axis_index] = (
                     angular_velocity[axis_index] + generalized_acceleration[index] * dt
                 ) * math.exp(-.08 * dt)
+                speed = spec.angular_speed_limit
+                bounded_speed = _clamp(angular_velocity[axis_index], -speed, speed)
+                if bounded_speed != angular_velocity[axis_index]:
+                    limit_strain += min(
+                        1.0, abs(angular_velocity[axis_index] - bounded_speed) / speed
+                    )
+                    angular_velocity[axis_index] = bounded_speed
                 unconstrained = rotation[axis_index] + angular_velocity[axis_index] * dt
                 low = spec.min_rotation_xyz[axis_index]
                 high = spec.max_rotation_xyz[axis_index]
