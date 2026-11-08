@@ -11,7 +11,9 @@ from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
 from chimera.http_server import ChimeraApplication, ChimeraRequestHandler
-from chimera.latent_language import EncoderRegistry, LatentLanguageCoordinator
+from chimera.latent_language import (
+    EncoderRegistry, LatentLanguageCoordinator, SceneGraph, SceneObject,
+)
 
 
 class BrowserAPIIntegrationTests(unittest.TestCase):
@@ -84,6 +86,62 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
             self.assertTrue(result["result"]["resource_charge"]["charged_before_action"])
             self.assertTrue(app.world.verify_event_chain())
             self.assertGreater(app.state()["cognition"]["workspace_tick"], 0)
+        finally:
+            app.close()
+
+
+    def test_semantic_scene_interpreter_is_opt_in(self):
+        with self.assertRaises(RuntimeError):
+            self.app.queue_cognition({"text": "Build a platform", "interpret_scene": True})
+
+    def test_interpreted_scene_enters_workspace_and_world_action_gateway(self):
+        class FixedEncoder:
+            encoder_id = "http-test-text"
+            def encode(self, payload):
+                return (0.2,) * 768
+
+        class FixedSceneInterpreter:
+            def __init__(self):
+                self.calls = []
+            def interpret(self, prompt, *, scene_id):
+                self.calls.append((prompt, scene_id))
+                return SceneGraph(
+                    scene_id,
+                    (SceneObject(
+                        "platform", "box", (20, 0.5, 20), (2, 1, 2),
+                        "stone", 20.0, False,
+                    ),),
+                )
+
+        registry = EncoderRegistry()
+        registry.register("text", FixedEncoder())
+        coordinator = LatentLanguageCoordinator(registry)
+        interpreter = FixedSceneInterpreter()
+        app = ChimeraApplication(
+            os.path.join(self.tmp.name, "interpreted-scene.sqlite3"),
+            cognition=coordinator,
+            scene_interpreter=interpreter,
+        )
+        try:
+            queued = app.queue_cognition({
+                "request_id": "scene-parse-1",
+                "text": "Build a stone platform at the far corner",
+                "interpret_scene": True,
+            })
+            self.assertTrue(queued["queued"])
+            self.assertEqual(interpreter.calls[0][0], "Build a stone platform at the far corner")
+            frame = app.tick()["frames"][0]
+            self.assertIsNotNone(frame["cognition_result"])
+            spatial = next(
+                proposal for proposal in coordinator.workspace.latest.selected
+                if proposal.specialist == "spatial" and proposal.kind == "world_action"
+            )
+            committed = app.execute_cognitive_action({"proposal_id": spatial.proposal_id})
+            self.assertTrue(committed["result"]["accepted"])
+            self.assertTrue(any(
+                entity["kind"] == "box" for entity in committed["state"]["entities"]
+            ))
+            self.assertTrue(app.world.verify_event_chain())
         finally:
             app.close()
 
