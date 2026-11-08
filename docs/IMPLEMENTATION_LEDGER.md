@@ -79,7 +79,7 @@ Implementation detail: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KERNEL_IMPLEMENTATIO
 | Runtime | `chimera/runtime.py` | One clock, physics tick, agent step and observation | Event bus, continuous runtime service, scheduling/multiple organism lifecycle |
 | Toolbox | `chimera/toolbox.py` | Six named domains; validated world mutations and inspection | Executable tool drivers, grasp/use/repair/build skills, autonomous capability discovery |
 | TEC-Q contract | `chimera/tecq/contract.py`, `docs/tecq-architecture-contract.json` | Machine-readable architecture constraints and boundary tests | Bonded-cell solver, torsional mechanics, phase dynamics, swarm coupling, GPU/WGSL and 15k-cell execution |
-| Browser/API integration | `chimera/http_server.py`, `web/index.html` | Added local HTTP API, same-process world/runtime/toolbox, revision-aware mutations, live Three.js projection of committed entities, physiology dashboard, event inspection and browser forms for all six toolbox domains | Anatomical rig, skin/tissue deformation, camera/sensor embodiment, GPU cell visualization, authentication for non-loopback exposure |
+| Browser/API integration | `chimera/http_server.py`, `web/index.html` | Added local HTTP API, same-process world/runtime/toolbox, revision-aware mutations, live Three.js projection of committed world entities, physiology dashboard, event inspection, five non-body toolbox forms and the separate Somatic Core SDF interface | Anatomical rig, skin/tissue deformation, camera/sensor embodiment, GPU cell visualization, authentication for non-loopback exposure |
 | Seed/Fold | `docs/TECQ-1KB-SEED-FOLD-BLUEPRINT.md` | Contracts and invariants | Original codec recovery, round-trip implementation, full content-addressed checkpoint/wake |
 
 ## Browser integration added in this change
@@ -102,7 +102,7 @@ HTTP contract:
 
 The HTTP server binds to loopback by default, caps JSON bodies at 1 MiB, serializes mutation requests, uses optimistic revision checks and returns HTTP 409 for stale writes. Do not expose it to a LAN/public interface without authentication, origin policy, CSRF protection and an explicit security review.
 
-The browser's Three.js dependency is loaded from a CDN. The simulation, state, SQLite database and Python API are local. The visible objects are box-geometry projections of committed world entities. The current organism display is physiology telemetry, not a claim that a complete articulated animal body is implemented.
+The browser's Three.js dependency is loaded from a CDN. The simulation, state, SQLite database and Python API are local. The general world viewport still projects committed non-organism entities as boxes. Creature morphology is handled by the separate Somatic Core WebGL2 SDF renderer and its canonical SDF pair is stored in RealityEngine. This is not a claim that articulated locomotion, deformable tissue mechanics or sensorimotor coupling are complete.
 
 ## Verification status
 
