@@ -49,6 +49,9 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertIn("PROJECT", html)
         self.assertIn("CHIMERA", html)
         self.assertIn("/api/state", html)
+        self.assertIn("bodyForm", html)
+        self.assertIn("/api/body/pose", html)
+        self.assertIn("/api/body/actuate", html)
         for tool_name in ("World Builder", "Somatic Core", "Tool Fabricator", "Life Generator", "Movement Lab", "Research Lab"):
             self.assertIn(tool_name, html)
 
@@ -102,6 +105,79 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(result["error"], "action_rejected")
 
+
+
+    def test_body_pose_endpoint_returns_authoritative_articulated_segments(self):
+        status, body = self.request("/api/body/pose")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["skeleton_version"], "human-3d-1")
+        self.assertEqual(len(body["segments"]), 16)
+        self.assertEqual(len(body["joints"]), 15)
+        self.assertEqual(body["world_revision"], self.app.world.revision())
+
+    def test_body_actuation_commits_joint_motion_and_physiological_feedback(self):
+        _, before = self.request("/api/body/pose")
+        _, before_state = self.request("/api/state")
+        status, result = self.request("/api/body/actuate", {
+            "expected_revision": before["world_revision"],
+            "motor_commands": {"thigh_l": 0.55, "shin_l": -0.3},
+            "root_acceleration": [0.6, 0.0, 0.0],
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["result"]["revision"], before["world_revision"] + 1)
+        joints = {joint["name"]: joint for joint in result["body"]["joints"]}
+        self.assertGreater(joints["thigh_l"]["angle"], 0.0)
+        self.assertGreater(joints["shin_l"]["activation"], 0.0)
+        self.assertGreater(result["body"]["root_position"][0], before["root_position"][0])
+        organism = result["state"]["organism"]["organism"]
+        before_organism = before_state["organism"]["organism"]
+        self.assertGreater(organism["resources"]["cumulative_work_units"], 0.0)
+        self.assertGreater(organism["sensorimotor"]["proprioceptive_error"], 0.0)
+        self.assertLess(organism["body"]["energy"], before_organism["body"]["energy"])
+        self.assertTrue(self.app.world.verify_event_chain())
+
+    def test_body_actuation_accepts_three_axis_joint_targets(self):
+        _, before = self.request("/api/body/pose")
+        status, result = self.request("/api/body/actuate", {
+            "expected_revision": before["world_revision"],
+            "motor_commands": {"thigh_l": [0.35, 0.4, -0.25]},
+        })
+        self.assertEqual(status, 200)
+        hip = {joint["name"]: joint for joint in result["body"]["joints"]}["thigh_l"]
+        self.assertGreater(abs(hip["rotation_xyz"][1]), 0.0)
+        self.assertGreater(abs(hip["rotation_xyz"][2]), 0.0)
+        self.assertGreater(abs(hip["tendon_extension_xyz"][1]), 0.0)
+        self.assertEqual(len(result["body"]["segments"][0]["orientation"]), 4)
+
+    def test_malformed_three_axis_motor_target_is_rejected(self):
+        revision = self.app.world.revision()
+        status, result = self.request("/api/body/actuate", {
+            "expected_revision": revision,
+            "motor_commands": {"thigh_l": [0.2, 0.3]},
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(self.app.world.revision(), revision)
+
+    def test_invalid_body_command_is_rejected_without_state_mutation(self):
+        revision = self.app.world.revision()
+        status, result = self.request("/api/body/actuate", {
+            "expected_revision": revision,
+            "motor_commands": {"tail": 0.5},
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(self.app.world.revision(), revision)
+        self.assertEqual(result["error"], "action_rejected")
+
+    def test_stale_body_actuation_is_rejected_without_mutation(self):
+        revision = self.app.world.revision()
+        self.request("/api/tick", {"ticks": 1})
+        current = self.app.world.revision()
+        status, result = self.request("/api/body/actuate", {
+            "expected_revision": revision,
+            "motor_commands": {"thigh_l": 0.5},
+        })
+        self.assertEqual(status, 409)
+        self.assertEqual(result["current_revision"], current)
 
     def test_somatic_candidate_generation_does_not_mutate_world(self):
         package = {
