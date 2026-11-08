@@ -257,7 +257,7 @@ class ArticulatedBodyState:
             JointCoordinate(segment.name)
             for segment in definition.segments if segment.parent is not None
         )
-        return cls(joints=joints)
+        return cls(skeleton_version=definition.version, joints=joints)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -772,7 +772,7 @@ class BiomechanicsEngine:
                 )
                 relative_jacobian = tuple(
                     [jacobian_b[axis][column] - jacobian_a[axis][column]
-                     for column in range(len(layout))]
+                     for column in range(len(rows[0]))]
                     for axis in range(3)
                 )
                 reference = (0.0, 1.0, 0.0) if abs(normal[1]) < 0.9 else (1.0, 0.0, 0.0)
@@ -828,8 +828,14 @@ class BiomechanicsEngine:
             effective_n = self._row_dot(normal_row, response_n)
             effective_x = self._row_dot(tangent_x_row, response_x)
             effective_z = self._row_dot(tangent_z_row, response_z)
-            if min(effective_n, effective_x, effective_z) <= 1e-10:
+            if effective_n <= 1e-10:
                 continue
+            if effective_x <= 1e-10:
+                response_x = [0.0 for _ in velocity]
+                effective_x = 1.0
+            if effective_z <= 1e-10:
+                response_z = [0.0 for _ in velocity]
+                effective_z = 1.0
             prepared.append({
                 "name": contact["name"], "gap": float(contact["gap"]),
                 "target_normal_speed": float(contact.get("target_normal_speed", 0.0)),
