@@ -116,7 +116,7 @@ export class SomaticGPU {
     // Rotate through a bounded slice of the global cell array each frame.
     // The five-frame target is further capped to protect the GPU watchdog.
     const targetChunk=Math.ceil(this.cellCount/this.rotationFrames);
-    const budget=Math.min(targetChunk,this.maxCellsPerFrame,this.cellCount);
+    const budget=Math.min(targetChunk,this.maxCellsPerFrame,this.cellCount-this.cursor);
     let remaining=budget,globalStart=this.cursor,dispatches=0;
     const encoder=this.device.createCommandEncoder({label:"Somatic bounded rotating step"});
     const pass=encoder.beginComputePass();pass.setPipeline(this.pipeline);
@@ -133,10 +133,10 @@ export class SomaticGPU {
       this.device.queue.writeBuffer(page.uniform,0,data);
       pass.setBindGroup(0,page.bindGroup);
       pass.dispatchWorkgroups(Math.ceil(segment/WORKGROUP_SIZE));
-      dispatches++;remaining-=segment;globalStart=(globalStart+segment)%this.cellCount;
+      dispatches++;remaining-=segment;globalStart=globalStart+segment;
     }
     pass.end();this.device.queue.submit([encoder.finish()]);
-    this.cursor=(this.cursor+budget)%this.cellCount;
+    this.cursor+=budget;if(this.cursor>=this.cellCount)this.cursor=0;
     this.steps++;this.simulationTime+=dt;
     return{steps:this.steps,simulationTime:this.simulationTime,delta:dt,cells:this.cellCount,
       processedCells:budget,dispatches,cursor:this.cursor,rotationFrames:this.rotationFrames};
