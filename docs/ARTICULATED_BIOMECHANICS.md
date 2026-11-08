@@ -109,3 +109,26 @@ This closes the first executable articulated-body gate, not all embodiment. Rema
 - calibration against reference motion capture and quantitative gait/pose benchmarks
 
 Do not describe this model as a complete human simulator, anatomically accurate digital twin, medical model, or evidence of sentience. It is a real deterministic articulated mechanics subsystem integrated into ISCE with clearly stated approximations and testable contracts.
+
+## 9. Runtime/API control
+
+The solver is reachable through the existing single-process HTTP application; this is not a disconnected test-only function.
+
+- `GET /api/body/pose` returns the current committed skeleton version, root transform/velocity, contact feet, all joint coordinates and all 16 world-space segment poses.
+- `POST /api/body/actuate` accepts a required `expected_revision`, a `motor_commands` object mapping canonical joint names to target radians, and optional `root_acceleration` as three world-frame components. It advances exactly one configured fixed timestep through the same OrganismKernel → ISCE → RealityEngine transaction.
+- Unknown joints, non-finite values, malformed vectors and stale revisions are rejected before the next state is published. The response includes the committed body pose and canonical state snapshot.
+
+Example request body:
+
+```json
+{
+  "expected_revision": 12,
+  "motor_commands": {
+    "thigh_l": 0.55,
+    "shin_l": -0.3
+  },
+  "root_acceleration": [0.6, 0.0, 0.0]
+}
+```
+
+The caller must obtain the current revision from `GET /api/body/pose` or `GET /api/state` and send it unchanged. This is an explicit motor-target interface, not yet a high-level gait planner or an authorization/governance layer for autonomous actions.
