@@ -175,6 +175,8 @@ class HuggingFaceAudioEncoder:
         self.torch = torch
         self.processor = AutoProcessor.from_pretrained(model_id)
         self.model = AutoModel.from_pretrained(model_id).to(device).eval()
+        if int(self.model.config.hidden_size) != 768:
+            raise EncoderDependencyError("Wav2Vec2 model must emit 768-D hidden states")
         self.projection = projection
         self.device = device
         self.encoder_id = f"hf:{model_id}+trained-audio-projection"
@@ -187,8 +189,20 @@ class HuggingFaceAudioEncoder:
         sampling_rate = int(payload["sampling_rate"])
         if sampling_rate <= 0 or len(audio) < 400:
             raise LatentLanguageError("Audio requires a valid rate and at least 400 samples")
+        waveform = self.torch.as_tensor(audio, dtype=self.torch.float32)
+        if waveform.ndim != 1 or not bool(self.torch.isfinite(waveform).all().item()):
+            raise LatentLanguageError("Audio must be a finite mono waveform")
+        target_rate = int(self.processor.feature_extractor.sampling_rate)
+        if sampling_rate != target_rate:
+            target_length = max(1, round(waveform.numel() * target_rate / sampling_rate))
+            waveform = self.torch.nn.functional.interpolate(
+                waveform.reshape(1, 1, -1), size=target_length,
+                mode="linear", align_corners=False,
+            ).reshape(-1)
+            sampling_rate = target_rate
         inputs = self.processor(
-            audio, sampling_rate=sampling_rate, return_tensors="pt", padding=True
+            waveform.cpu().tolist(), sampling_rate=sampling_rate,
+            return_tensors="pt", padding=True
         )
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         with self.torch.inference_mode():
