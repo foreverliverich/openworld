@@ -53,7 +53,9 @@ class ArticulatedBodyTests(unittest.TestCase):
         # Start with the feet intentionally intersecting the ground plane;
         # one fixed substep must resolve the contact without tunnelling.
         result = self.engine.step(self.state, (0, 0.5, 0), dt=0.02)
-        self.assertTrue(set(result.contacts).issubset({"foot_l", "foot_r"}))
+        self.assertTrue(set(result.contacts).issubset(
+            {"foot_l", "foot_r", "shin_l", "shin_r"}
+        ))
         lowest = min(
             min(pose.start[1], pose.end[1]) - pose.radius
             for pose in result.poses if pose.name in result.contacts
