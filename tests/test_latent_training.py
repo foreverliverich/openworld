@@ -48,15 +48,16 @@ class MultimodalAlignmentTests(unittest.TestCase):
             restored.load_checkpoint(path)
             self.assertEqual(tuple(restored.project_audio_slot(validation["audio"]).shape), (8, 128))
             class FixedEncoder:
-                def __init__(self, size):
+                def __init__(self, size, base_encoder_id):
                     self.size = size
                     self.encoder_id = f"test-fixed-{size}"
+                    self.base_encoder_id = base_encoder_id
                 def encode(self, payload):
                     return (0.1,) * self.size
             registry = EncoderRegistry()
-            registry.register("text", FixedEncoder(768))
-            registry.register("image", FixedEncoder(512))
-            registry.register("audio", FixedEncoder(128))
+            registry.register("text", FixedEncoder(768, "hf:bert-base-uncased"))
+            registry.register("image", FixedEncoder(512, "hf:openai/clip-vit-base-patch32"))
+            registry.register("audio", FixedEncoder(128, "hf:facebook/wav2vec2-base"))
             coordinator = LatentLanguageCoordinator(registry, alignment_model=restored)
             cycle = coordinator.cycle(
                 [
