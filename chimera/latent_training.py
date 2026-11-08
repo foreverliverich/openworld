@@ -61,7 +61,9 @@ class MultimodalProjectionModel:
         if not self.audio_trained or "audio" not in self.validated_modalities:
             raise AlignmentTrainingError("Audio bottleneck requires paired training and held-out validation")
         values = self._batch(audio_hidden, 768, "audio")
-        return self.audio_compressor(values)
+        self.audio_compressor.eval()
+        with self.torch.inference_mode():
+            return self.audio_compressor(values)
 
     def _require_validated(self, modality: str) -> None:
         if not self.trained or modality not in self.validated_modalities:
