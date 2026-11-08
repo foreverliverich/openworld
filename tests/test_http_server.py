@@ -110,7 +110,7 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
     def test_body_pose_endpoint_returns_authoritative_articulated_segments(self):
         status, body = self.request("/api/body/pose")
         self.assertEqual(status, 200)
-        self.assertEqual(body["skeleton_version"], "human-sagittal-1")
+        self.assertEqual(body["skeleton_version"], "human-3d-1")
         self.assertEqual(len(body["segments"]), 16)
         self.assertEqual(len(body["joints"]), 15)
         self.assertEqual(body["world_revision"], self.app.world.revision())
