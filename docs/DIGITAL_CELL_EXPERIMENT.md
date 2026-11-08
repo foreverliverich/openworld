@@ -18,17 +18,29 @@ controller with:
 - a pure transition into the existing ISCE kernel on every cell step.
 
 ISCE remains the single intrinsic organism-state owner. The cell's local
-variables are experimental controller state only. The caller receives the
-new ISCE state and must persist it through the existing OrganismKernel /
-RealityEngine path when running inside the application.
+variables are experimental controller state only. `DigitalCell.execute()`
+now reads a caller-supplied observation, proposes a cell and ISCE transition,
+routes a seek action through `OrganismActionGateway` to consume energy from
+the authoritative RealityEngine field, commits the exact proposed ISCE state,
+and advances local cell memory only after persistence succeeds. Rest and
+inspect also commit their proposed ISCE state before local cell memory advances.
+
+The new `world_builder.harvest_energy` action is bounded, revision-checked,
+event-journaled, and subject to the existing organism viability/resource gate.
+It does not create energy: it subtracts energy from the local environment.
 
 ## What this closes — and what it does not
 
-This closes the missing *executable coupling seam* between local cell
-regulation, action selection, outcome-based memory and organism-level
-physiology. It does not yet couple cell actions to actual RealityEngine
-geometry, GPU particles, gene expression, tissue mechanics or a camera-derived
-sensor. The current environment is supplied as a bounded observation.
+This closes a first *single-cell world-action loop*: a cell decision can
+consume a real persistent environmental field through the governed gateway,
+and its matching ISCE transition is committed before local memory advances.
+The integration tests cover a seek action that depletes the world energy field
+and a rest action that commits the proposed organism state.
+
+It does not yet establish adaptive survival advantage, long-horizon stability,
+learning transfer, or population-level emergence. The environment observation
+is still supplied by the caller; camera/touch/hearing sensing, GPU particle
+coupling, gene expression and tissue mechanics are not part of this path.
 
 ## Acceptance gate
 
@@ -38,8 +50,11 @@ Run:
 python -m unittest tests.test_digital_cell tests.test_ccpl
 ```
 
-Then add a paired experiment with identical initial states and observation
-sequences: adaptive cell, frozen-memory ablation and shuffled-outcome sham.
-Report cumulative homeostatic error, energy reserve, task reward, and
-prediction error. Do not call it learning until the adaptive condition
-reproducibly beats both controls across held-out observation sequences.
+The current tests are contract tests for one-step integration, not the paired
+survival experiment. Next acceptance gate: run matched long-horizon episodes
+with identical initial world/organism states under adaptive memory, frozen
+memory, and shuffled feedback. Change the location/time of environmental energy
+availability after the initial phase. Report survival ticks, minimum/mean body
+energy, cumulative homeostatic error, harvested field energy, action success,
+and prediction error. Do not claim learning advantage until adaptive memory
+reproducibly beats both controls on held-out schedules.
