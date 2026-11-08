@@ -52,6 +52,20 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         for tool_name in ("World Builder", "Somatic Core", "Tool Fabricator", "Life Generator", "Movement Lab", "Research Lab"):
             self.assertIn(tool_name, html)
 
+    def test_cross_origin_isolation_headers_are_present_on_api_and_static_responses(self):
+        for path in ("/api/health", "/", "/missing-resource"):
+            with urlopen(self.base + path, timeout=3) if path != "/missing-resource" else self._open_error(path) as response:
+                headers = response.headers
+                self.assertEqual(headers.get("Cross-Origin-Opener-Policy"), "same-origin")
+                self.assertEqual(headers.get("Cross-Origin-Embedder-Policy"), "require-corp")
+                self.assertEqual(headers.get("Cross-Origin-Resource-Policy"), "same-site")
+
+    def _open_error(self, path):
+        try:
+            return urlopen(self.base + path, timeout=3)
+        except HTTPError as exc:
+            return exc
+
     def test_state_is_read_from_one_runtime_and_world(self):
         status, state = self.request("/api/state")
         self.assertEqual(status, 200)
