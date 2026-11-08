@@ -151,11 +151,10 @@ class DigitalCell:
         ]
         if old.energy < 0.18 or old.stress > 0.85:
             action_index = 0
-        elif refractory > 0 and old.previous_action is not None:
-            action_index = self.ACTIONS.index(old.previous_action)
         else:
-            # Membrane firing is required for the metabolically active seek action.
-            eligible = (0, 1, 2) if fired else (0, 2)
+            # Refractory state suppresses active seeking. Outside refractoriness,
+            # a membrane spike is required for the metabolically active action.
+            eligible = (0, 2) if refractory > 0 else ((0, 1, 2) if fired else (0, 2))
             action_index = max(eligible, key=lambda idx: (scores[idx], -idx))
         action = self.ACTIONS[action_index]
 
