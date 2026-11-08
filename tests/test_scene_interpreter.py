@@ -158,6 +158,40 @@ class SceneInterpreterValidationTests(unittest.TestCase):
             body = json.loads(urlopen.call_args.args[0].data)
             self.assertIn("visible physical objects", body["contents"][0]["parts"][0]["text"])
 
+    def test_nonfinite_and_boolean_geometry_is_rejected(self):
+        valid = {
+            "objects": [{
+                "object_id": "block", "kind": "box",
+                "position": [0, 0.5, 0], "size": [1, 1, 1],
+                "material": "stone", "mass": 1, "dynamic": False,
+            }],
+            "relations": [],
+        }
+        for bad_position in ([float("nan"), 0.5, 0], [True, 0.5, 0], [float("inf"), 0.5, 0]):
+            with self.subTest(position=bad_position):
+                payload = {
+                    **valid,
+                    "objects": [{**valid["objects"][0], "position": bad_position}],
+                }
+                with self.assertRaises(SceneInterpretationError):
+                    GeminiSceneInterpreter._parse_graph(payload, "finite-check")
+
+    def test_nonfinite_relation_gap_is_rejected(self):
+        payload = {
+            "objects": [
+                {"object_id": "a", "kind": "box", "position": [0, 0.5, 0],
+                 "size": [1, 1, 1], "material": "stone", "mass": 1, "dynamic": False},
+                {"object_id": "b", "kind": "box", "position": [2, 0.5, 0],
+                 "size": [1, 1, 1], "material": "stone", "mass": 1, "dynamic": False},
+            ],
+            "relations": [{
+                "relation": "next_to", "subject": "a", "object": "b",
+                "gap": float("nan"),
+            }],
+        }
+        with self.assertRaises(SceneInterpretationError):
+            GeminiSceneInterpreter._parse_graph(payload, "finite-relation")
+
     def test_object_count_and_extent_are_bounded(self):
         with self.assertRaises(SceneInterpretationError):
             GeminiSceneInterpreter._parse_graph({
