@@ -9,6 +9,7 @@ outcome through the coupled organism kernel.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Mapping
 
 from .organism_kernel import OrganismKernel
