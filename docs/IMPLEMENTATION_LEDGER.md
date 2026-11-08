@@ -171,7 +171,7 @@ The protected body requirement has moved from a backlog statement to a connected
 - web/somatic-core.js: WebGL2 raymarcher, A/B SDF blending, BioPBR noise/domain operators, diffusion/fur displacement, pores, subdermal variation, material IDs, soft-light SSS and AO.
 - web/somatic.html: dedicated natural-language morphology interface; restores the canonical SDF pair from RealityEngine.
 - web/index.html: the rigid primitive Body Forge form is removed from the main UI and replaced with a link to Somatic Core.
-- tests/test_somatic_kernel.py and tests/test_somatic_reality.py: added package, credential, persistence, revision-conflict and event-chain tests.
+- tests/test_somatic_kernel.py, tests/test_somatic_reality.py and expanded tests/test_http_server.py: added package, credential, candidate-without-mutation, durable A/B persistence, revision-conflict and event-chain integration tests.
 
 **Important transaction invariant:** model generation is not a world mutation. The candidate SDF is compiled with the current BioPBR library in the browser first. Only after successful compile/link does the browser submit the package and expected world revision for an atomic RealityEngine commit. Compile failure leaves both the displayed program and canonical state unchanged.
 
