@@ -135,6 +135,22 @@ class OllamaCreativeSpecialistTests(unittest.TestCase):
             finally:
                 world.close()
 
+    @patch("chimera.ollama_creative_specialist.urllib.request.urlopen")
+    def test_non_utf8_provider_response_fails_closed(self, urlopen):
+        class InvalidUtf8Response(FakeResponse):
+            def read(self, size=-1):
+                return b"\\xff"
+        urlopen.return_value = InvalidUtf8Response({})
+        specialist = OllamaCreativeSpecialist("qwen2.5:7b")
+        self.assertEqual(
+            specialist.propose(
+                LatentState.empty(),
+                SpecialistContext(1.0, 0, text="Design a character."),
+            ),
+            (),
+        )
+        self.assertIn("non-UTF-8", specialist.last_error)
+
     def test_output_bounds_reject_unbounded_generated_content(self):
         invalid = dict(self.output)
         invalid["elements"] = [
