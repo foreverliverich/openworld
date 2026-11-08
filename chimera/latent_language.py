@@ -175,6 +175,14 @@ class EncoderRegistry:
             raise LatentLanguageError("Encoder must expose a stable encoder_id")
         self._encoders[modality] = encoder
 
+    def supports(self, modality: str) -> bool:
+        return modality in self._encoders
+
+    def get(self, modality: str) -> Encoder:
+        if modality not in self._encoders:
+            raise LatentLanguageError(f"No real encoder registered for modality '{modality}'")
+        return self._encoders[modality]
+
     def encode(
         self, modality: str, payload: Any, *, timestamp: float,
         confidence: float, source_id: str,
