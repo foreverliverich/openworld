@@ -134,6 +134,8 @@ class OrganismKernel:
         measured_work_units: float = 0.0,
         action_success: float = 0.5,
         sensory_salience: float = 0.0,
+        causation_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> WorldResult:
         position = self.state.position
         local = self.world.field_at(position)
@@ -171,6 +173,8 @@ class OrganismKernel:
                 self.world.revision()
                 if expected_revision is None else expected_revision
             ),
+            causation_id=causation_id,
+            correlation_id=correlation_id,
         )
         # Publish the next in-memory state only after the durable transaction
         # commits. A failed optimistic write leaves the prior state authoritative.
