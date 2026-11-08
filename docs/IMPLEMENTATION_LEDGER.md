@@ -227,3 +227,21 @@ The generalized contact solver now handles non-adjacent body-segment collisions,
 **Model boundary:** this is rigid capsule self-collision for one articulated organism. It does not yet implement soft-tissue collision, broadphase spatial acceleration, inter-organism collision, grasping, or uneven terrain. The pair search is currently quadratic in the number of body segments and is suitable for the canonical 16-segment skeleton, not an unbounded particle system.
 
 **Verification:** pending hosted CI for this branch. Do not treat this gate as closed until the standard-library suite and real Chromium/WebGL2 acceptance both pass.
+
+
+## Root attitude and angular-momentum dynamics — 2026-11-08
+
+The articulated generalized system now includes the root's six rigid-body velocity coordinates: world translation X/Y/Z and world angular velocity X/Y/Z, followed by all enabled joint rotations.
+
+- `ArticulatedBodyState` now owns a normalized root orientation quaternion and world-frame root angular velocity. Existing serialized payloads default to identity orientation and zero angular velocity, preserving compatibility.
+- Root orientation is composed into the entire forward-kinematic tree.
+- Every rigid segment contributes root rotational Jacobian terms to the generalized mass matrix: point velocity from `omega × (COM - root)` and angular velocity about each world axis. Root rotation therefore couples to segment translation, segment inertia, joint motion and gravity.
+- The finite-difference mass-matrix derivative perturbs root attitude on SO(3) using a world-axis quaternion increment; generalized velocity includes root angular velocity.
+- Root orientation is integrated with a world-frame exponential-map quaternion update. Contact and self-collision impulses act on root angular velocity through the expanded generalized Jacobian.
+- Root angular acceleration currently emerges from the coupled dynamics and contact impulses. There is not yet an external root torque/command interface.
+- Tests added for world-space root rotation of the kinematic tree, positive rotational inertia and translation/rotation coupling, angular velocity integration, and state serialization round-trip.
+- The browser acceptance test continues to validate the existing committed body pose UI. It does not yet provide direct root attitude controls.
+
+**Model boundary:** this is quaternion attitude integration with world-frame generalized angular velocity, not a full Lie-group variational integrator. Independent rigid-body-engine comparisons, external root torque control, uneven terrain, manipulation contacts, soft-tissue collision, and calibrated anthropometry remain open.
+
+**Verification:** pending hosted CI for this branch. Do not close this gate until all standard-library tests and real Chromium/WebGL2 acceptance pass.
