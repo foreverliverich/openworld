@@ -2,9 +2,9 @@ name: Chimera core tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "articulated-biomechanics"]
   push:
-    branches: [main, "tecq-causal-morphogenesis"]
+    branches: [main, "tecq-causal-morphogenesis", "contact-constrained-dynamics"]
   workflow_dispatch:
 
 permissions:
