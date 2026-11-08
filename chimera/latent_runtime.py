@@ -100,7 +100,7 @@ def build_latent_language(
         if ollama_creative_model:
             specialist_list.append(OllamaCreativeSpecialist(
                 ollama_creative_model, base_url=ollama_base_url,
-                timeout=max(ollama_timeout, 45.0),
+                timeout=ollama_timeout,
             ))
         specialists = tuple(specialist_list)
     trajectory_recorder = (
