@@ -219,8 +219,8 @@ class MultimodalFusion:
         return state.write_subspace(subspace, blended, timestamp=observation.timestamp)
 
     @staticmethod
-    def aligned_similarity(a: EncodedObservation, b: EncodedObservation) -> float:
-        if not a.shared_space or a.shared_space != b.shared_space:
+    def aligned_similarity(a: Any, b: Any) -> float:
+        if not getattr(a, "shared_space", None) or a.shared_space != getattr(b, "shared_space", None):
             raise LatentLanguageError(
                 "Cross-modal comparison requires an explicitly shared encoder space"
             )
@@ -242,8 +242,8 @@ class SceneObject:
             raise LatentLanguageError("Scene objects require object_id and kind")
         object.__setattr__(self, "position", _vector(self.position, 3, "position"))
         object.__setattr__(self, "size", _vector(self.size, 3, "size"))
-        if any(v <= 0 for v in self.size) or self.mass <= 0:
-            raise LatentLanguageError("Scene object dimensions and mass must be positive")
+        if any(v <= 0 for v in self.size) or not math.isfinite(self.mass) or self.mass <= 0:
+            raise LatentLanguageError("Scene object dimensions and mass must be finite and positive")
 
 
 @dataclass(frozen=True)
@@ -381,6 +381,24 @@ class Specialist(Protocol):
 
 def _stable_id(prefix: str, material: str) -> str:
     return prefix + "-" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
+
+def _proposal_fingerprint(proposal: SpecialistProposal) -> str:
+    payload = {
+        "id": proposal.proposal_id, "specialist": proposal.specialist,
+        "kind": proposal.kind, "payload": proposal.payload,
+        "confidence": proposal.confidence, "salience": proposal.salience,
+        "urgency": proposal.urgency, "novelty": proposal.novelty,
+        "estimated_cost": proposal.estimated_cost,
+        "world_revision": proposal.world_revision,
+        "evidence_refs": proposal.evidence_refs,
+        "conflict_key": proposal.conflict_key,
+    }
+    try:
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=list)
+    except (TypeError, ValueError) as exc:
+        raise LatentLanguageError("Proposal payload must be JSON-serializable") from exc
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _expand_features(features: Sequence[float], size: int) -> tuple[float, ...]:
@@ -585,6 +603,7 @@ class WorkspaceBroadcast:
     selected: tuple[SpecialistProposal, ...]
     rejected: tuple[SpecialistProposal, ...]
     scores: Mapping[str, float]
+    proposal_fingerprints: Mapping[str, str]
 
 
 class GlobalWorkspace:
@@ -636,6 +655,7 @@ class GlobalWorkspace:
         broadcast = WorkspaceBroadcast(
             self.tick, state.digest, tuple(selected), rejected,
             {p.proposal_id: self.score(p) for p in proposals},
+            {p.proposal_id: _proposal_fingerprint(p) for p in proposals},
         )
         self.latest = broadcast
         return broadcast
@@ -671,10 +691,12 @@ class LatentLanguageCoordinator:
 
     def cycle(
         self, observations: Sequence[Mapping[str, Any]], context: SpecialistContext,
-        *, dt: float = 0.05,
+        *, dt: float = 0.05, organism_state: Any | None = None,
     ) -> CognitiveCycleResult:
         if dt <= 0 or not math.isfinite(dt):
             raise LatentLanguageError("dt must be finite and positive")
+        if organism_state is not None:
+            self.state = project_isce_state(organism_state, timestamp=context.timestamp)
         for item in observations:
             encoded = self.encoders.encode(
                 str(item["modality"]), item["payload"],
@@ -740,7 +762,7 @@ def project_isce_state(organism_state: Any, *, timestamp: float | None = None) -
         resources = organism_state.resources
     except AttributeError as exc:
         raise LatentLanguageError("organism_state must expose the canonical ISCE partitions") from exc
-    now = float(temporal.organism_time)
+    now = float(temporal.organism_time) if timestamp is None else _finite(timestamp, "projection timestamp")
     emotion = _expand_features((
         body.stress, body.fatigue, body.allostatic_error,
         intero.hunger, intero.pain, intero.arousal, intero.precision,
@@ -782,6 +804,8 @@ class CognitiveActionGateway:
             item.proposal_id for item in latest.selected
         }:
             raise LatentLanguageError("Proposal was not selected by the latest global workspace")
+        if latest.proposal_fingerprints.get(proposal.proposal_id) != _proposal_fingerprint(proposal):
+            raise LatentLanguageError("Proposal changed after workspace arbitration")
         if proposal.kind != "world_action":
             raise LatentLanguageError("Only world_action proposals can cross the action gateway")
         if proposal.confidence < self.min_confidence:
