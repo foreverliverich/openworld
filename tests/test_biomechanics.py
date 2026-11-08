@@ -54,7 +54,13 @@ class ArticulatedBodyTests(unittest.TestCase):
         self.assertTrue(set(result.contacts).issubset(
             {segment.name for segment in self.engine.skeleton.segments}
         ))
-        self.assertTrue(result.contacts)
+        lowest = min(
+            min(pose.start[1], pose.end[1]) - pose.radius for pose in result.poses
+        )
+        self.assertTrue(
+            result.contacts,
+            f"root={result.position}, lowest_capsule_bottom={lowest}, velocity={result.state.root_velocity}",
+        )
         self.assertAlmostEqual(result.state.root_velocity[1], 0.0, places=6)
         poses = {pose.name: pose for pose in result.poses}
         for name in result.contacts:
