@@ -176,3 +176,19 @@ The protected body requirement has moved from a backlog statement to a connected
 **Important transaction invariant:** model generation is not a world mutation. The candidate SDF is compiled with the current BioPBR library in the browser first. Only after successful compile/link does the browser submit the package and expected world revision for an atomic RealityEngine commit. Compile failure leaves both the displayed program and canonical state unchanged.
 
 **Verification status:** local Python syntax and package-validation smoke checks passed. New automated tests are committed but hosted CI has not yet been confirmed for this implementation. A real WebGL2 browser run and the whitepaper's repeated T1–T7 acceptance suite have not been observed; local headless Chromium could not initialize EGL/SwiftShader in this environment. P0 is therefore **in progress, not certified complete**. Image-conditioned ten-step refinement and pointer-orbit/wheel-zoom camera controls are now implemented; visual-quality verification against live Gemini output and the repeated browser acceptance run remain open. Long-running request cancellation/retry remains open. No articulation, locomotion, GPU particle-count or sentience claims are made.
+
+
+## CCPL intervention battery — 2026-11-08
+
+Added chimera/ccpl.py and tests/test_ccpl.py on the isolated research/ccpl-causal-battery branch.
+
+- Runs paired deterministic trajectories from one immutable ISCE initial state and one identical ordered input sequence.
+- Includes baseline, zero-delta sham, single intervention, simultaneous double intervention and mediator-clamped conditions.
+- Records full state trajectories, initial-state digest, fixed-graph fingerprint, final outcome effects, sham error and mediation attenuation.
+- Interventions are bounded state clamps at a defined transition boundary; the causal graph and structural weights remain unchanged.
+- Default experiment perturbs body integrity, then resource reserve, and tests whether the interoceptive precision path mediates a downstream attention change.
+- The experiment harness is separate from the organism state owner and does not alter runtime behavior or persistence schema.
+
+**Verification status:** tests have been added but have not yet been executed by hosted CI. The authoring environment could not reach GitHub for a local clone. The workflow now includes research/** push branches so the isolated research branch will run the same Python 3.11 regression suite. Do not mark CCPL or ICCR acceptance complete until the hosted run passes and the experiment's expected causal effects are confirmed.
+
+Details: CCPL_INTERVENTION_BATTERY.md.
