@@ -191,3 +191,31 @@ A cognition request must set alignment_pair: true only when the text is a semant
     python scripts/train_multimodal_alignment.py --dataset ./private-data/chimera-trajectories.jsonl --checkpoint ./private-data/multimodal-alignment.pt
 
 The dynamics trainer uses the fixed sample_dt recorded by the runtime and requires at least two independent trajectory sessions. The alignment trainer uses only explicitly marked text/image pairs and splits by whole trajectory ID before flattening rows; adjacent frames from the same session cannot leak across the train/validation boundary. --include-audio additionally requires a raw 768-D audio training vector for every selected pair. Both scripts print held-out metrics and save only checkpoints that pass the model's existing validation requirements. Synthetic tensors in CI remain code-path tests, not project data or scientific evidence.
+
+
+## Optional model-backed creative generation
+
+The deterministic `CreativeSpecialist` composes a structured concept from the
+current request or validated scene graph; it is a baseline composer, not a
+generative model. The optional `OllamaCreativeSpecialist` adds actual local
+language-model generation behind a strict JSON contract. Enable it independently
+with `--ollama-creative-model <model-tag>`; it shares the configured Ollama URL
+and uses a bounded request timeout.
+
+Its output contract is deliberately not a world-action schema. It contains an
+artifact type, title, concept, up to 12 named elements, up to four variations,
+style tags and preserved constraints. Every field is length/count checked before
+the result becomes a `creative_artifact` workspace proposal. The proposal is
+eligible for limited-capacity competition, but its authority is
+`artifact_only`. It has no tool name, action field, geometry payload or gateway
+permission. The selected artifact is surfaced through the runtime cognition
+result and state snapshot; an unselected artifact remains rejected by the
+workspace. Ollama failure or invalid JSON drops the optional proposal without
+aborting the authoritative organism cycle.
+
+This is model-generated creative text, not image generation, mesh synthesis,
+shader compilation or verified 3D construction. The model's energy cost is not
+yet measured, and its fixed workspace score inputs are not calibrated confidence
+or metabolic telemetry. Any future conversion from an artifact into world
+geometry must pass the existing scene graph validator, workspace selection and
+revision-checked action gateway as a separate implementation.
