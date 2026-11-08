@@ -231,6 +231,8 @@ class ArticulatedBodyState:
     skeleton_version: str = SKELETON_VERSION
     joints: tuple[JointCoordinate, ...] = ()
     root_velocity: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    root_orientation: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
+    root_angular_velocity: tuple[float, float, float] = (0.0, 0.0, 0.0)
     contacts: tuple[str, ...] = ()
     mechanical_strain: float = 0.0
     proprioceptive_error: float = 0.0
@@ -239,6 +241,16 @@ class ArticulatedBodyState:
     def __post_init__(self) -> None:
         object.__setattr__(self, "joints", tuple(self.joints))
         object.__setattr__(self, "root_velocity", _vec3("root_velocity", self.root_velocity))
+        orientation = tuple(_finite("root_orientation", value) for value in self.root_orientation)
+        if len(orientation) != 4:
+            raise BiomechanicsError("root_orientation must contain four finite values")
+        norm = math.sqrt(sum(value * value for value in orientation))
+        if norm < 1e-12:
+            raise BiomechanicsError("root_orientation quaternion norm cannot be zero")
+        object.__setattr__(self, "root_orientation", tuple(value / norm for value in orientation))
+        object.__setattr__(self, "root_angular_velocity", _vec3(
+            "root_angular_velocity", self.root_angular_velocity
+        ))
         object.__setattr__(self, "contacts", tuple(self.contacts))
         names = [joint.name for joint in self.joints]
         if len(names) != len(set(names)):
@@ -278,6 +290,8 @@ class ArticulatedBodyState:
             skeleton_version=SKELETON_VERSION if source_version == "human-sagittal-1" else source_version,
             joints=tuple(joints),
             root_velocity=tuple(payload.get("root_velocity", (0.0,0.0,0.0))),  # type: ignore[arg-type]
+            root_orientation=tuple(payload.get("root_orientation", (1.0,0.0,0.0,0.0))),  # type: ignore[arg-type]
+            root_angular_velocity=tuple(payload.get("root_angular_velocity", (0.0,0.0,0.0))),  # type: ignore[arg-type]
             contacts=tuple(payload.get("contacts", ())),  # type: ignore[arg-type]
             mechanical_strain=float(payload.get("mechanical_strain", 0.0)),
             proprioceptive_error=float(payload.get("proprioceptive_error", 0.0)),
@@ -342,6 +356,17 @@ def _q_axis(axis: tuple[float, float, float], angle: float) -> Quaternion:
     half = angle * 0.5
     sine = math.sin(half)
     return (math.cos(half), axis[0]*sine, axis[1]*sine, axis[2]*sine)
+
+
+def _integrate_root_orientation(
+    orientation: Quaternion, angular_velocity: tuple[float, float, float], dt: float
+) -> Quaternion:
+    """Integrate world-frame angular velocity with an exponential-map step."""
+    speed = math.sqrt(_dot(angular_velocity, angular_velocity))
+    if speed <= 1e-12 or dt <= 0.0:
+        return _q_normalize(orientation)
+    delta = _q_axis(_scale(angular_velocity, 1.0 / speed), speed * dt)
+    return _q_normalize(_q_mul(delta, orientation))
 
 
 def _q_from_euler_xyz(rotation: tuple[float, float, float]) -> Quaternion:
@@ -451,7 +476,7 @@ class BiomechanicsEngine:
         poses: list[SegmentPose] = []
         for spec in self.skeleton.segments:
             if spec.parent is None:
-                origin, parent_q = root, (1.0, 0.0, 0.0, 0.0)
+                origin, parent_q = root, state.root_orientation
                 world_q = parent_q
             else:
                 parent_origin, parent_q = transforms[spec.parent]
@@ -476,7 +501,7 @@ class BiomechanicsEngine:
         # Root translation is part of the same generalized coordinate vector
         # as the articulated joints. This creates translational/joint coupling
         # in M(q), rather than integrating the pelvis as a separate particle.
-        root_dofs = (("__root__", 0), ("__root__", 1), ("__root__", 2))
+        root_dofs = tuple(("__root__", axis) for axis in range(6))
         joint_dofs = tuple(
             (spec.name, axis)
             for spec in self.skeleton.segments if spec.parent is not None
@@ -537,10 +562,17 @@ class BiomechanicsEngine:
                 ancestor_names.append(cursor)
                 cursor = self._specs[cursor].parent
 
+            root_position = _vec3("root position", position)
             jacobian_columns = [
                 (index[("__root__", axis)], tuple(
                     1.0 if component == axis else 0.0 for component in range(3)
                 ), (0.0, 0.0, 0.0))
+                for axis in range(3)
+            ] + [
+                (index[("__root__", axis + 3)], _cross(
+                    tuple(1.0 if component == axis else 0.0 for component in range(3)),
+                    _sub(com, root_position),
+                ), tuple(1.0 if component == axis else 0.0 for component in range(3)))
                 for axis in range(3)
             ]
             for joint_name in ancestor_names:
@@ -583,7 +615,10 @@ class BiomechanicsEngine:
         qdot = []
         for joint_name, axis_index in layout:
             if joint_name == "__root__":
-                qdot.append(state.root_velocity[axis_index])
+                qdot.append(
+                    state.root_velocity[axis_index] if axis_index < 3
+                    else state.root_angular_velocity[axis_index - 3]
+                )
             else:
                 coordinate = next(j for j in state.joints if j.name == joint_name)
                 qdot.append(coordinate.angular_velocity_xyz[axis_index])
@@ -592,10 +627,34 @@ class BiomechanicsEngine:
         derivatives = []
         epsilon = 1e-4
         for joint_name, axis_index in layout:
-            if joint_name == "__root__":
+            if joint_name == "__root__" and axis_index < 3:
                 derivatives.append([[
                     0.0 for _ in range(count)
                 ] for _ in range(count)])
+                continue
+            if joint_name == "__root__":
+                axis = axis_index - 3
+                world_axis = tuple(1.0 if component == axis else 0.0 for component in range(3))
+                shifted_orientation = _q_normalize(_q_mul(
+                    _q_axis(world_axis, epsilon), state.root_orientation
+                ))
+                perturbed = ArticulatedBodyState(
+                    skeleton_version=state.skeleton_version,
+                    joints=state.joints,
+                    root_velocity=state.root_velocity,
+                    root_orientation=shifted_orientation,
+                    root_angular_velocity=state.root_angular_velocity,
+                    contacts=state.contacts,
+                    mechanical_strain=state.mechanical_strain,
+                    proprioceptive_error=state.proprioceptive_error,
+                    metabolic_work=state.metabolic_work,
+                )
+                shifted, _ = self._mass_matrix_and_gravity(position, perturbed, layout)
+                derivatives.append([
+                    [(shifted[i][j] - base_mass[i][j]) / epsilon
+                     for j in range(count)]
+                    for i in range(count)
+                ])
                 continue
             changed = []
             joint_spec = self._specs[joint_name]
@@ -622,6 +681,8 @@ class BiomechanicsEngine:
             perturbed = ArticulatedBodyState(
                 skeleton_version=state.skeleton_version,
                 joints=tuple(changed), root_velocity=state.root_velocity,
+                root_orientation=state.root_orientation,
+                root_angular_velocity=state.root_angular_velocity,
                 contacts=state.contacts, mechanical_strain=state.mechanical_strain,
                 proprioceptive_error=state.proprioceptive_error,
                 metabolic_work=state.metabolic_work,
@@ -657,8 +718,13 @@ class BiomechanicsEngine:
         coordinates = self._validate_state(state)
         index = {key: i for i, key in enumerate(layout)}
         rows = [[0.0 for _ in layout] for _ in range(3)]
+        root = _vec3("root position", root_position)
         for axis in range(3):
             rows[axis][index[("__root__", axis)]] = 1.0
+            angular_axis = tuple(1.0 if component == axis else 0.0 for component in range(3))
+            linear = _cross(angular_axis, _sub(point, root))
+            for component in range(3):
+                rows[component][index[("__root__", axis + 3)]] = linear[component]
 
         cursor = segment_name
         while self._specs[cursor].parent is not None:
@@ -1046,7 +1112,7 @@ class BiomechanicsEngine:
         # through the complete mass matrix. This preserves the requested free
         # acceleration while retaining root/joint inertial coupling.
         root_acceleration_vector = [
-            acceleration[axis] if name == "__root__" else 0.0
+            acceleration[axis] if name == "__root__" and axis < 3 else 0.0
             for name, axis in layout
         ]
         external_generalized_force = [
@@ -1110,8 +1176,12 @@ class BiomechanicsEngine:
         # Assemble the free generalized velocity from the coupled solve.
         generalized_velocity = []
         for name, axis in layout:
-            if name == "__root__":
+            if name == "__root__" and axis < 3:
                 value = state.root_velocity[axis] + generalized_acceleration[
+                    dof_index[(name, axis)]
+                ] * dt
+            elif name == "__root__":
+                value = state.root_angular_velocity[axis - 3] + generalized_acceleration[
                     dof_index[(name, axis)]
                 ] * dt
             else:
@@ -1124,13 +1194,22 @@ class BiomechanicsEngine:
             _clamp(generalized_velocity[dof_index[("__root__", axis)]], -12.0, 12.0)
             for axis in range(3)
         )
+        candidate_root_angular_velocity = tuple(
+            _clamp(generalized_velocity[dof_index[("__root__", axis + 3)]], -18.0, 18.0)
+            for axis in range(3)
+        )
         candidate_root = tuple(
             root[axis] + candidate_root_velocity[axis] * dt for axis in range(3)
+        )
+        candidate_root_orientation = _integrate_root_orientation(
+            state.root_orientation, candidate_root_angular_velocity, dt
         )
         candidate_state = ArticulatedBodyState(
             skeleton_version=self.skeleton.version,
             joints=tuple(updated[s.name] for s in self.skeleton.segments if s.parent is not None),
             root_velocity=candidate_root_velocity,
+            root_orientation=candidate_root_orientation,
+            root_angular_velocity=candidate_root_angular_velocity,
         )
         candidate_poses = self.forward_kinematics(candidate_root, candidate_state)
         contact_constraints: list[dict[str, object]] = []
@@ -1200,6 +1279,13 @@ class BiomechanicsEngine:
             _clamp(constrained_velocity[dof_index[("__root__", axis)]], -12.0, 12.0)
             for axis in range(3)
         )
+        root_angular_velocity = tuple(
+            _clamp(constrained_velocity[dof_index[("__root__", axis + 3)]], -18.0, 18.0)
+            for axis in range(3)
+        )
+        root_orientation = _integrate_root_orientation(
+            state.root_orientation, root_angular_velocity, dt
+        )
         root = [root[axis] + root_velocity[axis] * dt for axis in range(3)]
         provisional_state = ArticulatedBodyState(
             skeleton_version=self.skeleton.version,
@@ -1208,6 +1294,8 @@ class BiomechanicsEngine:
                 if s.parent is not None
             ),
             root_velocity=root_velocity,
+            root_orientation=root_orientation,
+            root_angular_velocity=root_angular_velocity,
             contacts=tuple(contact_names),
             mechanical_strain=_clamp(limit_strain, 0.0, 1.0),
             proprioceptive_error=_clamp(
@@ -1240,6 +1328,8 @@ class BiomechanicsEngine:
             skeleton_version=self.skeleton.version,
             joints=provisional_state.joints,
             root_velocity=provisional_state.root_velocity,
+            root_orientation=provisional_state.root_orientation,
+            root_angular_velocity=provisional_state.root_angular_velocity,
             contacts=final_contacts,
             mechanical_strain=provisional_state.mechanical_strain,
             proprioceptive_error=provisional_state.proprioceptive_error,
