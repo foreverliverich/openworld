@@ -53,7 +53,8 @@ class MultimodalProjectionModel:
         self.trained = False
         self.audio_trained = False
         self.validated = False
-        self.history: list[dict[str, float]] =
+        self.validated_modalities: set[str] = set()
+        self.history: list[dict[str, float]] = []
 
     def project_audio_slot(self, audio_hidden):
         """Callable adapter for HuggingFaceAudioEncoder's 768→128 projection."""
