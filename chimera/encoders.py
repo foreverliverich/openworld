@@ -6,8 +6,10 @@ weights; they never substitute random or hash vectors when a model is unavailabl
 from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
+import base64
 import io
 import math
+import struct
 
 from .latent_language import LatentLanguageError
 
@@ -94,7 +96,17 @@ class HuggingFaceCLIPImageEncoder:
         return SharedSpaceEmbedding("image", self.encode(payload), self.shared_space)
 
     def encode(self, payload: Any) -> Sequence[float]:
-        # Accept a PIL image or a path readable by PIL; raw bytes are not silently decoded.
+        # Accept PIL/path/bytes or an explicit base64 payload from the local HTTP API.
+        if isinstance(payload, Mapping):
+            encoded = payload.get("image_base64")
+            if not isinstance(encoded, str):
+                raise LatentLanguageError("Image payload requires image_base64")
+            if encoded.startswith("data:") and "," in encoded:
+                encoded = encoded.split(",", 1)[1]
+            try:
+                payload = base64.b64decode(encoded, validate=True)
+            except Exception as exc:
+                raise LatentLanguageError(f"Invalid image_base64: {exc}") from exc
         try:
             from PIL import Image
             image = Image.open(io.BytesIO(payload)) if isinstance(payload, bytes) else (Image.open(payload) if isinstance(payload, str) else payload)
@@ -183,9 +195,23 @@ class HuggingFaceAudioEncoder:
 
     def encode(self, payload: Any) -> Sequence[float]:
         # payload = {"audio": mono_float_samples, "sampling_rate": int}
-        if not isinstance(payload, Mapping) or "audio" not in payload or "sampling_rate" not in payload:
+        # The HTTP API may send little-endian float32 samples as audio_f32_base64.
+        if not isinstance(payload, Mapping) or "sampling_rate" not in payload:
             raise LatentLanguageError("Audio payload requires audio samples and sampling_rate")
-        audio = payload["audio"]
+        audio = payload.get("audio")
+        if audio is None and isinstance(payload.get("audio_f32_base64"), str):
+            try:
+                raw = base64.b64decode(payload["audio_f32_base64"], validate=True)
+            except Exception as exc:
+                raise LatentLanguageError(f"Invalid audio_f32_base64: {exc}") from exc
+            if len(raw) % 4:
+                raise LatentLanguageError("Float32 audio byte length must be divisible by four")
+            count = len(raw) // 4
+            audio = [value[0] for value in struct.iter_unpack("<f", raw)]
+            if len(audio) != count:
+                raise LatentLanguageError("Audio sample decoding failed")
+        if audio is None:
+            raise LatentLanguageError("Audio payload requires audio or audio_f32_base64")
         sampling_rate = int(payload["sampling_rate"])
         if sampling_rate <= 0 or len(audio) < 400:
             raise LatentLanguageError("Audio requires a valid rate and at least 400 samples")
