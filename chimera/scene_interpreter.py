@@ -84,10 +84,10 @@ class GeminiSceneInterpreter:
             if not isinstance(size, list) or len(size) != 3:
                 raise SceneInterpretationError(f"objects[{index}].size must be a 3-vector")
             position_values = tuple(
-                self._number(v, f"objects[{index}].position") for v in position
+                GeminiSceneInterpreter._number(v, f"objects[{index}].position") for v in position
             )
             size_values = tuple(
-                self._number(v, f"objects[{index}].size") for v in size
+                GeminiSceneInterpreter._number(v, f"objects[{index}].size") for v in size
             )
             if any(abs(v) > MAX_SCENE_EXTENT for v in position_values):
                 raise SceneInterpretationError(f"objects[{index}] lies outside the scene extent")
@@ -96,7 +96,7 @@ class GeminiSceneInterpreter:
             material = item.get("material", "default")
             if not isinstance(material, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", material):
                 raise SceneInterpretationError(f"objects[{index}].material is invalid")
-            mass = self._number(item.get("mass", 1.0), f"objects[{index}].mass")
+            mass = GeminiSceneInterpreter._number(item.get("mass", 1.0), f"objects[{index}].mass")
             if not 0.01 <= mass <= 10000.0:
                 raise SceneInterpretationError(f"objects[{index}].mass is outside supported bounds")
             dynamic = item.get("dynamic", True)
@@ -118,7 +118,7 @@ class GeminiSceneInterpreter:
                 raise SceneInterpretationError(
                     f"relations[{index}].relation must be on_top or next_to"
                 )
-            gap = self._number(item.get("gap", 0.05), f"relations[{index}].gap")
+            gap = GeminiSceneInterpreter._number(item.get("gap", 0.05), f"relations[{index}].gap")
             if gap < 0:
                 raise SceneInterpretationError(f"relations[{index}].gap must be non-negative")
             relations.append(SpatialRelation(relation, subject, target, gap))
