@@ -256,9 +256,12 @@ class ChimeraApplication:
                 )
             if not text.strip() and scene_image_base64 is None:
                 raise ValueError("interpret_scene requires text or a base64 image observation")
-            scene_graph = self.scene_interpreter.interpret(
-                text, scene_id=request_id, image_base64=scene_image_base64,
-            )
+            if scene_image_base64 is None:
+                scene_graph = self.scene_interpreter.interpret(text, scene_id=request_id)
+            else:
+                scene_graph = self.scene_interpreter.interpret(
+                    text, scene_id=request_id, image_base64=scene_image_base64,
+                )
         if scene_data is not None:
             if not isinstance(scene_data, dict):
                 raise ValueError("scene_graph must be an object")
