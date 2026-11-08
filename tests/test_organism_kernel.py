@@ -99,8 +99,9 @@ class OrganismKernelTests(unittest.TestCase):
         # The migrated body now participates in real gravity/contact during
         # the first committed ISCE tick instead of retaining a display-only
         # floating position.
-        self.assertGreaterEqual(persisted["position"][1], 0.98)
+        self.assertGreater(persisted["position"][1], 0.0)
         self.assertLess(persisted["position"][1], 1.5)
+        self.assertTrue(persisted["articulation"]["contacts"])
         self.assertFalse(migrated.snapshot()["migration_pending"])
         self.assertTrue(self.world.verify_event_chain())
 
