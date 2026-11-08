@@ -53,7 +53,30 @@ Activation follows a first-order response with the segment's activation time con
 
 The compliant tendon stage uses a stable first-order series-elastic response: tendon extension relaxes toward the muscle-torque/stiffness target with a 25 ms time constant, and transmitted torque is the spring term plus tendon damping. The model then integrates each enabled rotational component with semi-implicit Euler at internal steps no larger than 20 ms.
 
-The three local Euler components are currently integrated independently; their composed orientation is a quaternion. This is 3D kinematic articulation with per-axis approximate dynamics, not a fully coupled quaternion rigid-body integrator. Gravity loading is calculated from the distal subtree's approximate mass and a world-space lever arm: \(\mathbf r\times\mathbf F\) is transformed into the parent joint frame. Effective inertia remains a diagonal subtree approximation, not a full articulated mass matrix.
+The generalized rotational coordinates are coupled through a dense articulated mass matrix. For every rigid segment, the solver computes each ancestor joint's linear and angular Jacobian columns at the segment centre of mass. Segment contributions are assembled as:
+
+\[
+M(q)=\sum_s\left(m_s J_{v,s}^{T}J_{v,s}
++J_{\omega,s}^{T}I_{s,world}J_{\omega,s}\right)+\epsilon I
+\]
+
+The segment inertia tensor is an explicitly approximate solid-cylinder/rod tensor oriented by the segment quaternion. Gravity is projected into generalized coordinates through \(J_v^T m\mathbf g\). Velocity bias uses Christoffel terms computed from finite-difference derivatives of \(M(q)\):
+
+\[
+C_i=\sum_{j,k}\frac{1}{2}
+\left(\frac{\partial M_{ij}}{\partial q_k}
++\frac{\partial M_{ik}}{\partial q_j}
+-\frac{\partial M_{jk}}{\partial q_i}\right)
+\dot q_j\dot q_k
+\]
+
+The solver uses deterministic Gaussian elimination with partial pivoting for:
+
+\[
+M(q)\ddot q=\tau_{tendon}+Q_g-C(q,\dot q)
+\]
+
+The resulting generalized accelerations are integrated semi-implicitly, then per-axis anatomical limits are enforced. The local XYZ Euler coordinates define the joint configuration and are composed into quaternions for segment transforms; the generalized dynamics are coupled, while the coordinate representation is not a full quaternion Lie-group integrator.
 
 Per-axis limits clamp the coordinate, remove outward velocity and contribute to mechanical strain. Work and effort are returned to ISCE as simulated quantities, not measured hardware energy or calibrated biological calories.
 
@@ -61,7 +84,7 @@ Per-axis limits clamp the coordinate, remove outward velocity and contribute to 
 
 The root receives explicit world-frame acceleration and gravity. Root velocity is integrated semi-implicitly and bounded to 12 m/s per axis. Feet are evaluated from the same forward-kinematic pose used for contact; a unilateral ground plane corrects foot penetration, cancels downward root velocity while supported and applies horizontal damping while feet are in contact.
 
-This is a deterministic ground-contact model for a single articulated organism. It is not yet a general-purpose rigid-body constraint solver: it does not implement self-collision, foot friction cones, contact manifolds, momentum-conserving impact impulses, uneven terrain, or full coupled articulated-body equations.
+This is a deterministic ground-contact model for a single articulated organism. Contact currently uses a unilateral ground-plane penetration correction and velocity damping; contact forces are not yet solved as constraint impulses in the generalized mass matrix. It does not implement self-collision, foot friction cones, contact manifolds, momentum-conserving impact impulses, uneven terrain or root translation/rotation as generalized coordinates.
 
 ## 5. ISCE coupling
 
@@ -89,7 +112,7 @@ A failed RealityEngine optimistic commit still cannot publish the speculative ne
 
 ## 7. Required regression coverage
 
-`tests/test_biomechanics.py` covers tree validity, connected forward kinematics, motor response/work, hard joint limits, gravity/ground contact, root translation, state round-trip, invalid commands/state rejection, old-state neutral migration, and coupling of mechanical work/proprioception into ISCE physiology.
+`tests/test_biomechanics.py` covers tree validity, connected quaternion forward kinematics, 3-axis motor response, tendon compliance, per-axis limits, mass-matrix symmetry and inter-joint coupling, finite-difference Coriolis bias, gravity/ground contact, root translation, state round-trip, invalid commands/state rejection, sagittal-to-3D migration, and coupling of mechanical work/proprioception into ISCE physiology.
 
 The existing organism-kernel persistence/restart tests also exercise the expanded ISCE payload through the same SQLite state row and event-chain contract.
 
@@ -97,7 +120,7 @@ The existing organism-kernel persistence/restart tests also exercise the expande
 
 This closes the first executable articulated-body gate, not all embodiment. Remaining engineering work includes:
 
-- coupled articulated-body dynamics (full generalized mass matrix, Coriolis/centrifugal terms, recursive Newton–Euler or equivalent solver, and constraint impulses)
+- contact constraints and root degrees of freedom coupled into the generalized mass matrix; compare the current Lagrangian/Jacobian solver against recursive Newton–Euler reference implementations
 - self-collision, terrain collision, friction cones and grasp/contact mechanics
 - antagonistic agonist/antagonist muscle pairs, pennation and physiological cross-sectional area, tendon slack/strain calibration, muscle-level fatigue and recovery
 - sensor observations from actual segment/contact geometry and camera/audio/touch modalities
