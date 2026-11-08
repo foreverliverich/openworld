@@ -41,7 +41,14 @@ def build_latent_language(
 
     alignment_model = None
     if alignment_checkpoint:
-        alignment_model = MultimodalProjectionModel(device=device)
+        alignment_model = MultimodalProjectionModel(
+            device=device,
+            encoder_manifest={
+                "text": f"hf:{text_model_id}",
+                "image": f"hf:{image_model_id}",
+                "audio": f"hf:{audio_model_id}",
+            },
+        )
         alignment_model.load_checkpoint(alignment_checkpoint)
         if "audio" in alignment_model.validated_modalities:
             registry.register(
