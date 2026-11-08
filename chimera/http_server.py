@@ -11,6 +11,7 @@ import argparse
 import json
 import mimetypes
 import threading
+from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,58 @@ class ChimeraApplication:
             )
         return {"result": result, "state": self.state()}
 
+    def body_pose(self) -> dict[str, Any]:
+        with self._mutation_lock:
+            state = self.organism.state
+            poses = self.organism.kernel.biomechanics.forward_kinematics(
+                state.position, state.articulation
+            )
+            return {
+                "world_revision": self.world.revision(),
+                "skeleton_version": state.articulation.skeleton_version,
+                "root_position": state.position,
+                "root_velocity": state.articulation.root_velocity,
+                "contacts": state.articulation.contacts,
+                "joints": [asdict(joint) for joint in state.articulation.joints],
+                "segments": [asdict(pose) for pose in poses],
+            }
+
+    def actuate_body(self, payload: dict[str, Any]) -> dict[str, Any]:
+        commands = payload.get("motor_commands", {})
+        if not isinstance(commands, dict):
+            raise ValueError("motor_commands must be an object of joint-name to target-radian values")
+        root_acceleration = payload.get("root_acceleration", (0.0, 0.0, 0.0))
+        if not isinstance(root_acceleration, (list, tuple)) or len(root_acceleration) != 3:
+            raise ValueError("root_acceleration must contain three world-frame values")
+        expected = payload.get("expected_revision")
+        if not isinstance(expected, int) or isinstance(expected, bool):
+            raise ValueError("expected_revision is required and must be an integer")
+        parsed_commands = []
+        for name, target in commands.items():
+            if isinstance(target, (int, float)):
+                parsed = float(target)
+            elif isinstance(target, (list, tuple)) and len(target) == 3:
+                parsed = tuple(float(value) for value in target)
+            else:
+                raise ValueError(
+                    f"motor target {name} must be a number or a three-element radians vector"
+                )
+            parsed_commands.append((str(name), parsed))
+        motor_commands = tuple(parsed_commands)
+        with self._mutation_lock:
+            result = self.organism.tick(
+                dt=self.world.config.fixed_dt,
+                motor_commands=motor_commands,
+                root_acceleration=tuple(float(v) for v in root_acceleration),
+                expected_revision=expected,
+                outcome="explicit_body_actuation",
+            )
+            return {
+                "result": {"revision": result.revision, "action": result.action},
+                "body": self.body_pose(),
+                "state": self.state(),
+            }
+
     def events(self, after_revision: int = 0, limit: int = 250) -> dict[str, Any]:
         with self._mutation_lock:
             return {
@@ -151,6 +204,8 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
                 })
             if parsed.path == "/api/state":
                 return self._json(200, self.app.state())
+            if parsed.path == "/api/body/pose":
+                return self._json(200, self.app.body_pose())
             if parsed.path == "/api/events":
                 query = parse_qs(parsed.query)
                 after = int(query.get("after_revision", ["0"])[0])
@@ -212,6 +267,8 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
                     "result": {"revision": result.revision, **result.details},
                     "state": self.app.world.somatic_morphology(),
                 })
+            if self.path == "/api/body/actuate":
+                return self._json(200, self.app.actuate_body(payload))
             if self.path == "/api/tick":
                 return self._json(200, self.app.tick(payload.get("ticks", 1)))
             if self.path == "/api/tool":
