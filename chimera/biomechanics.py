@@ -837,12 +837,14 @@ class BiomechanicsEngine:
         by_name = {pose.name: pose for pose in poses}
         contact_names: list[str] = []
         penetration = 0.0
-        for foot_name in ("foot_l", "foot_r"):
-            foot = by_name[foot_name]
-            bottom = foot.start[1] - foot.radius
+        # Every rigid segment is represented by a capsule for ground
+        # support. Feet are the intended stance contacts, but a fall must not
+        # allow the torso, head or arms to tunnel through the ground plane.
+        for segment in poses:
+            bottom = min(segment.start[1], segment.end[1]) - segment.radius
             penetration = max(penetration, self.ground_height - bottom)
             if bottom <= self.ground_height + .012:
-                contact_names.append(foot_name)
+                contact_names.append(segment.name)
         contact_force = 0.0
         if penetration > 0.0:
             root[1] += penetration
