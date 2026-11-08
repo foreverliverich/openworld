@@ -351,6 +351,10 @@ class MultimodalProjectionModel:
             768, 512, 768, 512, 128
         ]:
             raise AlignmentTrainingError("Projection checkpoint schema mismatch")
+        if checkpoint.get("encoder_manifest") != self.encoder_manifest:
+            raise AlignmentTrainingError(
+                "Checkpoint encoder manifest does not match configured pretrained encoders"
+            )
         for name in (
             "text_projection", "image_projection", "audio_projection",
             "audio_compressor", "audio_reconstructor",
