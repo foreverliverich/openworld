@@ -101,7 +101,8 @@ fn main(@builtin(workgroup_id) wid:vec3<u32>,@builtin(local_invocation_index) li
   }
   workgroupBarrier();
   if(i<params.count){
-    let block=wid.x/256u;\n    let destination=blockBases[block*16u+bucket]+localOffsets[wid.x*16u+bucket]+localRank;
+    let block=wid.x/256u;
+    let destination=blockBases[block*16u+bucket]+localOffsets[wid.x*16u+bucket]+localRank;
     keysOut[destination]=keysIn[i];valuesOut[destination]=valuesIn[i];
   }
 }\`;
@@ -125,7 +126,7 @@ export class SomaticRadixSorter {
     let expected=0;
     for(const p of pages){if(p.offset!==expected||!Number.isSafeInteger(p.count)||p.count<1||!p.buffer)throw new Error("Somatic pages must be contiguous and ordered");expected+=p.count;}
     if(expected!==cellCount)throw new Error("Somatic page count does not match cellCount");
-    const blockCount=Math.ceil(groupCount/GROUPS_PER_SCAN);\n    if(groupCount>device.limits.maxComputeWorkgroupsPerDimension)throw new RangeError("Radix dispatch exceeds maxComputeWorkgroupsPerDimension");\n    const modules=[DEPTH_WGSL,HIST_WGSL,PREFIX_LOCAL_WGSL,PREFIX_BLOCKS_WGSL,SCATTER_WGSL].map((code,i)=>device.createShaderModule({label:["Somatic depth keys","Somatic radix histogram","Somatic radix prefix","Somatic radix scatter"][i],code}));
+    const blockCount=Math.ceil(groupCount/GROUPS_PER_SCAN);\n    if(groupCount>device.limits.maxComputeWorkgroupsPerDimension)throw new RangeError("Radix dispatch exceeds maxComputeWorkgroupsPerDimension");\n    const modules=[DEPTH_WGSL,HIST_WGSL,PREFIX_LOCAL_WGSL,PREFIX_BLOCKS_WGSL,SCATTER_WGSL].map((code,i)=>device.createShaderModule({label:["Somatic depth keys","Somatic radix histogram","Somatic radix local prefix","Somatic radix block prefix","Somatic radix scatter"][i],code}));
     for(const m of modules){const info=await m.getCompilationInfo();const errors=info.messages.filter(x=>x.type==="error");if(errors.length)throw new Error(errors.map(x=>x.message).join("\\n"));}
     const pipelines=await Promise.all(modules.map((module,i)=>device.createComputePipelineAsync({layout:"auto",compute:{module,entryPoint:"main"}})));
     const [depthPipeline,histPipeline,prefixLocalPipeline,prefixBlocksPipeline,scatterPipeline]=pipelines;
@@ -134,7 +135,8 @@ export class SomaticRadixSorter {
     const valuesA=makeBuffer(device,"Somatic radix indices A",bytes);
     const valuesB=makeBuffer(device,"Somatic radix indices B",bytes);
     const histogram=makeBuffer(device,"Somatic radix histogram",scratchBytes);
-    const localOffsets=makeBuffer(device,"Somatic radix local offsets",scratchBytes);\n    const blockScratchBytes=blockCount*RADIX*4;\n    const blockSums=makeBuffer(device,"Somatic radix block sums",blockScratchBytes);\n    const blockBases=makeBuffer(device,"Somatic radix block bases",blockScratchBytes);
+    const localOffsets=makeBuffer(device,"Somatic radix local offsets",scratchBytes);
+    const blockScratchBytes=blockCount*RADIX*4;\n    const blockSums=makeBuffer(device,"Somatic radix block sums",blockScratchBytes);\n    const blockBases=makeBuffer(device,"Somatic radix block bases",blockScratchBytes);
     const depthGroups=pages.map(p=>{
       const uniform=device.createBuffer({label:"Somatic depth camera/page params",size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
       const bindGroup=device.createBindGroup({layout:depthPipeline.getBindGroupLayout(0),entries:[
@@ -172,13 +174,14 @@ export class SomaticRadixSorter {
         {binding:1,resource:{buffer:pass%2===0?valuesA:valuesB,size:bytes}},
         {binding:2,resource:{buffer:pass%2===0?keysB:keysA,size:bytes}},
         {binding:3,resource:{buffer:pass%2===0?valuesB:valuesA,size:bytes}},
-        {binding:4,resource:{buffer:offsets,size:scratchBytes}},
-        {binding:5,resource:{buffer:uniform}}
+        {binding:4,resource:{buffer:localOffsets,size:scratchBytes}},
+        {binding:5,resource:{buffer:blockBases,size:blockScratchBytes}},
+        {binding:6,resource:{buffer:uniform}}
       ]});
       rounds.push({uniform,histGroup,scatterGroup});
     }
-    return new SomaticRadixSorter({device,cellCount,groupCount,depthPipeline,histPipeline,prefixPipeline,scatterPipeline,
-      keysA,keysB,valuesA,valuesB,histogram,offsets,depthGroups,prefixGroup,rounds,disposed:false});
+    return new SomaticRadixSorter({device,cellCount,groupCount,blockCount,depthPipeline,histPipeline,prefixLocalPipeline,prefixBlocksPipeline,scatterPipeline,
+      keysA,keysB,valuesA,valuesB,histogram,localOffsets,blockSums,blockBases,depthGroups,prefixLocalGroup,prefixBlocksGroup,prefixUniform,rounds,disposed:false});
   }
   constructor(state){Object.assign(this,state);}
   encode(commandEncoder,viewMatrix){
