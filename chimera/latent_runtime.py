@@ -22,6 +22,7 @@ from .latent_language import (
 from .latent_training import MultimodalProjectionModel
 from .learned_dynamics import TorchMorphogeneticDynamics
 from .ollama_specialist import OllamaReasoningSpecialist
+from .latent_dataset import LatentTrajectoryRecorder
 
 
 def build_latent_language(
@@ -39,6 +40,8 @@ def build_latent_language(
     ollama_model: str | None = None,
     ollama_base_url: str = "http://127.0.0.1:11434",
     ollama_timeout: float = 30.0,
+    trajectory_log: str | None = None,
+    trajectory_organism_id: str = "chimera",
 ) -> tuple[LatentLanguageCoordinator, CognitiveActionGateway]:
     """Load actual encoders/checkpoints and bind them to this organism's one gateway."""
     if device not in {"cpu", "cuda"}:
@@ -91,11 +94,16 @@ def build_latent_language(
                 ollama_model, base_url=ollama_base_url, timeout=ollama_timeout,
             ),
         )
+    trajectory_recorder = (
+        LatentTrajectoryRecorder(trajectory_log, organism_id=trajectory_organism_id)
+        if trajectory_log else None
+    )
     coordinator = LatentLanguageCoordinator(
         registry,
         specialists=specialists,
         alignment_model=alignment_model,
         dynamics=dynamics,
+        trajectory_recorder=trajectory_recorder,
     )
     gateway = CognitiveActionGateway(toolbox, coordinator.workspace, organism)
     return coordinator, gateway

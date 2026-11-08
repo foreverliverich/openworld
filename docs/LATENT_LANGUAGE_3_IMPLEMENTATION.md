@@ -112,7 +112,7 @@ classes above.
 
 This PR supplies executable interfaces and first working baselines; the following require additional data or infrastructure and are not represented as complete:
 
-1. **Model training evidence:** no paired multimodal corpus or trained projection/dynamics checkpoints are included. Downloaded pretrained encoders are available after installing dependencies, but project-specific alignment and morphogenetic dynamics must be trained and evaluated on real Chimera trajectories.
+1. **Model training evidence:** no project training corpus or trained projection/dynamics checkpoints are included. An opt-in append-only recorder and session-isolated training/evaluation CLIs now collect real runtime vectors and explicitly marked text/image/audio pairs. Real sessions must still be collected and trained; no project-specific checkpoint is shipped.
 2. **Specialist depth:** emotion and intent specialists are transparent deterministic baselines; social specialist encodes explicit interaction metadata only. Trained classifiers/LLM reasoning adapters and calibrated confidence are still required.
 3. **Persistent episodic memory:** retrieval accepts records from the caller and does not create a competing memory database. A rebuildable index over the authoritative event journal must be wired with provenance and retention policy.
 4. **Semantic scene parsing:** an opt-in Gemini text/image-to-scene-graph parser is executable. It accepts one still image plus optional text, emits bounded primitive object estimates and validates the graph against current geometry constraints. It is not a general visual scene understanding system, does not infer hidden geometry, reconstruct depth, fuse multiple camera views, or expose calibrated uncertainty. Metric dimensions and positions from a single image are approximate model estimates, not measurements.
@@ -172,3 +172,22 @@ organism's measured metabolic budget; proposal estimated_cost is therefore zero
 and must not be interpreted as free computation. The endpoint can be configured
 to a non-loopback host, so deployment operators must secure that endpoint and
 must not expose the unauthenticated local Chimera HTTP API publicly.
+
+
+## Real trajectory capture and model-training pipeline
+
+The runtime can optionally attach LatentTrajectoryRecorder through the --latent-trajectory-log option. It appends one JSONL record for each successful cognition cycle. Each record contains the final 2,464-D ephemeral latent vector and canonical latent-state digest; a SHA-256 vector digest and previous-record digest continuity chain; trajectory/session ID, organism label, sequence index, world revision, timestamp and actual runtime integration step; modality runtime embeddings, training embeddings, confidence, source IDs, encoder IDs and shared-space IDs; and selected proposal IDs plus an explicit alignment_pair flag.
+
+This file is a derived experiment dataset, not a second state owner. It does not replace ISCE or RealityEngine and does not store raw text, images or audio waveforms. Embeddings can still contain sensitive information; protect the file and do not commit it to the repository.
+
+### Recording paired multimodal samples
+
+A cognition request must set alignment_pair: true only when the text is a semantic caption or description aligned with the image (and optional audio) supplied in that same cycle. A query such as "what is in this picture?" is not a caption pair and must not be marked. The HTTP layer rejects alignment_pair requests without both text and image. Audio is included only when its encoder can provide the raw 768-D Wav2Vec2 hidden representation; the runtime continues to use the trained 128-D audio projection.
+
+### Training commands
+
+    python -m chimera.http_server --enable-latent-language --latent-trajectory-log ./private-data/chimera-trajectories.jsonl
+    python scripts/train_latent_dynamics.py --dataset ./private-data/chimera-trajectories.jsonl --checkpoint ./private-data/morphogenetic-dynamics.pt
+    python scripts/train_multimodal_alignment.py --dataset ./private-data/chimera-trajectories.jsonl --checkpoint ./private-data/multimodal-alignment.pt
+
+The dynamics trainer uses the fixed sample_dt recorded by the runtime and requires at least two independent trajectory sessions. The alignment trainer uses only explicitly marked text/image pairs and splits by whole trajectory ID before flattening rows; adjacent frames from the same session cannot leak across the train/validation boundary. --include-audio additionally requires a raw 768-D audio training vector for every selected pair. Both scripts print held-out metrics and save only checkpoints that pass the model's existing validation requirements. Synthetic tensors in CI remain code-path tests, not project data or scientific evidence.

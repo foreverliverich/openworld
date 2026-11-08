@@ -66,11 +66,15 @@ class ChimeraApplication:
         ollama_model: str | None = None,
         ollama_base_url: str = "http://127.0.0.1:11434",
         ollama_timeout: float = 30.0,
+        trajectory_log: str | None = None,
+        trajectory_organism_id: str = "chimera",
     ):
         if cognition is not None and enable_latent_language:
             raise ValueError("Pass a coordinator or enable model loading, not both")
-        if not enable_latent_language and (alignment_checkpoint or dynamics_checkpoint or ollama_model):
-            raise ValueError("Model checkpoints and Ollama require --enable-latent-language")
+        if not enable_latent_language and (
+            alignment_checkpoint or dynamics_checkpoint or ollama_model or trajectory_log
+        ):
+            raise ValueError("Model checkpoints, Ollama and trajectory logging require --enable-latent-language")
         self.world = RealityEngine(WorldConfig(database=database))
         self.organism = OrganismKernel(self.world, "chimera")
         self.agent = AutonomousWorldAgent(self.world, self.organism)
@@ -95,6 +99,8 @@ class ChimeraApplication:
                 ollama_model=ollama_model,
                 ollama_base_url=ollama_base_url,
                 ollama_timeout=ollama_timeout,
+                trajectory_log=trajectory_log,
+                trajectory_organism_id=trajectory_organism_id,
             )
         elif self.cognition is not None:
             cognition_gateway = CognitiveActionGateway(
@@ -241,6 +247,14 @@ class ChimeraApplication:
         })
         if missing_encoders:
             raise ValueError(f"No configured encoders for modalities: {', '.join(missing_encoders)}")
+        alignment_pair = payload.get("alignment_pair", False)
+        if not isinstance(alignment_pair, bool):
+            raise ValueError("alignment_pair must be boolean")
+        present_modalities = {item["modality"] for item in normalized_observations}
+        if alignment_pair and not {"text", "image"}.issubset(present_modalities):
+            raise ValueError(
+                "alignment_pair requires a text caption and image observation in the same cognition cycle"
+            )
 
         scene_graph = None
         scene_data = payload.get("scene_graph")
@@ -317,6 +331,7 @@ class ChimeraApplication:
             speaker_id=speaker_id,
             participant_count=participant_count,
             source_refs=source_refs,
+            alignment_pair=alignment_pair,
         )
         with self._mutation_lock:
             self.runtime.queue_cognition_cycle(normalized_observations, context)
@@ -567,6 +582,10 @@ def main() -> None:
                         help="Local Ollama HTTP base URL")
     parser.add_argument("--ollama-timeout", type=float, default=30.0,
                         help="Maximum seconds for one Ollama reasoning request")
+    parser.add_argument("--latent-trajectory-log", default=None,
+                        help="Optional append-only JSONL path for derived latent training snapshots")
+    parser.add_argument("--trajectory-organism-id", default="chimera",
+                        help="Stable organism label for trajectory dataset records")
     parser.add_argument("--alignment-checkpoint", default=None,
                         help="Validated multimodal projection checkpoint")
     parser.add_argument("--dynamics-checkpoint", default=None,
@@ -600,6 +619,8 @@ def main() -> None:
         ollama_model=args.ollama_model,
         ollama_base_url=args.ollama_url,
         ollama_timeout=args.ollama_timeout,
+        trajectory_log=args.latent_trajectory_log,
+        trajectory_organism_id=args.trajectory_organism_id,
     )
     server = ChimeraHTTPServer((args.host, args.port), app)
     print(f"Chimera running at http://{args.host}:{args.port}")

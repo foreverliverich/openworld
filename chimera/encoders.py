@@ -198,8 +198,12 @@ class HuggingFaceAudioEncoder:
         self.base_encoder_id = f"hf:{model_id}"
 
     def encode(self, payload: Any) -> Sequence[float]:
-        # payload = {"audio": mono_float_samples, "sampling_rate": int}
-        # The HTTP API may send little-endian float32 samples as audio_f32_base64.
+        return self.encode_with_training_input(payload)[0]
+
+    def encode_with_training_input(
+        self, payload: Any
+    ) -> tuple[Sequence[float], Sequence[float]]:
+        """Return the 128-D runtime slot and its paired raw 768-D training input."""
         if not isinstance(payload, Mapping) or "sampling_rate" not in payload:
             raise LatentLanguageError("Audio payload requires audio samples and sampling_rate")
         audio = payload.get("audio")
@@ -243,10 +247,10 @@ class HuggingFaceAudioEncoder:
             projected = self.projection(hidden)
             projected = self.torch.nn.functional.normalize(projected, p=2, dim=-1)
         values = tuple(float(v) for v in projected[0].cpu().tolist())
-        if len(values) != 128:
-            raise EncoderDependencyError("Audio projection must return 128 dimensions")
-        return values
-
+        raw_values = tuple(float(v) for v in hidden[0].cpu().tolist())
+        if len(values) != 128 or len(raw_values) != 768:
+            raise EncoderDependencyError("Audio encoder must emit 128-D runtime and 768-D training vectors")
+        return values, raw_values
 
 class CalibratedSensorEncoder:
     """Calibrated physical sensor vector; all 64 channels must be explicitly named."""

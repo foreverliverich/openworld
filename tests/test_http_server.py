@@ -229,6 +229,68 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         finally:
             app.close()
 
+
+    def test_alignment_pair_flag_requires_caption_and_image_together(self):
+        class FixedTextEncoder:
+            encoder_id = "http-test-text"
+            def encode(self, payload):
+                return (0.2,) * 768
+
+        registry = EncoderRegistry()
+        registry.register("text", FixedTextEncoder())
+        app = ChimeraApplication(
+            os.path.join(self.tmp.name, "alignment-pair-invalid.sqlite3"),
+            cognition=LatentLanguageCoordinator(registry),
+        )
+        try:
+            with self.assertRaisesRegex(ValueError, "requires a text caption and image"):
+                app.queue_cognition({
+                    "text": "A caption for the image", "alignment_pair": True,
+                })
+        finally:
+            app.close()
+
+    def test_http_alignment_pair_flag_reaches_trajectory_recorder(self):
+        import tempfile
+        from chimera.latent_dataset import LatentTrajectoryRecorder
+
+        class FixedTextEncoder:
+            encoder_id = "http-test-text"
+            def encode(self, payload):
+                return (0.2,) * 768
+
+        class FixedImageEncoder:
+            encoder_id = "http-test-image"
+            def encode(self, payload):
+                return (0.3,) * 512
+
+        path = os.path.join(self.tmp.name, "http-alignment.jsonl")
+        registry = EncoderRegistry()
+        registry.register("text", FixedTextEncoder())
+        registry.register("image", FixedImageEncoder())
+        recorder = LatentTrajectoryRecorder(path, trajectory_id="http-pair-session")
+        coordinator = LatentLanguageCoordinator(registry, trajectory_recorder=recorder)
+        app = ChimeraApplication(
+            os.path.join(self.tmp.name, "alignment-pair-world.sqlite3"),
+            cognition=coordinator,
+        )
+        try:
+            app.queue_cognition({
+                "text": "A caption describing a red mug on a table",
+                "alignment_pair": True,
+                "observations": [{
+                    "modality": "image", "payload": b"image-bytes",
+                    "source_id": "camera-image-1",
+                }],
+            })
+            app.tick()
+            with open(path, "r", encoding="utf-8") as handle:
+                record = json.loads(handle.readline())
+            self.assertTrue(record["alignment_pair"])
+            self.assertEqual(set(record["modalities"]), {"text", "image"})
+        finally:
+            app.close()
+
     def test_health_and_static_client_are_served(self):
         status, health = self.request("/api/health")
         self.assertEqual(status, 200)

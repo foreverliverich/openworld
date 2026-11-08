@@ -268,3 +268,18 @@ Extended the opt-in Gemini scene interpreter from text-only parsing to a single-
 - Gemini receives image content and the optional user instruction in the same structured-output request. The response is still constrained to the existing typed SceneGraph and existing geometric compiler.
 - Added tests for image MIME spoofing, malformed base64, text+image request construction, image-only scene interpretation, and an HTTP-to-workspace-to-action-gateway integration path.
 - The model is instructed to include only clearly visible objects. Single-view positions and dimensions remain approximate; there is no calibrated depth, camera-pose estimation, multi-view tracking, occlusion reconstruction or mesh output.
+
+
+## Latent trajectory capture and session-isolated training — 2026-11-08
+
+Added an opt-in experiment-data path so learned dynamics and multimodal alignment can be trained from actual runtime observations rather than synthetic unit-test tensors alone.
+
+- New chimera/latent_dataset.py writes append-only JSONL records with the 2,464-D post-cycle vector, canonical state digest, vector digest chain, trajectory ID, sequence index, world revision, timestamp, actual fixed integration step, selected proposal IDs and modality provenance/features.
+- LatentLanguageCoordinator can receive a recorder. It records only after encoding, specialist execution, workspace arbitration and optional dynamics have completed; recorder failure aborts publication of that candidate cycle rather than silently losing a training sample.
+- Added EncodedObservation.training_embedding. Audio encoders now return the trained 128-D runtime slot and paired raw 768-D Wav2Vec2 hidden vector in one model pass, allowing the same captured audio event to be used for runtime state and future projection training.
+- SpecialistContext.alignment_pair and the HTTP alignment_pair request flag require explicit text+image pairs; a generic question about an image is not silently treated as a contrastive caption pair.
+- Added integrity-checked trajectory loading, vector continuity verification, deterministic whole-session train/validation splitting, fixed-dt validation and explicit alignment-pair loading.
+- Added scripts/train_latent_dynamics.py and scripts/train_multimodal_alignment.py; both train on captured sessions, evaluate held-out sessions and save through the existing checkpoint validation gates.
+- Tests cover continuity/digest tampering, session-level splits, aligned text/image/audio dimensions, runtime recording, raw audio feature preservation and integration-step consistency.
+
+No project data or trained weights are bundled. The recorder must be explicitly enabled, real trajectories and explicitly captioned image pairs must be collected, and resulting checkpoints still require inspection of their held-out metrics before deployment.
