@@ -492,7 +492,7 @@ class ISCEKernel:
             interoception=InteroceptiveState(hunger, pain, arousal,
                                              smoothed_error, precision),
             sensorimotor=SensorimotorState(motor_readiness, proprioceptive_error,
-                                           action_energy_cost,
+                                           _clamp(action_energy_cost),
                                            inputs.action_success),
             temporal=TemporalState(state.temporal.tick + 1,
                                    state.temporal.organism_time + dt,
