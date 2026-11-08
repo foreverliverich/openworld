@@ -14,9 +14,14 @@ from .encoders import (
     HuggingFaceCLIPImageEncoder,
     HuggingFaceTextEncoder,
 )
-from .latent_language import CognitiveActionGateway, EncoderRegistry, LatentLanguageCoordinator
+from .latent_language import (
+    CognitiveActionGateway, CognitiveSpecialist, CreativeSpecialist, EmotionSpecialist,
+    EncoderRegistry, LatentLanguageCoordinator, MemorySpecialist, SocialSpecialist,
+    SpatialSpecialist, TemporalSpecialist,
+)
 from .latent_training import MultimodalProjectionModel
 from .learned_dynamics import TorchMorphogeneticDynamics
+from .ollama_specialist import OllamaReasoningSpecialist
 
 
 def build_latent_language(
@@ -31,6 +36,9 @@ def build_latent_language(
     sensor_calibration: Mapping[str, tuple[float, float]] | None = None,
     sensor_channel_names: Sequence[str] | None = None,
     device: str = "cpu",
+    ollama_model: str | None = None,
+    ollama_base_url: str = "http://127.0.0.1:11434",
+    ollama_timeout: float = 30.0,
 ) -> tuple[LatentLanguageCoordinator, CognitiveActionGateway]:
     """Load actual encoders/checkpoints and bind them to this organism's one gateway."""
     if device not in {"cpu", "cuda"}:
@@ -69,8 +77,23 @@ def build_latent_language(
         dynamics = TorchMorphogeneticDynamics(device=device)
         dynamics.load_checkpoint(dynamics_checkpoint)
 
+    specialists = None
+    if ollama_model:
+        specialists = (
+            EmotionSpecialist(),
+            CognitiveSpecialist(),
+            MemorySpecialist(),
+            SocialSpecialist(),
+            TemporalSpecialist(),
+            SpatialSpecialist(),
+            CreativeSpecialist(),
+            OllamaReasoningSpecialist(
+                ollama_model, base_url=ollama_base_url, timeout=ollama_timeout,
+            ),
+        )
     coordinator = LatentLanguageCoordinator(
         registry,
+        specialists=specialists,
         alignment_model=alignment_model,
         dynamics=dynamics,
     )

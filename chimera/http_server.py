@@ -63,11 +63,14 @@ class ChimeraApplication:
         device: str = "cpu",
         scene_interpreter: Any | None = None,
         enable_scene_interpreter: bool = False,
+        ollama_model: str | None = None,
+        ollama_base_url: str = "http://127.0.0.1:11434",
+        ollama_timeout: float = 30.0,
     ):
         if cognition is not None and enable_latent_language:
             raise ValueError("Pass a coordinator or enable model loading, not both")
-        if not enable_latent_language and (alignment_checkpoint or dynamics_checkpoint):
-            raise ValueError("Model checkpoints require --enable-latent-language")
+        if not enable_latent_language and (alignment_checkpoint or dynamics_checkpoint or ollama_model):
+            raise ValueError("Model checkpoints and Ollama require --enable-latent-language")
         self.world = RealityEngine(WorldConfig(database=database))
         self.organism = OrganismKernel(self.world, "chimera")
         self.agent = AutonomousWorldAgent(self.world, self.organism)
@@ -89,6 +92,9 @@ class ChimeraApplication:
                 audio_model_id=audio_model_id,
                 sensor_calibration=sensor_calibration,
                 device=device,
+                ollama_model=ollama_model,
+                ollama_base_url=ollama_base_url,
+                ollama_timeout=ollama_timeout,
             )
         elif self.cognition is not None:
             cognition_gateway = CognitiveActionGateway(
@@ -542,6 +548,12 @@ def main() -> None:
                         help="Load real pretrained modality encoders and enable cognition endpoints")
     parser.add_argument("--enable-scene-interpreter", action="store_true",
                         help="Enable Gemini natural-language-to-validated-3D-scene parsing")
+    parser.add_argument("--ollama-model", default=None,
+                        help="Optional local Ollama model tag to add as an advisory reasoning co-agent")
+    parser.add_argument("--ollama-url", default="http://127.0.0.1:11434",
+                        help="Local Ollama HTTP base URL")
+    parser.add_argument("--ollama-timeout", type=float, default=30.0,
+                        help="Maximum seconds for one Ollama reasoning request")
     parser.add_argument("--alignment-checkpoint", default=None,
                         help="Validated multimodal projection checkpoint")
     parser.add_argument("--dynamics-checkpoint", default=None,
@@ -572,6 +584,9 @@ def main() -> None:
         sensor_calibration=calibration,
         device=args.device,
         enable_scene_interpreter=args.enable_scene_interpreter,
+        ollama_model=args.ollama_model,
+        ollama_base_url=args.ollama_url,
+        ollama_timeout=args.ollama_timeout,
     )
     server = ChimeraHTTPServer((args.host, args.port), app)
     print(f"Chimera running at http://{args.host}:{args.port}")
