@@ -656,12 +656,14 @@ class RealityEngine:
                 previous = json.loads(row["payload"])["sdfScript"] if row else (
                     "vec2 map_object(vec3 p){vec2 h=sdHumanoidBase(p);"
                     "vec3 q=p-vec3(0.,.35,0.);"
-                    "float a=sdCapsule(q,vec3(-.28,.12,0.),vec3(-.48,-.35,0.),.095);"
-                    "float b=sdCapsule(q,vec3(.28,.12,0.),vec3(.48,-.35,0.),.095);"
-                    "float l=sdCapsule(p,vec3(-.16,-.42,0.),vec3(-.19,-.95,.02),.12);"
-                    "float r=sdCapsule(p,vec3(.16,-.42,0.),vec3(.19,-.95,.02),.12);"
-                    "float d=smin(smin(smin(smin(h.x,a,.09),b,.09),l,.1),r,.1);"
-                    "return vec2(opFur(d,opLatentWarp(p,.012),2.8,.006),1.);}"
+                    "float armL=sdCapsule(q,vec3(-.28,.12,0.),vec3(-.48,-.35,0.),.095);"
+                    "float armR=sdCapsule(q,vec3(.28,.12,0.),vec3(.48,-.35,0.),.095);"
+                    "float legL=sdCapsule(p,vec3(-.16,-.42,0.),vec3(-.19,-.95,.02),.12);"
+                    "float legR=sdCapsule(p,vec3(.16,-.42,0.),vec3(.19,-.95,.02),.12);"
+                    "float d=smin(h.x,armL,.09);d=smin(d,armR,.09);"
+                    "d=smin(d,legL,.1);d=smin(d,legR,.1);"
+                    "vec3 w=opLatentWarp(p,.012);d=opFur(d,w,2.8,.006);"
+                    "return vec2(d,1.);}"
                 )
                 state = {
                     "label": str(package["label"])[:200],
