@@ -55,6 +55,18 @@ class LatentLanguageTests(unittest.TestCase):
         self.assertEqual(fused.subspaces["language"][0], 0.4)
         self.assertEqual(fused.updated_at["language"], 10)
 
+
+    def test_low_confidence_observation_cannot_inflate_isce_novelty(self):
+        encoders = EncoderRegistry()
+        encoders.register("text", FixedEncoder(768, value=0.4))
+        coordinator = LatentLanguageCoordinator(encoders)
+        result = coordinator.cycle(
+            [{"modality": "text", "payload": "uncertain", "timestamp": 1.0,
+              "confidence": 0.0, "source_id": "uncertain-input"}],
+            SpecialistContext(1.0, 0, source_refs=("uncertain-input",)),
+        )
+        self.assertEqual(result.feedback.novelty, 0.0)
+
     def test_out_of_order_observation_and_unaligned_similarity_are_rejected(self):
         from chimera.latent_language import MultimodalFusion
         fusion = MultimodalFusion()
