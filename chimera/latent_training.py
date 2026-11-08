@@ -92,6 +92,53 @@ class MultimodalProjectionModel:
         with torch.inference_mode():
             return functional.normalize(self.audio_projection(values), dim=-1)
 
+    def project_audio_slot_shared(self, audio_slot):
+        """Map the validated 128-D audio slot back into the learned shared space."""
+        self._require_validated("audio")
+        torch, _, functional = _torch_modules()
+        slot = self._batch(audio_slot, 128, "audio_slot")
+        self.audio_reconstructor.eval()
+        with torch.inference_mode():
+            reconstructed = self.audio_reconstructor(slot)
+            return functional.normalize(self.audio_projection(reconstructed), dim=-1)
+
+    def fuse_encoded_shared(
+        self, modalities: Mapping[str, Any],
+        confidence: Mapping[str, float] | None = None,
+    ):
+        """Fuse the source-schema text/image/audio slot vectors into one 512-D space."""
+        if not self.trained:
+            raise AlignmentTrainingError("Shared-space fusion requires trained projection heads")
+        confidence = dict(confidence or {})
+        projectors = {
+            "text": self.project_text_shared,
+            "image": self.project_image_shared,
+            "audio": self.project_audio_slot_shared,
+        }
+        projections = []
+        weights = []
+        batch_size = None
+        for modality in ("text", "image", "audio"):
+            if modality not in modalities:
+                continue
+            weight = float(confidence.get(modality, 1.0))
+            if not 0.0 <= weight <= 1.0:
+                raise AlignmentTrainingError(f"{modality} confidence must be in [0, 1]")
+            if weight == 0.0:
+                continue
+            projected = projectors[modality](modalities[modality])
+            if batch_size is None:
+                batch_size = projected.shape[0]
+            elif projected.shape[0] != batch_size:
+                raise AlignmentTrainingError("Encoded modality batches must align row-for-row")
+            projections.append(projected * weight)
+            weights.append(weight)
+        if len(projections) < 2:
+            raise AlignmentTrainingError("At least two trained modalities are required for cross-modal fusion")
+        torch, _, functional = _torch_modules()
+        fused = torch.stack(projections, dim=0).sum(dim=0) / sum(weights)
+        return functional.normalize(fused, dim=-1)
+
     def fuse_shared(self, modalities: Mapping[str, Any], confidence: Mapping[str, float] | None = None):
         """Confidence-weight aligned modalities into one normalized shared-space vector."""
         if not self.trained:
