@@ -113,7 +113,7 @@ class OrganismActionGateway:
         if proposal.action == "create_structure":
             return float(details.get("part_count", 0))
         if proposal.action == "advance_physics":
-            return float(result.get("details", {}).get("steps", 1))
+            return float(result.get("steps", 1))
         return 1.0
 
     def execute(self, proposal: ActionProposal) -> ActionReceipt:
