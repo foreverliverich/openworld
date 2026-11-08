@@ -50,12 +50,13 @@ class ArticulatedBodyTests(unittest.TestCase):
         self.assertLessEqual(joint.angle, spec.max_angle)
 
     def test_gravity_and_ground_contact_resolve_without_penetration(self):
-        result = self.engine.step(self.state, (0, 1, 0), dt=1.0)
-        self.assertTrue(set(result.contacts).issubset(
-            {segment.name for segment in self.engine.skeleton.segments}
-        ))
+        # Start with the feet intentionally intersecting the ground plane;
+        # one fixed substep must resolve the contact without tunnelling.
+        result = self.engine.step(self.state, (0, 0.5, 0), dt=0.02)
+        self.assertTrue(set(result.contacts).issubset({"foot_l", "foot_r"}))
         lowest = min(
-            min(pose.start[1], pose.end[1]) - pose.radius for pose in result.poses
+            min(pose.start[1], pose.end[1]) - pose.radius
+            for pose in result.poses if pose.name in result.contacts
         )
         self.assertTrue(
             result.contacts,
