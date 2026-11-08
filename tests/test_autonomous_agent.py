@@ -26,6 +26,7 @@ class AutonomousAgentTests(unittest.TestCase):
         first = self.agent.step()
         self.assertEqual(first.goal, "create_shelter")
         self.assertEqual(first.action, "construct_structure")
+        self.assertTrue(first.action_id)
         self.assertEqual(first.result["part_count"], 6)
         self.assertIn("first_shelter", {
             e.metadata.get("structure_name") for e in self.world.entities()
