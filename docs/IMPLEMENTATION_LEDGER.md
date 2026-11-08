@@ -208,4 +208,4 @@ The next embodiment gate extends the articulated solver from joint-only generali
 
 **Model boundary:** root translation is now a generalized coordinate; root orientation/angular momentum are still not generalized coordinates. This does not yet implement self-collision, uneven terrain, grasping, multi-body contact, or calibrated friction. The solver remains a deterministic rigid-segment model with approximate anthropometric parameters, not a validated biological simulator.
 
-**Verification:** pending hosted CI for this branch. Do not treat this gate as closed until the standard-library suite and real Chromium/WebGL2 acceptance both pass.
+**Verification:** GitHub Actions run [42438951673](https://github.com/foreverliverich/openworld/actions/runs/42438951673) passed all **103 standard-library tests** and the real Chromium/ANGLE/SwiftShader WebGL2 acceptance job. The test run covered the exact implementation and regression-test commit `cf3758acb6ecf40b79b2c611bd55ef9b17283e76`; the subsequent ledger-only documentation update does not alter executable code.
