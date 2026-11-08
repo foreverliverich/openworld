@@ -131,7 +131,8 @@ class MultimodalProjectionModel:
             raise AlignmentTrainingError(f"{name} batch must have shape [N, {width}]")
         if not bool(torch.isfinite(tensor).all().item()):
             raise AlignmentTrainingError(f"{name} batch contains non-finite values")
-        return tensor
+        # All encoder training/inference paths use the same L2-normalized feature contract.
+        return torch.nn.functional.normalize(tensor, p=2, dim=-1)
 
     @staticmethod
     def _symmetric_info_nce(functional, left, right, temperature: float):
