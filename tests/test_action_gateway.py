@@ -94,7 +94,10 @@ class ActionGatewayTests(unittest.TestCase):
 
     def test_large_build_is_admitted_by_its_actual_part_count(self):
         blueprint = one_part_blueprint()
-        blueprint["parts"] = blueprint["parts"] * 6
+        blueprint["parts"] = [
+            {**blueprint["parts"][0], "position": [index * 2.0, 0.5, 0]}
+            for index in range(6)
+        ]
         receipt = self.gateway.execute(self.proposal(arguments={"blueprint": blueprint}))
         self.assertEqual(receipt.logical_work_units, 6.0)
         self.assertEqual(receipt.result["details"]["part_count"], 6)
