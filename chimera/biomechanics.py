@@ -470,6 +470,154 @@ class BiomechanicsEngine:
                            state: ArticulatedBodyState) -> tuple[SegmentPose, ...]:
         return self._world_transforms(position, state)[1]
 
+    def _dof_layout(self) -> tuple[tuple[str, int], ...]:
+        return tuple(
+            (spec.name, axis)
+            for spec in self.skeleton.segments if spec.parent is not None
+            for axis, enabled in enumerate(spec.dof_mask) if enabled
+        )
+
+    def _mass_matrix_and_gravity(
+        self, position: Iterable[float], state: ArticulatedBodyState,
+        layout: tuple[tuple[str, int], ...],
+    ) -> tuple[list[list[float]], list[float]]:
+        """Assemble M(q) and J(q)^T m g from every rigid segment.
+
+        Each segment contributes translational COM Jacobian energy and its
+        oriented rod/cylinder inertia tensor. This is a coupled generalized
+        mass matrix; it is not a diagonal per-joint inertia approximation.
+        """
+        transforms, _ = self._world_transforms(position, state)
+        coordinates = self._validate_state(state)
+        index = {key: i for i, key in enumerate(layout)}
+        joint_axes: dict[str, tuple[tuple[float, float, float], ...]] = {}
+        joint_origins: dict[str, tuple[float, float, float]] = {}
+        for spec in self.skeleton.segments:
+            if spec.parent is None:
+                continue
+            parent_q = transforms[spec.parent][1]
+            rx, ry, _ = coordinates[spec.name].rotation_xyz
+            qx = _q_axis((1.0, 0.0, 0.0), rx)
+            qy = _q_axis((0.0, 1.0, 0.0), ry)
+            q_after_x = _q_mul(parent_q, qx)
+            q_after_y = _q_mul(q_after_x, qy)
+            joint_axes[spec.name] = (
+                _q_rotate(parent_q, (1.0, 0.0, 0.0)),
+                _q_rotate(q_after_x, (0.0, 1.0, 0.0)),
+                _q_rotate(q_after_y, (0.0, 0.0, 1.0)),
+            )
+            joint_origins[spec.name] = transforms[spec.name][0]
+
+        size = len(layout)
+        mass_matrix = [[0.0 for _ in range(size)] for _ in range(size)]
+        gravity = [0.0 for _ in range(size)]
+        gravity_force = (0.0, -GRAVITY, 0.0)
+
+        for spec in self.skeleton.segments:
+            origin, world_q = transforms[spec.name]
+            com = _add(origin, _q_rotate(
+                world_q, _scale(spec.direction, spec.length * 0.5)
+            ))
+            segment_axis = _q_rotate(world_q, spec.direction)
+            parallel_inertia = 0.5 * spec.mass * spec.radius * spec.radius
+            transverse_inertia = spec.mass * (
+                spec.length * spec.length / 12.0 + spec.radius * spec.radius / 4.0
+            )
+
+            ancestor_names = []
+            cursor = spec.name
+            while self._specs[cursor].parent is not None:
+                ancestor_names.append(cursor)
+                cursor = self._specs[cursor].parent
+
+            jacobian_columns = []
+            for joint_name in ancestor_names:
+                for axis_index, enabled in enumerate(self._specs[joint_name].dof_mask):
+                    if not enabled:
+                        continue
+                    column_index = index[(joint_name, axis_index)]
+                    axis_world = joint_axes[joint_name][axis_index]
+                    lever = _sub(com, joint_origins[joint_name])
+                    jacobian_columns.append((
+                        column_index,
+                        _cross(axis_world, lever),
+                        axis_world,
+                    ))
+
+            for i, linear_i, angular_i in jacobian_columns:
+                gravity[i] += spec.mass * _dot(linear_i, gravity_force)
+                for j, linear_j, angular_j in jacobian_columns:
+                    inertia_angular_j = _add(
+                        _scale(angular_j, transverse_inertia),
+                        _scale(segment_axis,
+                               (parallel_inertia - transverse_inertia)
+                               * _dot(angular_j, segment_axis)),
+                    )
+                    mass_matrix[i][j] += (
+                        spec.mass * _dot(linear_i, linear_j)
+                        + _dot(angular_i, inertia_angular_j)
+                    )
+
+        for i in range(size):
+            mass_matrix[i][i] += 1e-6
+        return mass_matrix, gravity
+
+    def _coriolis_vector(
+        self, position: Iterable[float], state: ArticulatedBodyState,
+        layout: tuple[tuple[str, int], ...], base_mass: list[list[float]],
+    ) -> list[float]:
+        """Compute Christoffel velocity bias from finite-difference dM/dq."""
+        count = len(layout)
+        qdot = []
+        for joint_name, axis_index in layout:
+            coordinate = next(j for j in state.joints if j.name == joint_name)
+            qdot.append(coordinate.angular_velocity_xyz[axis_index])
+        derivatives = []
+        epsilon = 1e-4
+        joint_map = {joint.name: joint for joint in state.joints}
+        for joint_name, axis_index in layout:
+            changed = []
+            for joint in state.joints:
+                if joint.name != joint_name:
+                    changed.append(joint)
+                    continue
+                rotation = list(joint.rotation_xyz)
+                rotation[axis_index] += epsilon
+                changed.append(JointCoordinate(
+                    name=joint.name, angle=rotation[0], velocity=joint.velocity,
+                    activation=joint.activation, rotation_xyz=tuple(rotation),
+                    angular_velocity_xyz=joint.angular_velocity_xyz,
+                    tendon_extension_xyz=joint.tendon_extension_xyz,
+                    tendon_velocity_xyz=joint.tendon_velocity_xyz,
+                ))
+            perturbed = ArticulatedBodyState(
+                skeleton_version=state.skeleton_version,
+                joints=tuple(changed), root_velocity=state.root_velocity,
+                contacts=state.contacts, mechanical_strain=state.mechanical_strain,
+                proprioceptive_error=state.proprioceptive_error,
+                metabolic_work=state.metabolic_work,
+            )
+            shifted, _ = self._mass_matrix_and_gravity(position, perturbed, layout)
+            derivatives.append([
+                [(shifted[i][j] - base_mass[i][j]) / epsilon
+                 for j in range(count)]
+                for i in range(count)
+            ])
+
+        coriolis = [0.0 for _ in range(count)]
+        for i in range(count):
+            total = 0.0
+            for j in range(count):
+                for k in range(count):
+                    christoffel = 0.5 * (
+                        derivatives[k][i][j]
+                        + derivatives[j][i][k]
+                        - derivatives[i][j][k]
+                    )
+                    total += christoffel * qdot[j] * qdot[k]
+            coriolis[i] = total
+        return coriolis
+
     def step(self, state: ArticulatedBodyState, position: Iterable[float], *,
              dt: float, motor_commands: Sequence[tuple[str, object]] = (),
              root_acceleration: Iterable[float] = (0.0, 0.0, 0.0),
