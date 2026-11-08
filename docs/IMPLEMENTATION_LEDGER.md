@@ -1,6 +1,6 @@
 # Chimera implementation ledger
 
-Last verified repository branch: `tecq-causal-morphogenesis`
+Last verified repository branch: `research/ccpl-causal-battery` (based on `tecq-causal-morphogenesis`)
 Repository: `foreverliverich/openworld`
 
 This file is the durable engineering handoff. Update it in the same change as every material implementation or verification result. Do not use conversational summaries as the sole source of project status. The uploaded legacy source/transport audit is maintained in [docs/LEGACY_SOURCE_INTEGRATION_AUDIT.md](LEGACY_SOURCE_INTEGRATION_AUDIT.md). The master source reconciliation is [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); the adopted ISCE/V-OMEGA standing decisions and corrections are [docs/ISCE_VOMEGA_STANDING_DECISIONS.md](ISCE_VOMEGA_STANDING_DECISIONS.md).
