@@ -47,6 +47,7 @@ class TorchMorphogeneticDynamics:
         self.state_dim = state_dim
         self.hidden_dim = hidden_dim
         self.max_derivative = float(max_derivative)
+        self.training_dt = 0.05
         self.model = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
@@ -91,9 +92,12 @@ class TorchMorphogeneticDynamics:
         self, trajectories: Sequence[Sequence[Sequence[float]]], *,
         validation: Sequence[Sequence[Sequence[float]]] | None = None,
         epochs: int = 20, batch_size: int = 16, learning_rate: float = 2e-4,
+        sample_dt: float = 0.05,
     ) -> list[dict[str, float]]:
         if epochs < 1 or batch_size < 1 or learning_rate <= 0:
             raise DynamicsTrainingError("Invalid training hyperparameters")
+        if not math.isfinite(sample_dt) or not 0 < sample_dt <= 0.25:
+            raise DynamicsTrainingError("sample_dt must be finite and in (0, 0.25]")
         if not validation:
             raise DynamicsTrainingError("Held-out validation trajectories are required")
         # Validate the held-out data contract before modifying model weights.
@@ -102,6 +106,7 @@ class TorchMorphogeneticDynamics:
         x, y = self._tensor_sequences(trajectories)
         self.trained = False
         self.validated = False
+        self.training_dt = float(sample_dt)
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=learning_rate, weight_decay=1e-5
         )
@@ -118,7 +123,7 @@ class TorchMorphogeneticDynamics:
                 # One-step Euler prediction is the training target for the learned
                 # continuous vector field. Smoothness and bounded-energy penalties
                 # discourage explosive trajectories.
-                predicted = xb + derivative * 0.05
+                predicted = xb + derivative * self.training_dt
                 prediction_loss = torch.mean((predicted - yb) ** 2)
                 smoothness = torch.mean(derivative ** 2)
                 energy_penalty = torch.mean(torch.relu(
@@ -134,21 +139,25 @@ class TorchMorphogeneticDynamics:
                 count += 1
             metrics = {"epoch": float(epoch + 1), "train_loss": total / max(1, count)}
             if validation:
-                metrics.update({f"validation_{k}": v for k, v in self.evaluate(validation).items()})
+                metrics.update({f"validation_{k}": v for k, v in self.evaluate(validation, dt=self.training_dt).items()})
             history.append(metrics)
         self.training_history.extend(history)
         self.trained = True
         return history
 
     def evaluate(
-        self, trajectories: Sequence[Sequence[Sequence[float]]]
+        self, trajectories: Sequence[Sequence[Sequence[float]]], *,
+        dt: float | None = None,
     ) -> dict[str, float]:
         torch = self.torch
+        dt = self.training_dt if dt is None else float(dt)
+        if not math.isfinite(dt) or not 0 < dt <= 0.25:
+            raise DynamicsTrainingError("evaluation dt must be finite and in (0, 0.25]")
         x, y = self._tensor_sequences(trajectories)
         self.model.eval()
         with torch.inference_mode():
             derivative = self._derivative(x)
-            predicted = x + derivative * 0.05
+            predicted = x + derivative * dt
             mse = torch.mean((predicted - y) ** 2)
             derivative_rms = torch.sqrt(torch.mean(derivative ** 2))
             norm_growth = torch.mean(
@@ -199,6 +208,9 @@ class TorchMorphogeneticDynamics:
             raise DynamicsTrainingError("Checkpoint schema/state dimension mismatch")
         if checkpoint.get("hidden_dim") != self.hidden_dim:
             raise DynamicsTrainingError("Checkpoint hidden dimension mismatch")
+        self.training_dt = float(checkpoint.get("training_dt", 0.05))
+        if not math.isfinite(self.training_dt) or not 0 < self.training_dt <= 0.25:
+            raise DynamicsTrainingError("Checkpoint has invalid training time step")
         self.model.load_state_dict(checkpoint["model"], strict=True)
         self.training_history = list(checkpoint.get("training_history", []))
         self.trained = True
