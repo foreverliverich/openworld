@@ -381,3 +381,37 @@ python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_wo
 Open [http://127.0.0.1:8765/web/somatic.html](http://127.0.0.1:8765/web/somatic.html). The key is not exposed to browser JavaScript. The canonical previous/current SDF scripts and morph metadata are stored by RealityEngine and restored after reload. The interface also provides screenshot-conditioned auto-refinement with a hard ten-iteration cap; each candidate is compiled before its revision-checked commit. The old Body Forge toolbox action remains a legacy world-entity prototype API; it is not the Somatic Core body path.
 
 Implementation detail, transaction contract and open acceptance gates: [docs/SOMATIC_CORE_IMPLEMENTATION.md](docs/SOMATIC_CORE_IMPLEMENTATION.md). P0 is still in progress until the real WebGL2 T1–T7 suite has been repeatedly run and verified.
+
+
+### Optional semantic-to-spatial scene interpreter
+
+Latent Language can turn a natural-language spatial prompt into a constrained
+scene graph using the same server-side Gemini credential as Somatic Core. Enable
+it explicitly alongside the cognition runtime:
+
+```bash
+export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+python -m chimera.http_server \
+  --enable-latent-language \
+  --enable-scene-interpreter \
+  --host 127.0.0.1 --port 8765
+```
+
+Then queue a prompt without manually supplying `scene_graph`:
+
+```http
+POST /api/cognition
+Content-Type: application/json
+
+{
+  "text": "Build a grounded stone platform with a small marker beside it",
+  "interpret_scene": true
+}
+```
+
+The interpreter returns typed objects and relations, enforces object/count/extent
+limits, and runs the existing SceneGraph geometry checks before arbitration.
+The resulting spatial proposal must still win the global workspace and be
+executed through `/api/cognition/execute`. The parser does not run generated
+code, create arbitrary meshes, or bypass RealityEngine's collision and revision
+checks. Nested containment remains unsupported by the primitive AABB world.
