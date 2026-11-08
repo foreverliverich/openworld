@@ -44,6 +44,13 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
             return exc.code, json.loads(exc.read())
 
 
+    def test_creative_coagent_requires_explicit_latent_runtime_enablement(self):
+        with self.assertRaisesRegex(ValueError, "require --enable-latent-language"):
+            ChimeraApplication(
+                os.path.join(self.tmp.name, "creative-disabled.sqlite3"),
+                ollama_creative_model="qwen2.5:7b",
+            )
+
     def test_cognition_endpoint_is_explicitly_disabled_without_model_runtime(self):
         status, result = self.request("/api/cognition", {"text": "hello"})
         self.assertEqual(status, 503)

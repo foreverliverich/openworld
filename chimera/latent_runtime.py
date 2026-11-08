@@ -22,6 +22,7 @@ from .latent_language import (
 from .latent_training import MultimodalProjectionModel
 from .learned_dynamics import TorchMorphogeneticDynamics
 from .ollama_specialist import OllamaReasoningSpecialist
+from .ollama_creative_specialist import OllamaCreativeSpecialist
 from .latent_dataset import LatentTrajectoryRecorder
 
 
@@ -38,6 +39,7 @@ def build_latent_language(
     sensor_channel_names: Sequence[str] | None = None,
     device: str = "cpu",
     ollama_model: str | None = None,
+    ollama_creative_model: str | None = None,
     ollama_base_url: str = "http://127.0.0.1:11434",
     ollama_timeout: float = 30.0,
     trajectory_log: str | None = None,
@@ -81,8 +83,8 @@ def build_latent_language(
         dynamics.load_checkpoint(dynamics_checkpoint)
 
     specialists = None
-    if ollama_model:
-        specialists = (
+    if ollama_model or ollama_creative_model:
+        specialist_list = [
             EmotionSpecialist(),
             CognitiveSpecialist(),
             MemorySpecialist(),
@@ -90,10 +92,17 @@ def build_latent_language(
             TemporalSpecialist(),
             SpatialSpecialist(),
             CreativeSpecialist(),
-            OllamaReasoningSpecialist(
+        ]
+        if ollama_model:
+            specialist_list.append(OllamaReasoningSpecialist(
                 ollama_model, base_url=ollama_base_url, timeout=ollama_timeout,
-            ),
-        )
+            ))
+        if ollama_creative_model:
+            specialist_list.append(OllamaCreativeSpecialist(
+                ollama_creative_model, base_url=ollama_base_url,
+                timeout=ollama_timeout,
+            ))
+        specialists = tuple(specialist_list)
     trajectory_recorder = (
         LatentTrajectoryRecorder(trajectory_log, organism_id=trajectory_organism_id)
         if trajectory_log else None
