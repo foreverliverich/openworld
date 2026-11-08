@@ -134,8 +134,9 @@ class DigitalCell:
             + observation.novelty * 0.15
         )
         potential = max(0.0, old.membrane_potential * 0.72 + drive * 0.42)
+        was_refractory = old.refractory_ticks > 0
         refractory = max(0, old.refractory_ticks - 1)
-        fired = refractory == 0 and potential >= self.membrane_threshold
+        fired = not was_refractory and potential >= self.membrane_threshold
 
         # Homeostatic gating changes the action scores; learned values bias,
         # but cannot override, severe energy/stress constraints.
@@ -154,7 +155,7 @@ class DigitalCell:
         else:
             # Refractory state suppresses active seeking. Outside refractoriness,
             # a membrane spike is required for the metabolically active action.
-            eligible = (0, 2) if refractory > 0 else ((0, 1, 2) if fired else (0, 2))
+            eligible = (0, 2) if was_refractory else ((0, 1, 2) if fired else (0, 2))
             action_index = max(eligible, key=lambda idx: (scores[idx], -idx))
         action = self.ACTIONS[action_index]
 
