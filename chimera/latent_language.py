@@ -95,6 +95,11 @@ class EncodedObservation:
         if not self.source_id or not self.encoder_id:
             raise LatentLanguageError("Observation source_id and encoder_id are required")
         if self.training_embedding is not None:
+            if any(
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                for value in self.training_embedding
+            ):
+                raise LatentLanguageError("Training embedding values must be numeric")
             training = tuple(float(value) for value in self.training_embedding)
             if not training or any(not math.isfinite(value) for value in training):
                 raise LatentLanguageError("Training embedding must be a non-empty finite vector")
@@ -987,6 +992,7 @@ class LatentLanguageCoordinator:
                 latent_vector=working_state.vector,
                 latent_state_digest=working_state.digest,
                 timestamp=context.timestamp,
+                sample_dt=dt,
                 world_revision=context.world_revision,
                 modality_embeddings=modality_records,
                 alignment_pair=context.alignment_pair,
