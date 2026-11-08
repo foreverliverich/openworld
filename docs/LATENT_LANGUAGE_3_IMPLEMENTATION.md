@@ -59,13 +59,13 @@ Use paired, semantically corresponding encoder outputs. Rows must align: row i i
 - audio: 768-D Wav2Vec2 mean-pooled hidden states
 - optional audio: row-aligned with text/image
 
-The training class provides symmetric InfoNCE losses and an audio reconstruction constraint. Evaluate on a held-out split and retain recall@1, paired cosine and audio reconstruction metrics. The repository does not include a fabricated dataset or claim that these weights have already been trained.
+The training class provides symmetric InfoNCE losses and an audio reconstruction constraint. Run `evaluate()` on a held-out split before using or checkpointing the audio compressor; retain recall@1, paired cosine and audio reconstruction metrics. The audio slot projection remains unavailable until paired audio training and held-out validation have both run. The repository does not include a fabricated dataset or claim that these weights have already been trained.
 
 ## Train morphogenetic dynamics
 
 Collect versioned latent trajectories from real runtime cycles. Each row is one complete 2,464-D state; adjacent rows must be consecutive observations from the same trajectory. Separate train and validation trajectories by organism/session, not by randomly splitting adjacent timesteps.
 
-The model learns a vector field from next-state prediction with bounded derivative, smoothness and norm-growth penalties. It integrates using RK4 and clamps the working vector to the documented range. `evolve()` refuses to run until a model has been trained or a compatible checkpoint loaded. A trained checkpoint is still an empirical predictor, not proof of autonomous thought or subjective experience.
+The model learns a vector field from next-state prediction with bounded derivative, smoothness and norm-growth penalties. It integrates using RK4 and clamps the working vector to the documented range. A held-out trajectory set is mandatory before the model is marked deployable; `evolve()` refuses to run until training and validation have passed or a validated compatible checkpoint has been loaded. A trained checkpoint is still an empirical predictor, not proof of autonomous thought or subjective experience.
 
 ## Tests
 
@@ -74,7 +74,7 @@ python -m unittest discover -s tests -p "test_latent_language.py" -v
 python -m unittest discover -s tests -v
 ```
 
-The acceptance suite checks dimensions, provenance, confidence fusion, stale-observation rejection, scene-graph geometry, workspace capacity, proposal mutation protection, sensor calibration, runtime integration and committed RealityEngine effects.
+The acceptance suite checks dimensions, provenance, confidence fusion, stale-observation rejection, scene-graph geometry, workspace capacity, proposal mutation protection, ISCE resource admission, sensor calibration, runtime feedback and committed RealityEngine effects. A separate CI job installs CPU PyTorch and executes both learned-model training/evaluation suites.
 
 ## Explicit remaining gates
 
