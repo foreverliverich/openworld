@@ -189,7 +189,7 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
                     ),),
                 )
 
-        png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\nvalid-image-bytes").decode()
+        png = base64.b64encode(b"\x89PNG\r\n\x1a\nvalid-image-bytes").decode()
         image_uri = "data:image/png;base64," + png
         registry = EncoderRegistry()
         registry.register("text", FixedTextEncoder())
