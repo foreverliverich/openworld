@@ -166,6 +166,8 @@ class OrganismActionGateway:
                     outcome=outcome,
                     measured_work_units=actual_work,
                     action_success=1.0,
+                    causation_id=str(result.get("action_id", "")),
+                    correlation_id=str(result.get("action_id", "")),
                     expected_revision=self.world.revision(),
                 )
                 break
