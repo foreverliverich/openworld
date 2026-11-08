@@ -142,6 +142,90 @@ class LatentLanguageTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+
+    def test_calibrated_sensor_encoder_requires_and_normalizes_64_channels(self):
+        names = [f"channel_{i}" for i in range(64)]
+        calibration = {name: (0.0, 100.0) for name in names}
+        encoder = CalibratedSensorEncoder(names, calibration)
+        encoded = encoder.encode({name: 50.0 for name in names})
+        self.assertEqual(len(encoded), 64)
+        self.assertTrue(all(value == 0.0 for value in encoded))
+        with self.assertRaises(LatentLanguageError):
+            CalibratedSensorEncoder(names, {})
+
+    def test_runtime_projects_current_isce_state_and_runs_cognition_cycle(self):
+        tmp = tempfile.TemporaryDirectory()
+        world = None
+        try:
+            world = RealityEngine(WorldConfig(database=os.path.join(tmp.name, "runtime-latent.sqlite3")))
+            organism = OrganismKernel(world, "latent-runtime")
+            agent = AutonomousWorldAgent(world, organism)
+            encoders = EncoderRegistry()
+            encoders.register("text", FixedEncoder(768, value=0.2))
+            coordinator = LatentLanguageCoordinator(encoders)
+            toolbox = ChimeraToolbox(world, actor_id="latent-runtime")
+            gateway = CognitiveActionGateway(toolbox, coordinator.workspace)
+            runtime = AutonomousRuntime(
+                world, agent, cognition=coordinator, cognition_gateway=gateway
+            )
+            graph = SceneGraph(
+                "runtime-scene",
+                (SceneObject("object", "cube", (0, 0.5, 0), (0.5, 1, 0.5),
+                             dynamic=False),),
+            )
+            runtime.queue_cognition_cycle(
+                [{"modality": "text", "payload": "Create a scene",
+                  "source_id": "runtime-input", "timestamp": 1.0}],
+                SpecialistContext(
+                    timestamp=1.0, world_revision=world.revision(),
+                    text="Create a scene", scene_graph=graph,
+                    source_refs=("runtime-input",),
+                ),
+            )
+            frame = runtime.tick()
+            self.assertIsNotNone(frame.cognition_result)
+            self.assertEqual(frame.cognition_result["workspace_tick"], 1)
+            self.assertGreater(
+                coordinator.state.subspaces["cognition"][0], 0.0
+            )
+            selected = coordinator.workspace.latest.selected
+            spatial = next(p for p in selected if p.specialist == "spatial")
+            committed = runtime.execute_cognitive_proposal(spatial)
+            self.assertTrue(committed["accepted"])
+        finally:
+            if world is not None:
+                world.close()
+            tmp.cleanup()
+
+    def test_workspace_detects_proposal_mutation_after_selection(self):
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            world = RealityEngine(WorldConfig(database=os.path.join(tmp.name, "mutate.sqlite3")))
+            toolbox = ChimeraToolbox(world)
+            encoders = EncoderRegistry()
+            encoders.register("text", FixedEncoder(768, value=0.1))
+            coordinator = LatentLanguageCoordinator(encoders)
+            graph = SceneGraph(
+                "mutation-scene",
+                (SceneObject("one", "cube", (0, 0.5, 0), (1, 1, 1)),),
+            )
+            cycle = coordinator.cycle(
+                [{"modality": "text", "payload": "Build scene",
+                  "source_id": "mutation-test", "timestamp": 2.0}],
+                SpecialistContext(
+                    2.0, world.revision(), text="Build scene",
+                    scene_graph=graph, source_refs=("mutation-test",),
+                ),
+            )
+            proposal = next(p for p in cycle.broadcast.selected if p.specialist == "spatial")
+            proposal.payload["arguments"]["blueprint"]["name"] = "tampered"
+            gateway = CognitiveActionGateway(toolbox, coordinator.workspace)
+            with self.assertRaises(LatentLanguageError):
+                gateway.execute(proposal)
+            world.close()
+        finally:
+            tmp.cleanup()
+
     def test_gateway_rejects_unselected_proposal(self):
         from chimera.latent_language import SpecialistProposal
         tmp = tempfile.TemporaryDirectory()
