@@ -765,8 +765,8 @@ class LatentLanguageCoordinator:
             self.state = self.fusion.update(self.state, encoded)
         prediction_error = None
         if self.dynamics is not None:
-            if not getattr(self.dynamics, "trained", False):
-                raise LatentLanguageError("Configured morphogenetic dynamics must be trained")
+            if not getattr(self.dynamics, "trained", False) or not getattr(self.dynamics, "validated", False):
+                raise LatentLanguageError("Configured morphogenetic dynamics must be trained and held-out validated")
             if self._previous_cycle_vector is not None:
                 predicted = self.dynamics.evolve(self._previous_cycle_vector, dt=dt)
                 residual = [
