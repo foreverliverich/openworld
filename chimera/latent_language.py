@@ -367,8 +367,8 @@ class SpecialistProposal:
             raise LatentLanguageError("Proposal identity fields are required")
         for name in ("confidence", "salience", "urgency", "novelty"):
             _unit(getattr(self, name), name)
-        if not math.isfinite(self.estimated_cost) or self.estimated_cost < 0:
-            raise LatentLanguageError("estimated_cost must be finite and non-negative")
+        _unit(self.estimated_cost, "estimated_cost")
+
         if self.world_revision < 0:
             raise LatentLanguageError("world_revision cannot be negative")
 
@@ -871,9 +871,15 @@ def project_isce_state(organism_state: Any, *, timestamp: float | None = None) -
 class CognitiveActionGateway:
     """Only selected, evidence-bearing, revision-current proposals can mutate world."""
 
-    def __init__(self, toolbox: Any, workspace: GlobalWorkspace, *, min_confidence: float = 0.65):
+    def __init__(
+        self, toolbox: Any, workspace: GlobalWorkspace, organism: Any, *,
+        min_confidence: float = 0.65,
+    ):
+        if organism is None or getattr(organism, "world", None) is not toolbox.world:
+            raise LatentLanguageError("Action gateway requires the ISCE organism for resource admission")
         self.toolbox = toolbox
         self.workspace = workspace
+        self.organism = organism
         self.min_confidence = _unit(min_confidence, "min_confidence")
 
     def execute(self, proposal: SpecialistProposal, *, actor_id: str = "chimera") -> dict[str, Any]:
@@ -888,6 +894,12 @@ class CognitiveActionGateway:
             raise LatentLanguageError("Only world_action proposals can cross the action gateway")
         if proposal.confidence < self.min_confidence:
             raise LatentLanguageError("Proposal confidence is below the action threshold")
+        available_reserve = self.organism.state.resources.reserve
+        if proposal.estimated_cost > available_reserve:
+            raise LatentLanguageError(
+                f"Estimated action cost {proposal.estimated_cost:.3f} exceeds "
+                f"ISCE reserve {available_reserve:.3f}"
+            )
         if not proposal.evidence_refs:
             raise LatentLanguageError("World actions require explicit evidence provenance")
         current_revision = self.toolbox.world.revision()
