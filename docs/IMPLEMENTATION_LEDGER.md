@@ -220,3 +220,17 @@ Added chimera/sensory.py and tests/test_sensory.py. The autonomous agent's obser
 - This is world-state visual sensing over the current AABB entity scene, not camera vision, touch, hearing, proprioception or anatomical sensing. The count/signature surprise measure is an initial grounded proxy, not a complete predictive perception system.
 
 Details: SENSORY_GROUNDING.md. Verification for the latest combined commit is pending hosted CI.
+
+
+## Browser-home worker scheduler — 2026-11-08
+
+Added web/runtime-worker.js and explicit Run organism / Pause controls to web/index.html. The worker schedules three authoritative POST /api/tick calls per 100 ms batch and reports committed frames to the page. The browser now displays attention focus/urgency and last-frame grounded sensory salience, novelty and observation error.
+
+- The worker does not own ISCE or RealityEngine state; the existing Python runtime and SQLite database remain authoritative.
+- requestAnimationFrame remains visual-only. The worker uses a bounded, non-overlapping setTimeout loop and stops on errors, explicit pause or page unload.
+- Browser suspension/closure interrupts execution. These periods are paused/dormant, not continuous organism life. No background execution guarantee is claimed.
+- Python CI statically verifies worker/API wiring, start/stop controls, disposal and no worker render loop. It does not replace real-browser Web Worker, Three.js or WebGL2 acceptance.
+
+**Verification:** GitHub Actions run 42511589801 passed 100 Python 3.11 standard-library tests in 5.810 seconds. This includes the CCPL, action-gateway, sensory adapter, browser-worker wiring and existing project regressions. Actual browser/WebGL2 execution remains unverified.
+
+Details: BROWSER_WORKER_LIFECYCLE.md.
