@@ -108,6 +108,14 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
     def app(self) -> ChimeraApplication:
         return self.server.app  # type: ignore[attr-defined]
 
+    def end_headers(self) -> None:
+        # Enable cross-origin isolation for SharedArrayBuffer in this local app.
+        # Cross-origin subresources must opt in through CORS/CORP under COEP.
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        self.send_header("Cross-Origin-Resource-Policy", "same-site")
+        super().end_headers()
+
     def log_message(self, fmt: str, *args: Any) -> None:
         print("[chimera-http] " + fmt % args)
 
