@@ -61,6 +61,64 @@ class MultimodalProjectionModel:
             raise AlignmentTrainingError("Audio bottleneck requires paired training and held-out validation")
         return self.audio_compressor(audio_hidden)
 
+    def _require_validated(self) -> None:
+        if not self.trained or not self.validated:
+            raise AlignmentTrainingError("Shared-space fusion requires trained and validated projections")
+
+    def project_text_shared(self, text_hidden):
+        self._require_validated()
+        torch, _, functional = _torch_modules()
+        values = self._batch(text_hidden, 768, "text")
+        with torch.inference_mode():
+            return functional.normalize(self.text_projection(values), dim=-1)
+
+    def project_image_shared(self, image_features):
+        self._require_validated()
+        torch, _, functional = _torch_modules()
+        values = self._batch(image_features, 512, "image")
+        with torch.inference_mode():
+            return functional.normalize(self.image_projection(values), dim=-1)
+
+    def project_audio_shared(self, audio_hidden):
+        self._require_validated()
+        torch, _, functional = _torch_modules()
+        values = self._batch(audio_hidden, 768, "audio")
+        with torch.inference_mode():
+            return functional.normalize(self.audio_projection(values), dim=-1)
+
+    def fuse_shared(self, modalities: Mapping[str, Any], confidence: Mapping[str, float] | None = None):
+        """Confidence-weight aligned modalities into one normalized shared-space vector."""
+        self._require_validated()
+        confidence = dict(confidence or {})
+        projections = []
+        weights = []
+        batch_size = None
+        projectors = {
+            "text": self.project_text_shared,
+            "image": self.project_image_shared,
+            "audio": self.project_audio_shared,
+        }
+        for modality in ("text", "image", "audio"):
+            if modality not in modalities:
+                continue
+            weight = float(confidence.get(modality, 1.0))
+            if not 0.0 <= weight <= 1.0:
+                raise AlignmentTrainingError(f"{modality} confidence must be in [0, 1]")
+            if weight == 0.0:
+                continue
+            projected = projectors[modality](modalities[modality])
+            if batch_size is None:
+                batch_size = projected.shape[0]
+            elif projected.shape[0] != batch_size:
+                raise AlignmentTrainingError("Shared-space modality batches must align row-for-row")
+            projections.append(projected * weight)
+            weights.append(weight)
+        if not projections:
+            raise AlignmentTrainingError("At least one positive-confidence modality is required")
+        torch, _, functional = _torch_modules()
+        fused = torch.stack(projections, dim=0).sum(dim=0) / sum(weights)
+        return functional.normalize(fused, dim=-1)
+
     def _batch(self, value: Any, width: int, name: str):
         torch = self.torch
         tensor = torch.as_tensor(value, dtype=torch.float32, device=self.device)
