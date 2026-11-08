@@ -3,14 +3,14 @@
 **Implementation:** `chimera/biomechanics.py`  
 **State owner:** `ISCEOrganismState` in `chimera/isce.py`  
 **Persistence owner:** `RealityEngine`'s existing transactional organism-state row  
-**Model version:** `human-sagittal-1`  
+**Model version:** `human-3d-1` (migrates `human-sagittal-1` state)  
 **Units:** metres, kilograms, seconds, radians, newtons, newton-metres
 
 ## 1. What is now executable
 
-This implementation replaces the former statement that the organism had physiology without articulated mechanics. It provides a deterministic, versioned human segment tree; joint coordinates; forward kinematics; bounded PD muscle actuators; gravity loading; semi-implicit joint integration; joint-limit impacts; root translation; unilateral foot/ground contact; effort/work accounting; and proprioceptive error.
+This implementation provides a deterministic, versioned human segment tree; scalar hinge and multi-axis joint coordinates; quaternion-composed 3D forward kinematics; bounded PD muscle excitation; activation dynamics; a compliant series-elastic tendon stage; force-length/force-velocity capacity scaling; gravity torque from world-space lever arms; semi-implicit joint integration; per-axis limits; root translation; unilateral foot/ground contact; effort/work accounting; and proprioceptive error.
 
-The canonical tree contains 16 segments and 15 actuated hinge coordinates:
+The canonical tree contains 16 rigid segments and 15 actuated joints. Spine, neck, shoulders and hips are three-axis; wrists and ankles are two-axis; knees and elbows are single-axis hinges. Local XYZ Euler components are composed into normalized quaternions for forward kinematics:
 
 - axial: pelvis, spine, neck, head
 - left arm: upper arm, forearm, hand
@@ -26,7 +26,8 @@ The segment mass and length values are an explicit approximate human-sized param
 
 Articulation is a nested immutable value inside the existing ISCE organism state:
 
-- joint angle, angular velocity and muscle activation per joint
+- local XYZ rotation and angular velocity per joint, with legacy X-axis angle/velocity aliases
+- muscle activation plus per-axis tendon extension and tendon velocity
 - root linear velocity
 - active ground-contact feet
 - current mechanical strain and proprioceptive error
@@ -34,30 +35,27 @@ Articulation is a nested immutable value inside the existing ISCE organism state
 
 No second organism object, database table, renderer-owned pose or parallel physiology state is introduced. `OrganismState.to_dict()` serializes articulation with the other intrinsic partitions; the existing RealityEngine organism-state transaction commits it atomically with world-field projections and the event hash.
 
-The schema version remains 1 because this is an additive, defaulted field. Existing schema-v1 payloads without articulation load with the canonical neutral skeleton. New payloads persist the complete articulation. A future incompatible skeleton or state change must use an explicit migration/version rather than silently reinterpreting joint order.
+The organism schema version remains 1 because articulation is still an additive nested field. Existing schema-v1 payloads without articulation load with the neutral canonical body. Persisted `human-sagittal-1` articulation is explicitly migrated to `human-3d-1`: prior scalar angle and velocity are preserved on local X, Y/Z components and tendon state start at zero. Unknown skeleton versions are not silently rewritten. The skeleton version remains stored in the articulation payload.
 
 ## 3. Actuator and joint dynamics
 
-Motor commands are pairs `(joint_name, target_angle_radians)`. Each joint is a bounded hinge with a torque limit, proportional gain and derivative damping.
+A motor command may be a scalar (legacy X-axis target) or a three-element XYZ radians vector. Each enabled axis computes a bounded PD torque request:
 
-For a joint coordinate (q), target (q^*), angular velocity (dot q), and motor readiness (r):
+\[
+\tau_{request,i}=\operatorname{clamp}(K_p r(q_i^*-q_i)-K_d\dot q_i,-\tau_{max},\tau_{max})
+\]
 
-[
-\tau_{motor}=\operatorname{clamp}(K_p r(q^*-q)-K_d\dot q,-\tau_{max},\tau_{max})
-]
+Activation follows a first-order response with the segment's activation time constant. Available torque is scaled by a Gaussian force-length factor around neutral, a bounded force-velocity factor, activation, and the square root of normalized body energy:
 
-The solver estimates distal subtree mass and effective hinge inertia, applies a gravity load based on the accumulated sagittal angle, and integrates with semi-implicit Euler at internal steps no larger than 20 ms:
+\[
+\tau_{capacity}=\tau_{max}\,a\,f_l(q)\,f_v(\dot q)\sqrt{E}
+\]
 
-[
-\ddot q = \frac{\tau_{motor}+\tau_{gravity}}{I_{effective}}
-]
+The compliant tendon stage uses a stable first-order series-elastic response: tendon extension relaxes toward the muscle-torque/stiffness target with a 25 ms time constant, and transmitted torque is the spring term plus tendon damping. The model then integrates each enabled rotational component with semi-implicit Euler at internal steps no larger than 20 ms.
 
-[
-\dot q_{n+1}=(\dot q_n+\ddot q\,h)e^{-0.08h},\qquad
-q_{n+1}=\operatorname{clamp}(q_n+\dot q_{n+1}h,q_{min},q_{max})
-]
+The three local Euler components are currently integrated independently; their composed orientation is a quaternion. This is 3D kinematic articulation with per-axis approximate dynamics, not a fully coupled quaternion rigid-body integrator. Gravity loading is calculated from the distal subtree's approximate mass and a world-space lever arm: \(\mathbf r\times\mathbf F\) is transformed into the parent joint frame. Effective inertia remains a diagonal subtree approximation, not a full articulated mass matrix.
 
-Crossing a joint limit clamps the coordinate, removes outward velocity and contributes to mechanical strain. Motor effort and positive mechanical work are accumulated and returned to ISCE as simulated work units and metabolic cost. These are model quantities, not measured hardware energy or calibrated biological calories.
+Per-axis limits clamp the coordinate, remove outward velocity and contribute to mechanical strain. Work and effort are returned to ISCE as simulated quantities, not measured hardware energy or calibrated biological calories.
 
 ## 4. Root motion and ground contact
 
@@ -99,10 +97,9 @@ The existing organism-kernel persistence/restart tests also exercise the expande
 
 This closes the first executable articulated-body gate, not all embodiment. Remaining engineering work includes:
 
-- multi-axis 3D joints and quaternion rigid-segment transforms
-- coupled articulated-body dynamics (mass matrix, Coriolis/centrifugal terms and constraint impulses)
+- coupled articulated-body dynamics (full generalized mass matrix, Coriolis/centrifugal terms, recursive Newton–Euler or equivalent solver, and constraint impulses)
 - self-collision, terrain collision, friction cones and grasp/contact mechanics
-- antagonistic muscle pairs, tendon compliance, force-length/force-velocity curves, fatigue and recovery at muscle level
+- antagonistic agonist/antagonist muscle pairs, pennation and physiological cross-sectional area, tendon slack/strain calibration, muscle-level fatigue and recovery
 - sensor observations from actual segment/contact geometry and camera/audio/touch modalities
 - a single governed action gateway that translates planner intent into validated motor targets
 - higher-fidelity skin/soft-tissue deformation that binds the segmented Three.js projection to the Somatic Core SDF surface without inventing display-only motion
@@ -115,7 +112,7 @@ Do not describe this model as a complete human simulator, anatomically accurate 
 The solver is reachable through the existing single-process HTTP application; this is not a disconnected test-only function.
 
 - `GET /api/body/pose` returns the current committed skeleton version, root transform/velocity, contact feet, all joint coordinates and all 16 world-space segment poses.
-- `POST /api/body/actuate` accepts a required `expected_revision`, a `motor_commands` object mapping canonical joint names to target radians, and optional `root_acceleration` as three world-frame components. It advances exactly one configured fixed timestep through the same OrganismKernel → ISCE → RealityEngine transaction.
+- `POST /api/body/actuate` accepts a required `expected_revision`, a `motor_commands` object mapping canonical joint names to scalar X-axis targets or three-element XYZ radians vectors, and optional `root_acceleration` as three world-frame components. It advances exactly one configured fixed timestep through the same OrganismKernel → ISCE → RealityEngine transaction.
 - Unknown joints, non-finite values, malformed vectors and stale revisions are rejected before the next state is published. The response includes the committed body pose and canonical state snapshot.
 
 Example request body:
@@ -124,7 +121,7 @@ Example request body:
 {
   "expected_revision": 12,
   "motor_commands": {
-    "thigh_l": 0.55,
+    "thigh_l": [0.55, 0.2, -0.1],
     "shin_l": -0.3
   },
   "root_acceleration": [0.6, 0.0, 0.0]
@@ -133,4 +130,4 @@ Example request body:
 
 The caller must obtain the current revision from `GET /api/body/pose` or `GET /api/state` and send it unchanged. This is an explicit motor-target interface, not yet a high-level gait planner or an authorization/governance layer for autonomous actions.
 
-The main browser world scene now calls the pose endpoint and draws the returned segment transforms as connected cylinder-and-joint geometry. The motor-control panel submits four explicit joint targets plus optional horizontal root acceleration; the scene updates only from the committed response and periodic pose reads. This is a physical-state projection, not a deforming skin mesh and not the Somatic Core raymarched SDF renderer.
+The main browser world scene now calls the pose endpoint and projects the returned world-space segment quaternions and local segment axes as connected cylinder-and-joint geometry. The motor-control panel exposes hip flexion/abduction/axial rotation and shoulder flexion/abduction/axial rotation, plus scalar knee/elbow controls and optional horizontal root acceleration. The scene updates only from committed pose responses; it does not own a second physics state. This remains a rigid-segment projection, not a deforming skin mesh or the Somatic Core raymarched SDF renderer.
