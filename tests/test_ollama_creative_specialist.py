@@ -151,6 +151,37 @@ class OllamaCreativeSpecialistTests(unittest.TestCase):
         )
         self.assertIn("non-UTF-8", specialist.last_error)
 
+    @patch("chimera.latent_runtime.HuggingFaceTextEncoder")
+    @patch("chimera.latent_runtime.HuggingFaceCLIPImageEncoder")
+    def test_runtime_can_enable_creative_model_without_reasoning_model(
+        self, image_encoder, text_encoder,
+    ):
+        from chimera.latent_runtime import build_latent_language
+
+        class FixedEncoder:
+            def __init__(self, encoder_id):
+                self.encoder_id = encoder_id
+            def encode(self, payload):
+                return [0.1] * 768
+
+        text_encoder.return_value = FixedEncoder("text-test")
+        image_encoder.return_value = FixedEncoder("image-test")
+        with tempfile.TemporaryDirectory() as directory:
+            world = RealityEngine(WorldConfig(database=os.path.join(directory, "runtime.sqlite3")))
+            try:
+                organism = OrganismKernel(world, "creative-runtime-test")
+                toolbox = ChimeraToolbox(world)
+                coordinator, gateway = build_latent_language(
+                    toolbox, organism, ollama_creative_model="qwen2.5:7b",
+                )
+                names = {specialist.name for specialist in coordinator.specialists}
+                self.assertIn("creative_generation", names)
+                self.assertIn("creative", names)
+                self.assertNotIn("ollama_reasoning", names)
+                self.assertIs(gateway.workspace, coordinator.workspace)
+            finally:
+                world.close()
+
     def test_output_bounds_reject_unbounded_generated_content(self):
         invalid = dict(self.output)
         invalid["elements"] = [
