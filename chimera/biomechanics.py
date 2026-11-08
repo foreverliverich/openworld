@@ -572,17 +572,26 @@ class BiomechanicsEngine:
         for joint_name, axis_index in layout:
             coordinate = next(j for j in state.joints if j.name == joint_name)
             qdot.append(coordinate.angular_velocity_xyz[axis_index])
+        if max((abs(value) for value in qdot), default=0.0) < 1e-12:
+            return [0.0 for _ in range(count)]
         derivatives = []
         epsilon = 1e-4
-        joint_map = {joint.name: joint for joint in state.joints}
         for joint_name, axis_index in layout:
             changed = []
+            joint_spec = self._specs[joint_name]
+            coordinate = next(j for j in state.joints if j.name == joint_name)
+            current_value = coordinate.rotation_xyz[axis_index]
+            low = joint_spec.min_rotation_xyz[axis_index]
+            high = joint_spec.max_rotation_xyz[axis_index]
+            delta = epsilon if current_value + epsilon <= high else -epsilon
+            if current_value + delta < low:
+                delta = epsilon
             for joint in state.joints:
                 if joint.name != joint_name:
                     changed.append(joint)
                     continue
                 rotation = list(joint.rotation_xyz)
-                rotation[axis_index] += epsilon
+                rotation[axis_index] += delta
                 changed.append(JointCoordinate(
                     name=joint.name, angle=rotation[0], velocity=joint.velocity,
                     activation=joint.activation, rotation_xyz=tuple(rotation),
@@ -599,7 +608,7 @@ class BiomechanicsEngine:
             )
             shifted, _ = self._mass_matrix_and_gravity(position, perturbed, layout)
             derivatives.append([
-                [(shifted[i][j] - base_mass[i][j]) / epsilon
+                [(shifted[i][j] - base_mass[i][j]) / delta
                  for j in range(count)]
                 for i in range(count)
             ])
