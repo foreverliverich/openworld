@@ -174,11 +174,15 @@ function renderCreativeResult(result){
  output.innerHTML=artifacts.map(item=>{
   const a=item.artifact;
   const elements=(a.elements||[]).map(e=>'<li><b>'+escapeHTML(e.name)+'</b> — '+escapeHTML(e.detail)+'</li>').join('');
+  const objects=(a.objects||[]).map(e=>'<li><b>'+escapeHTML(e.kind)+'</b> · '+escapeHTML(e.id)+'</li>').join('');
+  const title=a.title||(a.kind==='scene'?'Scene concept':'Concept seed');
+  const concept=a.concept||a.prompt||'';
   const variations=(a.variations||[]).map(v=>'<li>'+escapeHTML(v)+'</li>').join('');
   const tags=(a.style_tags||[]).map(t=>'<span class="pill">'+escapeHTML(t)+'</span>').join(' ');
   const constraints=(a.preserved_constraints||[]).map(v=>'<li>'+escapeHTML(v)+'</li>').join('');
-  return '<article class="entity"><b>'+escapeHTML(a.title||'Creative artifact')+'</b><p>'+escapeHTML(a.concept||'')+'</p>'+
+  return '<article class="entity"><b>'+escapeHTML(title)+'</b><p>'+escapeHTML(concept)+'</p>'+
    (elements?'<b>Design elements</b><ul>'+elements+'</ul>':'')+
+   (objects?'<b>Scene objects</b><ul>'+objects+'</ul>':'')+
    (variations?'<b>Variations</b><ul>'+variations+'</ul>':'')+
    (constraints?'<b>Preserved constraints</b><ul>'+constraints+'</ul>':'')+
    (tags?'<p>'+tags+'</p>':'')+
