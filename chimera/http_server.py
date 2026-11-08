@@ -188,7 +188,8 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
                 current_label = payload.get("current_label", "")
                 if not isinstance(description, str) or not isinstance(current_label, str):
                     raise ValueError("description and current_label must be strings")
-                package = generate_morph_package(description, current_label)
+                current_state = self.app.world.somatic_morphology()
+                package = generate_morph_package(description, current_label, current_state)
                 return self._json(200, {"package": package})
             if self.path == "/api/somatic/refine":
                 state = self.app.world.somatic_morphology()
