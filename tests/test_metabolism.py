@@ -2,7 +2,7 @@ import unittest
 
 from chimera.metabolism import (
     CirculationEdge, ComputationalBloodstream, MetabolicCalibration,
-    MetabolismError, OrganSpec, WorkMeasurement,
+    MetabolicState, MetabolismError, OrganSpec, WorkMeasurement,
 )
 
 
@@ -103,6 +103,16 @@ class ComputationalBloodstreamTests(unittest.TestCase):
         self.assertAlmostEqual(result.state.cumulative_production, 0.05)
         self.assertLessEqual(result.state.as_dict()["core"], 1.0)
         self.assertAlmostEqual(result.conservation_error, 0.0, places=12)
+
+    def test_state_above_capacity_is_rejected_and_calibration_is_auditable(self):
+        state = self.system.initial_state()
+        result = self.system.step(state, {})
+        self.assertEqual(result.calibration_version, "test-v1")
+        invalid = MetabolicState((
+            ("core", 1.01), ("motor", 0.55), ("sensor", 0.55),
+        ))
+        with self.assertRaises(MetabolismError):
+            self.system.step(invalid, {})
 
     def test_invalid_measurements_and_unknown_organs_rejected(self):
         state = self.system.initial_state()
