@@ -49,7 +49,7 @@ class AutonomousRuntime:
         )
         agent_result = self.agent.step()
         self._tick += 1
-        organism_position = self.agent.organism.state.position.as_tuple()
+        organism_position = self.agent.organism.state.position
         observation = self.world.observe(
             center=organism_position, radius=self.observer_radius
         )
@@ -106,7 +106,7 @@ class AutonomousRuntime:
             "simulation_time": self.world.simulation_time(),
             "organism": self.agent.organism.snapshot(),
             "observation": self.world.observe(
-                center=self.agent.organism.state.position.as_tuple(),
+                center=self.agent.organism.state.position,
                 radius=self.observer_radius,
             ),
         }

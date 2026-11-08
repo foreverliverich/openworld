@@ -60,6 +60,7 @@ class ActionType(str, Enum):
     FIELD_INJECT = "field_inject"
     PHYSICS_STEP = "physics_step"
     ORGANISM_TICK = "organism_tick"
+    SOMATIC_MORPH = "somatic_morph"
 
 
 @dataclass(frozen=True)
@@ -76,8 +77,23 @@ class Vec3:
         return (self.x, self.y, self.z)
 
     @classmethod
-    def from_value(cls, value: Iterable[float]) -> "Vec3":
-        x, y, z = value
+    def from_value(cls, value: Iterable[float] | dict[str, float]) -> "Vec3":
+        """Normalize tuple/list coordinates and persisted {x, y, z} vectors.
+
+        OrganismState serializes Vec3 as a named mapping for durable JSON
+        storage; accepting that representation here keeps the database and
+        runtime vector contracts consistent without changing the stored schema.
+        """
+        if isinstance(value, dict):
+            try:
+                x, y, z = value["x"], value["y"], value["z"]
+            except KeyError as exc:
+                raise ValueError("Vector mappings require x, y and z") from exc
+        else:
+            try:
+                x, y, z = value
+            except (TypeError, ValueError) as exc:
+                raise ValueError("A vector must contain exactly three components") from exc
         return cls(float(x), float(y), float(z))
 
 
@@ -200,6 +216,11 @@ class RealityEngine:
         );
 
         CREATE TABLE IF NOT EXISTS organism_state (
+            singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+            payload TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS somatic_morphology (
             singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
             payload TEXT NOT NULL
         );
@@ -597,6 +618,87 @@ class RealityEngine:
                 self._rollback()
                 raise
 
+    def somatic_morphology(self) -> Optional[dict[str, Any]]:
+        """Read the canonical A/B SDF pair and derive morph progress from its start time."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT payload FROM somatic_morphology WHERE singleton=1"
+            ).fetchone()
+            if row is None:
+                return None
+            state = json.loads(row["payload"])
+            started = float(state.get("morph_started_at", 0.0))
+            state["evolutionProgress"] = min(1.0, max(0.0, (time.time() - started) * 1.5))
+            state["world_revision"] = self.revision()
+            return state
+
+    def apply_somatic_morphology(
+        self, package: dict[str, Any], *, actor_id: str,
+        expected_revision: Optional[int] = None,
+    ) -> WorldResult:
+        """Atomically replace the current SDF while retaining the previous SDF for A/B morphing."""
+        required = {"label", "persona", "dialogue", "critique", "sdfScript", "color", "material"}
+        if not isinstance(package, dict) or not required.issubset(package):
+            raise InvalidWorldAction("Somatic package is missing required fields")
+        script = package["sdfScript"]
+        if not isinstance(script, str) or not 40 <= len(script) <= 24000:
+            raise InvalidWorldAction("Somatic SDF must contain 40..24000 characters")
+        if not isinstance(package["color"], list) or len(package["color"]) != 3:
+            raise InvalidWorldAction("Somatic color must contain three channels")
+        action_id = str(uuid.uuid4())
+        with self._lock:
+            self._begin()
+            try:
+                self._check_revision(expected_revision)
+                row = self._db.execute(
+                    "SELECT payload FROM somatic_morphology WHERE singleton=1"
+                ).fetchone()
+                previous = json.loads(row["payload"])["sdfScript"] if row else (
+                    "vec2 map_object(vec3 p){vec2 h=sdHumanoidBase(p);"
+                    "vec3 q=p-vec3(0.,.35,0.);"
+                    "float armL=sdCapsule(q,vec3(-.28,.12,0.),vec3(-.48,-.35,0.),.095);"
+                    "float armR=sdCapsule(q,vec3(.28,.12,0.),vec3(.48,-.35,0.),.095);"
+                    "float legL=sdCapsule(p,vec3(-.16,-.42,0.),vec3(-.19,-.95,.02),.12);"
+                    "float legR=sdCapsule(p,vec3(.16,-.42,0.),vec3(.19,-.95,.02),.12);"
+                    "float d=smin(h.x,armL,.09);d=smin(d,armR,.09);"
+                    "d=smin(d,legL,.1);d=smin(d,legR,.1);"
+                    "vec3 w=opLatentWarp(p,.012);d=opFur(d,w,2.8,.006);"
+                    "return vec2(d,1.);}"
+                )
+                state = {
+                    "label": str(package["label"])[:200],
+                    "persona": str(package["persona"])[:2000],
+                    "dialogue": str(package["dialogue"])[:2000],
+                    "critique": str(package["critique"])[:2000],
+                    "prevSdfScript": previous,
+                    "sdfScript": script,
+                    "color": package["color"],
+                    "material": package["material"],
+                    "iteration": int(json.loads(row["payload"]).get("iteration", 0) + 1) if row else 1,
+                    "morph_started_at": time.time(),
+                }
+                self._db.execute(
+                    "INSERT INTO somatic_morphology(singleton,payload) VALUES(1,?) "
+                    "ON CONFLICT(singleton) DO UPDATE SET payload=excluded.payload",
+                    (json.dumps(state, sort_keys=True),),
+                )
+                revision = self._advance_revision()
+                self._append_event(
+                    action_id, revision, ActionType.SOMATIC_MORPH, actor_id, None,
+                    {"label": state["label"], "iteration": state["iteration"],
+                     "previous_sdf": previous, "target_sdf": script,
+                     "color": state["color"], "material": state["material"]},
+                )
+                self._commit()
+                return WorldResult(
+                    action_id, revision, ActionType.SOMATIC_MORPH.value, None, True,
+                    {"label": state["label"], "iteration": state["iteration"],
+                     "evolutionProgress": 0.0},
+                )
+            except Exception:
+                self._rollback()
+                raise
+
     def field_at(self, position: Iterable[float]) -> dict[str, float]:
         p = Vec3.from_value(position)
         cell = self.config.field_cell_size
@@ -738,7 +840,14 @@ class RealityEngine:
         self, state: dict[str, Any], field_values: dict[str, float], *,
         actor_id: str, expected_revision: Optional[int] = None,
     ) -> WorldResult:
-        """Atomically commit organism state and local morphogenic fields."""
+        """Atomically commit the single versioned ISCE state and local fields."""
+        required = {"organism_id", "schema_version", "position", "body",
+                    "interoception", "sensorimotor", "temporal",
+                    "self_model", "attention", "resources"}
+        if not required.issubset(state) or state.get("schema_version") != 1:
+            raise InvalidWorldAction(
+                "Only complete schema-v1 ISCE organism states may be committed"
+            )
         if set(field_values) - set(FIELD_NAMES):
             raise InvalidWorldAction("Organism tick contains an unknown field")
         for name, value in field_values.items():

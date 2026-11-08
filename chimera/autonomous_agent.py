@@ -84,9 +84,9 @@ class AutonomousWorldAgent:
         structures = self._structures()
         state = self.organism.state
         if "first_shelter" not in structures:
-            return "create_shelter" if state.energy >= 0.55 else "recover_and_regulate"
+            return "create_shelter" if state.body.energy >= 0.55 else "recover_and_regulate"
         if "first_workbench" not in structures:
-            return "create_workbench" if state.energy >= 0.35 else "recover_and_regulate"
+            return "create_workbench" if state.body.energy >= 0.35 else "recover_and_regulate"
         return "inspect_world_and_consolidate_memory"
 
     def step(self, dt: float | None = None) -> AgentStep:
@@ -138,15 +138,15 @@ class AutonomousWorldAgent:
                              result.revision, result.details)
 
         observation = self.world.observe(
-            center=self.organism.state.position.as_tuple(), radius=20.0
+            center=self.organism.state.position, radius=20.0
         )
         entity_count = observation["entity_count"]
         # A deterministic surprise proxy for this baseline: a change in observed
         # entity count relative to the organism's stored previous outcome.
-        previous = self.organism.state.last_outcome or ""
+        previous = self.organism.state.self_model.last_outcome or ""
         novelty = 0.15 if str(entity_count) not in previous else 0.02
         result = self.organism.tick(
-            dt=1.0, action_energy_cost=0.002, mechanical_strain=0.0,
+            dt=dt, action_energy_cost=0.002, mechanical_strain=0.0,
             prediction_error=0.08, novelty=novelty,
             outcome=f"observed_entities:{entity_count}",
             expected_revision=observation["revision"],

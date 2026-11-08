@@ -1,0 +1,174 @@
+{
+  "contract_name": "Chimera 1KB Seed × TEC-Q × Fold",
+  "contract_version": "1.0.0",
+  "status": "architecture-contract-committed; integration-incomplete",
+  "repository_branch": "tecq-causal-morphogenesis",
+  "governing_invariant": "one organism, one authoritative lifecycle; no competing world state",
+  "artifacts": {
+    "identity_seed": {
+      "purpose": "compact identity and genesis input",
+      "max_payload_bytes": 1024,
+      "schema_status": "authoritative byte layout not recovered; treat payload as opaque",
+      "must_not_contain_claim": "arbitrary exact full TEC-Q runtime state"
+    },
+    "developmental_genome": {
+      "purpose": "generative morphology and development parameters",
+      "known_form_seed": {
+        "float32_count": 1024,
+        "bytes": 4096,
+        "compression_claim": false
+      },
+      "seedd2_gene_segment": {
+        "values_per_form_min": 1,
+        "values_per_form_max": 32,
+        "quantization": "1/255",
+        "supported_form_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "relationship": "distinct versioned artifact; no implicit conversion to identity_seed"
+    },
+    "seed2_fold": {
+      "role": "existing versioned compact codec and VM",
+      "versions": [
+        2,
+        3
+      ],
+      "preserve_existing_byte_contract": true,
+      "required_dependencies": [
+        "bytecode-data.js",
+        "dictionary-data.js"
+      ],
+      "does_not_implicitly_serialize_tecq_checkpoint": true
+    },
+    "tecq": {
+      "full_name": "Topological Entanglement Cognition",
+      "initial_cells": 15000,
+      "scale_target_cells": 1000000,
+      "base_cell_abi_bytes": 48,
+      "base_abi_layout_status": "source confirms ABI exists; exact field offsets not recovered; opaque preservation required",
+      "sidecar_state": [
+        "orientation_xyzw",
+        "angular_velocity_xyz",
+        "activation",
+        "phase",
+        "strain",
+        "memory",
+        "cohesion",
+        "organ_id",
+        "potential",
+        "refractory",
+        "swarm_intent"
+      ],
+      "fields": [
+        "energy",
+        "stress",
+        "memory",
+        "cohesion"
+      ],
+      "organs": [
+        "core",
+        "motor",
+        "sensor"
+      ],
+      "phase_schedule_candidate": [
+        1,
+        2,
+        4,
+        8,
+        7,
+        5
+      ],
+      "phase_schedule_status": "preserve as candidate; experimentally compare against controls; not a physical law",
+      "worker_pool_target": 20,
+      "shared_array_buffer_target_bytes": 134217728,
+      "gpu_extended_state_bytes_per_cell": 144,
+      "gpu_pool_target_bytes": 134217728
+    },
+    "fold_descriptor": {
+      "modes": {
+        "portable": "identity seed + versioned deterministic reconstruction recipe and seed",
+        "lossless": "identity seed + external content-addressed checkpoint containing all required state domains"
+      },
+      "checkpoint_domains": [
+        "cell_abi",
+        "cell_extensions",
+        "bond_topology",
+        "torsion_state",
+        "morphogenetic_fields",
+        "nervous_state",
+        "swarm_state",
+        "sensor_readout_state",
+        "physiology_state",
+        "developmental_state",
+        "world_revision"
+      ],
+      "integrity": "SHA-256 per artifact; reject mismatch"
+    }
+  },
+  "execution_truths": {
+    "sab_to_webgpu_zero_copy": false,
+    "transfer_model": "worker shared staging data to explicit GPU buffer upload or mapped staging buffer",
+    "coop_coep_required_for_shared_array_buffer": true,
+    "atomics_wait_location": "workers only",
+    "one_million_cells_at_144_bytes": 144000000,
+    "one_hundred_twenty_eight_mib": 134217728,
+    "gpu_overage_bytes_at_scale_target": 9782272,
+    "one_million_cells_at_48_bytes": 48000000
+  },
+  "tick_order": [
+    "read_authoritative_world_revision",
+    "update_sensors_and_nervous_potentials",
+    "discover_neighbors_and_bonded_edges",
+    "solve_translation_and_rotation",
+    "propagate_phase_and_swarm_intent",
+    "update_morphogenetic_fields",
+    "apply_allostatic_constraints",
+    "update_activation_and_memory",
+    "evaluate_causal_topology_candidates",
+    "compute_readout_and_task_metrics",
+    "commit_versioned_delta_or_reject_stale_revision",
+    "render_committed_revision"
+  ],
+  "mandatory_phase_controls": [
+    "canonical_1_2_4_8_7_5",
+    "uniform_six_state_cycle",
+    "randomized_six_state_schedule",
+    "learned_schedule",
+    "sinusoidal_phase_coupling",
+    "phase_coupling_disabled"
+  ],
+  "non_negotiable_rules": [
+    "preserve_48_byte_base_abi",
+    "do_not_claim_lossless_fold_without_checkpoint",
+    "do_not_conflate_1kb_seed_and_4kb_gene_vector",
+    "do_not_claim_zero_copy_sab_to_gpu",
+    "do_not_claim_vortex_sequence_is_physics",
+    "require_input_substrate_readout_task_metric_path",
+    "causal_interventions_before_structural_memory_claim",
+    "rollback_and_scar_record_for_ai_authored_changes",
+    "reality_engine_is_world_state_authority"
+  ],
+  "open_source_recovery": [
+    "canonical_1kb_seed_codec_and_tests",
+    "48_byte_somatic_cell_field_map",
+    "original_tecq_solver_and_wgsl",
+    "globalGenome.ts_and_allocation_fix",
+    "complete_seed2_codec_and_dependency_files",
+    "worker_and_gpu_staging_implementation"
+  ],
+  "build_gates": [
+    "recover_and_checksum_authoritative_sources",
+    "canonical_data_contracts_and_migrations",
+    "deterministic_cpu_reference_at_15000_cells",
+    "wgsl_gpu_parity_and_memory_budget",
+    "causal_computation_benchmarks",
+    "lossless_fold_wake_and_lineage_tests",
+    "reality_engine_somatic_os_runtime_integration"
+  ]
+}

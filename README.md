@@ -31,6 +31,16 @@ colliders, simple gravity and vertical support contacts. It is not a full rigid
 body engine, deformable tissue solver, fluid solver or voxel terrain system.
 Rapier is a candidate for the next physics adapter; it has not yet been wired in.
 
+## TEC-Q / seed / Fold contract
+
+The canonical integration law is in [docs/TECQ-1KB-SEED-FOLD-BLUEPRINT.md](docs/TECQ-1KB-SEED-FOLD-BLUEPRINT.md), with a machine-readable companion at [docs/tecq-architecture-contract.json](docs/tecq-architecture-contract.json). Executable boundary checks live in `chimera/tecq/contract.py`; run their tests with:
+
+```bash
+python -m unittest discover -s tests -p "test_tecq_contract.py" -v
+```
+
+These contracts preserve the 48-byte SomaticCell ABI, distinguish the compact identity seed from 4KB form genes and SEED2, and refuse to call a compact fold lossless without a complete external checkpoint. They do not claim that the TEC-Q solver or GPU implementation is complete.
+
 ## Quick start
 
 Python 3.10+; no third-party package is required for the core.
@@ -85,6 +95,49 @@ The example above is a blueprint illustration. The static wall placement must
 satisfy the support and non-intersection rules of the current box model; build
 and validate each proposed blueprint against the actual world before treating it
 as a successful design.
+
+## Creation toolbox
+
+`ChimeraToolbox` exposes the existing six-domain game/toolbox direction through one callable API. It does not create a second world model: every persistent mutation is delegated to the same `RealityEngine` transaction boundary.
+
+| Tool | Working actions in this branch |
+|---|---|
+| Body Forge | Create and inspect persistent body/anatomy prototypes |
+| World Builder | Create objects, atomically build structures, inspect the world |
+| Tool Fabricator | Fabricate and inspect persistent tool-item entities with declared capabilities |
+| Life Generator | Spawn and inspect organism prototype entities with identity/species/genome references |
+| Movement Lab | Move entities through world validation and advance fixed-step physics |
+| Research Lab | Observe entities, read local fields, inspect event history and export snapshots |
+
+The first implementation deliberately distinguishes **a world entity** from a fully articulated body, executable tool, or independently running agent. Body prototypes are currently rigid primitive representations; fabricated tools are persistent items whose capabilities are metadata, not yet executable device drivers; Life Generator creates an organism prototype, not a separately scheduled autonomous organism. These are honest extension seams, not simulated completion.
+
+Example:
+
+```python
+from chimera import ChimeraToolbox, RealityEngine, WorldConfig
+
+world = RealityEngine(WorldConfig(database="chimera.sqlite3"))
+tools = ChimeraToolbox(world, actor_id="player")
+
+result = tools.execute(
+    "world_builder", "create_object",
+    {
+        "kind": "stone",
+        "position": [0, 0.5, 0],
+        "size": [1, 1, 1],
+        "material": "granite",
+        "dynamic": False
+    }
+)
+print(result)  # accepted flag, entity ID and committed world revision
+world.close()
+```
+
+Tool definitions are discoverable with `tools.manifest()`. Every mutation supports an expected world revision; stale plans are rejected instead of overwriting newer state. Run the toolbox tests with:
+
+```bash
+python -m unittest discover -s tests -p "test_toolbox.py" -v
+```
 
 ## Autonomous organism runtime
 
@@ -166,12 +219,14 @@ new revision.
 
 ## Current status and limitations
 
-This is a committed implementation foundation, not yet integrated into the
-existing uploaded FastAPI/Flask application. The uploaded code has multiple
-runtime entry points and websocket ports; those must be reconciled deliberately
-before connecting the frontend. The test suite is committed but has not been
-executed in this environment. Run the command above locally and fix any
-platform-specific issues before relying on it.
+The new browser frontend is connected to the Chimera RealityEngine through
+`chimera/http_server.py`; it does not yet replace or consolidate the separate
+legacy uploaded Flask, FastAPI and Flask-SocketIO applications. Those original
+entry points and their WebSocket protocols still require a source-by-source
+integration audit before their existing capabilities can be unified. The full
+standard-library suite has passed on the hosted GitHub Actions runner; see
+[docs/IMPLEMENTATION_LEDGER.md](docs/IMPLEMENTATION_LEDGER.md) for the exact
+verified commit and remaining implementation queue.
 
 The organism kernel now has a real two-way coupling with local scalar fields:
 environmental fields modulate energy/stress/memory regulation, and the organism's
@@ -179,3 +234,48 @@ updated physiology is committed back into those fields in the same transaction.
 The fields do not yet deform geometry, and the cognitive variables are a compact
 state model rather than a trained cognitive architecture. Those are subsequent
 research and implementation milestones.
+
+
+## Run the integrated browser application
+
+The repository now includes a local HTTP/API adapter and a Three.js client over the
+same authoritative RealityEngine, organism kernel, autonomous agent, runtime and
+six-domain toolbox. It does not create a parallel renderer-owned simulation.
+
+From the repository root:
+
+```bash
+python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_world.sqlite3
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). The client projects committed
+world entities, displays persisted organism physiology, advances the runtime,
+exposes all six toolbox domains (Body Forge, World Builder, Tool Fabricator, Life Generator, Movement Lab and Research Lab), and inspects the event journal.
+The browser uses a Three.js CDN import; Python, SQLite and the simulation remain
+local. Current body creation still produces a rigid prototype, not an articulated
+animal. The full implementation status and next integration queue are maintained
+in [docs/IMPLEMENTATION_LEDGER.md](docs/IMPLEMENTATION_LEDGER.md).
+
+The HTTP service binds to loopback by default. Do not expose it beyond the local
+machine until authentication, origin/CSRF protections and a security review are
+implemented. Run the API integration tests with:
+
+```bash
+python -m unittest discover -s tests -p "test_http_server.py" -v
+```
+
+
+## Somatic Core — SDF creature morphogenesis
+
+The browser now has a dedicated SDF embodiment path. The former rigid Body Forge panel is no longer presented as the creature renderer. Somatic Core uses WebGL2 raymarching and a BioPBR shader library; Gemini produces a target GLSL SDF on the Python server, and the browser compiles it before RealityEngine commits the new A/B morphology pair to SQLite.
+
+Configure the Gemini credential on the server process and start the integrated app:
+
+```bash
+export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_world.sqlite3
+```
+
+Open [http://127.0.0.1:8765/web/somatic.html](http://127.0.0.1:8765/web/somatic.html). The key is not exposed to browser JavaScript. The canonical previous/current SDF scripts and morph metadata are stored by RealityEngine and restored after reload. The interface also provides screenshot-conditioned auto-refinement with a hard ten-iteration cap; each candidate is compiled before its revision-checked commit. The old Body Forge toolbox action remains a legacy world-entity prototype API; it is not the Somatic Core body path.
+
+Implementation detail, transaction contract and open acceptance gates: [docs/SOMATIC_CORE_IMPLEMENTATION.md](docs/SOMATIC_CORE_IMPLEMENTATION.md). P0 is still in progress until the real WebGL2 T1–T7 suite has been repeatedly run and verified.

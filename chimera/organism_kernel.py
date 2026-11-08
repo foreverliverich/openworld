@@ -1,55 +1,34 @@
-"""Causally coupled organism physiology/cognition/world-field kernel.
+"""Compatibility-facing organism controller backed exclusively by ISCE.
 
-This is a computational organism model, not a claim of biological consciousness.
-Its state is persisted by RealityEngine in the same transaction as local field
-updates, making organism/world coupling inspectable and restart-safe.
+There is no independent legacy physiology state in this module. The public
+OrganismKernel name is retained for callers, but its only mutable organism
+state is the versioned ISCEOrganismState committed through RealityEngine.
 """
-
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
-from typing import Any, Optional
+from typing import Optional
 
+from .isce import (
+    AttentionState, BodyState, ISCEKernel, InteroceptiveState,
+    OrganismState as ISCEOrganismState, ResourceState, SelfModelState,
+    SensorimotorState, TemporalState, TransitionInput,
+)
 from .reality_engine import RealityEngine, Vec3, WorldResult
 
 
-def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
-    return max(low, min(high, value))
-
-
-@dataclass
-class OrganismState:
-    organism_id: str
-    position: Vec3
-    energy: float = 0.85
-    stress: float = 0.12
-    integrity: float = 1.0
-    fatigue: float = 0.0
-    memory_strength: float = 0.0
-    curiosity: float = 0.5
-    prediction_error: float = 0.0
-    confidence: float = 0.5
-    allostatic_error: float = 0.0
-    age_seconds: float = 0.0
-    tick: int = 0
-    active_goal: Optional[str] = None
-    last_outcome: Optional[str] = None
-
-    def to_dict(self) -> dict[str, Any]:
-        result = asdict(self)
-        result["position"] = asdict(self.position)
-        return result
-
-    @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "OrganismState":
-        data = dict(value)
-        data["position"] = Vec3(**data["position"])
-        return cls(**data)
+def _unit(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
 
 
 class OrganismKernel:
-    """Minimal allostatic + cognitive + morphogenic coupling mechanism."""
+    """ISCE-backed controller preserving the established runtime API.
+
+    Legacy persisted payloads are read once and converted in memory. The next
+    successful organism tick writes the complete ISCE state into the existing
+    transactional organism-state row, preserving organism identity, location,
+    age/tick, physiology, memory and goal provenance.
+    """
 
     def __init__(
         self,
@@ -63,30 +42,83 @@ class OrganismKernel:
     ):
         self.world = world
         self.organism_id = organism_id
-        self.basal_metabolic_rate = basal_metabolic_rate
-        self.stress_recovery_rate = stress_recovery_rate
-        self.fatigue_recovery_rate = fatigue_recovery_rate
+        self.kernel = ISCEKernel(
+            basal_metabolic_rate=basal_metabolic_rate,
+            stress_recovery_rate=stress_recovery_rate,
+            fatigue_recovery_rate=fatigue_recovery_rate,
+        )
         persisted = world.get_organism_state()
+        self._migration_pending = False
         if persisted is not None:
-            if persisted["organism_id"] != organism_id:
+            if persisted.get("organism_id") != organism_id:
                 raise ValueError("World already contains a different organism identity")
-            self.state = OrganismState.from_dict(persisted)
+            if persisted.get("schema_version") == 1 and "body" in persisted:
+                self.state = ISCEOrganismState.from_dict(persisted)
+            else:
+                self.state = self._migrate_legacy_payload(persisted, initial_position)
+                self._migration_pending = True
         else:
-            self.state = OrganismState(
+            self.state = ISCEOrganismState(
                 organism_id=organism_id,
-                position=Vec3.from_value(initial_position),
+                position=tuple(float(v) for v in initial_position),
             )
+
+    @staticmethod
+    def _migrate_legacy_payload(
+        value: dict, initial_position: tuple[float, float, float]
+    ) -> ISCEOrganismState:
+        """Map the old flat physiology payload into the unified ISCE schema."""
+        raw_position = value.get("position", initial_position)
+        position = Vec3.from_value(raw_position).as_tuple()
+        energy = _unit(value.get("energy", 0.85))
+        stress = _unit(value.get("stress", 0.12))
+        integrity = _unit(value.get("integrity", 1.0))
+        fatigue = _unit(value.get("fatigue", 0.0))
+        prediction_error = _unit(value.get("prediction_error", 0.0))
+        confidence = _unit(value.get("confidence", 1.0 - prediction_error))
+        memory = _unit(value.get("memory_strength", 0.0))
+        tick = max(0, int(value.get("tick", 0)))
+        age = max(0.0, float(value.get("age_seconds", 0.0)))
+        return ISCEOrganismState(
+            organism_id=str(value["organism_id"]),
+            position=position,
+            body=BodyState(
+                energy=energy, stress=stress, integrity=integrity,
+                fatigue=fatigue,
+                allostatic_error=_unit(value.get("allostatic_error", 0.0)),
+            ),
+            interoception=InteroceptiveState(
+                arousal=stress, prediction_error=prediction_error,
+                precision=confidence,
+            ),
+            sensorimotor=SensorimotorState(
+                motor_readiness=energy,
+            ),
+            temporal=TemporalState(
+                tick=tick, organism_time=age,
+                previous_state_digest="legacy-import",
+            ),
+            self_model=SelfModelState(
+                confidence=confidence, memory_strength=memory,
+                curiosity=_unit(value.get("curiosity", 0.5)),
+                active_goal=value.get("active_goal"),
+                last_outcome=value.get("last_outcome"),
+            ),
+            attention=AttentionState(
+                focus=confidence, urgency=stress,
+            ),
+            resources=ResourceState(),
+        )
 
     @property
     def can_act(self) -> bool:
-        s = self.state
-        return s.energy > 0.12 and s.integrity > 0.25 and s.stress < 0.95
+        return self.kernel.can_act(self.state)
 
     def set_goal(self, goal: Optional[str]) -> None:
-        self.state.active_goal = goal
+        self.state = self.state.with_goal(goal)
 
     def relocate(self, position: tuple[float, float, float]) -> None:
-        self.state.position = Vec3.from_value(position)
+        self.state = self.state.at_position(Vec3.from_value(position).as_tuple())
 
     def tick(
         self,
@@ -99,110 +131,81 @@ class OrganismKernel:
         outcome: Optional[str] = None,
         resting: bool = False,
         expected_revision: Optional[int] = None,
+        measured_work_units: float = 0.0,
     ) -> WorldResult:
-        """
-        Advance one organism tick.
-
-        Inputs are measured/estimated signals from the action, body and world
-        model. The kernel uses the local world fields as inputs and writes the
-        resulting physiology/cognitive trace back into those same fields.
-        """
-        values = (dt, action_energy_cost, mechanical_strain,
-                  prediction_error, novelty)
-        if not all(math.isfinite(float(v)) for v in values):
-            raise ValueError("Organism tick inputs must be finite")
-        if dt <= 0 or dt > 10:
-            raise ValueError("dt must be in (0, 10]")
-        if action_energy_cost < 0:
-            raise ValueError("action_energy_cost cannot be negative")
-        if not 0 <= mechanical_strain <= 1:
-            raise ValueError("mechanical_strain must be in [0, 1]")
-        if not 0 <= prediction_error <= 1 or not 0 <= novelty <= 1:
-            raise ValueError("prediction_error and novelty must be in [0, 1]")
-
-        s = self.state
-        local = self.world.field_at(s.position.as_tuple())
-
-        # External morphogenic fields are not decorative: they modulate internal
-        # regulation and memory/learning state on this tick.
-        energy = _clamp(
-            s.energy
-            - self.basal_metabolic_rate * dt
-            - action_energy_cost
-            - mechanical_strain * 0.035
-            + local["energy"] * 0.012 * dt
-            + (0.025 * dt if resting else 0.0)
+        position = self.state.position
+        local = self.world.field_at(position)
+        transition_input = TransitionInput(
+            dt=dt,
+            action_energy_cost=action_energy_cost,
+            mechanical_strain=mechanical_strain,
+            prediction_error=prediction_error,
+            novelty=novelty,
+            environmental_energy=_unit(local["energy"]),
+            environmental_stress=_unit(local["stress"]),
+            environmental_memory=_unit(local["memory"]),
+            environmental_cohesion=_unit(local["cohesion"]),
+            resting=resting,
+            outcome=outcome,
+            measured_work_units=measured_work_units,
         )
-        stress = _clamp(
-            s.stress
-            + mechanical_strain * 0.22
-            + local["stress"] * 0.045 * dt
-            + prediction_error * 0.035
-            - (0.05 if resting else self.stress_recovery_rate) * dt
-            - local["cohesion"] * 0.012 * dt
-        )
-        fatigue = _clamp(
-            s.fatigue + mechanical_strain * 0.10 * dt
-            - (0.05 if resting else self.fatigue_recovery_rate) * dt
-        )
-
-        repair_rate = 0.012 if energy > 0.55 and stress < 0.45 else 0.0
-        damage_rate = max(0.0, mechanical_strain - 0.72) * 0.025
-        integrity = _clamp(s.integrity + repair_rate * dt - damage_rate * dt)
-
-        memory_strength = _clamp(
-            s.memory_strength
-            + prediction_error * 0.035
-            + novelty * 0.025
-            + local["memory"] * 0.008 * dt
-        )
-        curiosity = _clamp(s.curiosity + novelty * 0.025 - 0.004 * dt
-                           + prediction_error * 0.012)
-        smoothed_error = _clamp(0.75 * s.prediction_error + 0.25 * prediction_error)
-        confidence = _clamp(1.0 - smoothed_error)
-        allostatic_error = abs(0.75 - energy) + abs(0.12 - stress)
-
-        next_state = OrganismState(
-            organism_id=s.organism_id,
-            position=s.position,
-            energy=energy,
-            stress=stress,
-            integrity=integrity,
-            fatigue=fatigue,
-            memory_strength=memory_strength,
-            curiosity=curiosity,
-            prediction_error=smoothed_error,
-            confidence=confidence,
-            allostatic_error=allostatic_error,
-            age_seconds=s.age_seconds + dt,
-            tick=s.tick + 1,
-            active_goal=s.active_goal,
-            last_outcome=outcome if outcome is not None else s.last_outcome,
-        )
-
-        # The world fields are the spatial projection of the organism's internal
-        # condition. This creates a two-way coupling: field -> physiology above;
-        # physiology -> field here. Geometry is not yet altered by these fields.
+        transition = self.kernel.transition(self.state, transition_input)
+        next_state = transition.state
         field_values = {
-            "energy": energy,
-            "stress": stress,
-            "memory": memory_strength,
-            "cohesion": _clamp(integrity * (1.0 - 0.5 * fatigue)),
+            "energy": next_state.body.energy,
+            "stress": next_state.body.stress,
+            "memory": next_state.self_model.memory_strength,
+            "cohesion": _unit(
+                next_state.body.integrity * (1.0 - 0.5 * next_state.body.fatigue)
+            ),
         }
-
         result = self.world.commit_organism_tick(
             next_state.to_dict(),
             field_values,
             actor_id=self.organism_id,
-            expected_revision=(self.world.revision()
-                               if expected_revision is None else expected_revision),
+            expected_revision=(
+                self.world.revision()
+                if expected_revision is None else expected_revision
+            ),
         )
+        # Publish the next in-memory state only after the durable transaction
+        # commits. A failed optimistic write leaves the prior state authoritative.
         self.state = next_state
+        self._migration_pending = False
         return result
 
-    def snapshot(self) -> dict[str, Any]:
+    def snapshot(self) -> dict:
+        # Compatibility projection for existing browser/API clients. These
+        # aliases are derived on read; ISCE remains the only stored state.
+        state = self.state
+        organism = state.to_dict()
+        organism.update({
+            "position": {
+                "x": state.position[0], "y": state.position[1],
+                "z": state.position[2],
+            },
+            "energy": state.body.energy,
+            "stress": state.body.stress,
+            "integrity": state.body.integrity,
+            "fatigue": state.body.fatigue,
+            "memory_strength": state.self_model.memory_strength,
+            "curiosity": state.self_model.curiosity,
+            "prediction_error": state.interoception.prediction_error,
+            "confidence": state.self_model.confidence,
+            "allostatic_error": state.body.allostatic_error,
+            "age_seconds": state.temporal.organism_time,
+            "tick": state.temporal.tick,
+            "active_goal": state.self_model.active_goal,
+            "last_outcome": state.self_model.last_outcome,
+        })
         return {
-            "organism": self.state.to_dict(),
+            "organism": organism,
             "can_act": self.can_act,
             "world_revision": self.world.revision(),
+            "kernel_version": "isce/0.1.0",
+            "migration_pending": self._migration_pending,
         }
+
+
+# Backwards-compatible public type name; it is the ISCE state, not a second schema.
+OrganismState = ISCEOrganismState
