@@ -9,7 +9,9 @@ claim of learning transfer or emergent intelligence.
 controller with:
 
 - bounded energy and stress regulation;
-- leaky membrane-potential integration and a refractory gate;
+- leaky membrane-potential integration that causally gates active seeking;
+- refractory suppression of active actions;
+- pure step proposals with explicit commit, so failed world persistence cannot silently advance cell state;
 - three actions (rest, seek, inspect);
 - a bounded reward-prediction memory for action values;
 - deterministic action selection and explicit prediction error;
