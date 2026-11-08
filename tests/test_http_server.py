@@ -91,8 +91,24 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
 
 
     def test_semantic_scene_interpreter_is_opt_in(self):
-        with self.assertRaises(RuntimeError):
-            self.app.queue_cognition({"text": "Build a platform", "interpret_scene": True})
+        class FixedEncoder:
+            encoder_id = "http-test-text"
+            def encode(self, payload):
+                return (0.2,) * 768
+
+        registry = EncoderRegistry()
+        registry.register("text", FixedEncoder())
+        app = ChimeraApplication(
+            os.path.join(self.tmp.name, "scene-disabled.sqlite3"),
+            cognition=LatentLanguageCoordinator(registry),
+        )
+        try:
+            with self.assertRaisesRegex(RuntimeError, "scene interpretation is disabled"):
+                app.queue_cognition({
+                    "text": "Build a platform", "interpret_scene": True,
+                })
+        finally:
+            app.close()
 
     def test_interpreted_scene_enters_workspace_and_world_action_gateway(self):
         class FixedEncoder:
