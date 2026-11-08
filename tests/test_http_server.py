@@ -126,10 +126,11 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertGreater(joints["thigh_l"]["angle"], 0.0)
         self.assertGreater(joints["shin_l"]["activation"], 0.0)
         self.assertGreater(result["body"]["root_position"][0], before["root_position"][0])
-        organism = result["state"]["organism"]
+        organism = result["state"]["organism"]["organism"]
+        before_organism = before_state["organism"]["organism"]
         self.assertGreater(organism["resources"]["cumulative_work_units"], 0.0)
         self.assertGreater(organism["sensorimotor"]["proprioceptive_error"], 0.0)
-        self.assertLess(organism["body"]["energy"], before_state["organism"]["body"]["energy"])
+        self.assertLess(organism["body"]["energy"], before_organism["body"]["energy"])
         self.assertTrue(self.app.world.verify_event_chain())
 
     def test_invalid_body_command_is_rejected_without_state_mutation(self):
