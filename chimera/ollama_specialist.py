@@ -61,7 +61,7 @@ class OllamaReasoningSpecialist:
         next_step = value.get("next_step", "")
         entities = value.get("entities", [])
         evidence = value.get("evidence", "")
-        if intent not in INTENTS:
+        if not isinstance(intent, str) or intent not in INTENTS:
             raise OllamaSpecialistError("Ollama returned an unsupported intent")
         if not isinstance(summary, str) or not summary.strip() or len(summary) > MAX_SUMMARY_CHARS:
             raise OllamaSpecialistError("Ollama summary is empty or too long")
@@ -69,9 +69,14 @@ class OllamaReasoningSpecialist:
             raise OllamaSpecialistError("Ollama next_step is invalid or too long")
         if not isinstance(entities, list) or len(entities) > MAX_ENTITIES:
             raise OllamaSpecialistError("Ollama entities must be a list of at most 12 items")
-        if any(not isinstance(item, str) or not item.strip() or len(item) > MAX_ENTITY_CHARS
-               for item in entities):
-            raise OllamaSpecialistError("Ollama entity labels must be short non-empty strings")
+        if any(
+            not isinstance(item, str) or not item.strip() or len(item) > MAX_ENTITY_CHARS
+            or item.casefold() not in original_text.casefold()
+            for item in entities
+        ):
+            raise OllamaSpecialistError(
+                "Ollama entity labels must be short, non-empty phrases grounded in user text"
+            )
         if not isinstance(evidence, str) or len(evidence) > 240:
             raise OllamaSpecialistError("Ollama evidence must be a string of at most 240 characters")
         if evidence and evidence not in original_text:
@@ -82,7 +87,6 @@ class OllamaReasoningSpecialist:
             "next_step": next_step.strip(),
             "entities": [item.strip() for item in entities],
             "evidence": evidence,
-            "model": "ollama:" + "validated",
         }
 
     def _infer(self, text: str) -> dict[str, Any]:
