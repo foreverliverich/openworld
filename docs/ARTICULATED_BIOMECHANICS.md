@@ -105,7 +105,7 @@ This closes the first executable articulated-body gate, not all embodiment. Rema
 - antagonistic muscle pairs, tendon compliance, force-length/force-velocity curves, fatigue and recovery at muscle level
 - sensor observations from actual segment/contact geometry and camera/audio/touch modalities
 - a single governed action gateway that translates planner intent into validated motor targets
-- a renderer adapter that projects the authoritative articulated pose without inventing display-only motion
+- higher-fidelity skin/soft-tissue deformation that binds the segmented Three.js projection to the Somatic Core SDF surface without inventing display-only motion
 - calibration against reference motion capture and quantitative gait/pose benchmarks
 
 Do not describe this model as a complete human simulator, anatomically accurate digital twin, medical model, or evidence of sentience. It is a real deterministic articulated mechanics subsystem integrated into ISCE with clearly stated approximations and testable contracts.
@@ -132,3 +132,5 @@ Example request body:
 ```
 
 The caller must obtain the current revision from `GET /api/body/pose` or `GET /api/state` and send it unchanged. This is an explicit motor-target interface, not yet a high-level gait planner or an authorization/governance layer for autonomous actions.
+
+The main browser world scene now calls the pose endpoint and draws the returned segment transforms as connected cylinder-and-joint geometry. The motor-control panel submits four explicit joint targets plus optional horizontal root acceleration; the scene updates only from the committed response and periodic pose reads. This is a physical-state projection, not a deforming skin mesh and not the Somatic Core raymarched SDF renderer.
