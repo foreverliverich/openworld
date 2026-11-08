@@ -144,6 +144,11 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
                     "ok": True, "engine": "RealityEngine",
                     "revision": self.app.world.revision(),
                 })
+            if parsed.path == "/api/somatic/state":
+                return self._json(200, {
+                    "state": self.app.world.somatic_morphology(),
+                    "world_revision": self.app.world.revision(),
+                })
             if parsed.path == "/api/state":
                 return self._json(200, self.app.state())
             if parsed.path == "/api/events":
@@ -181,10 +186,20 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/somatic/morph":
                 description = payload.get("description")
                 current_label = payload.get("current_label", "")
+                expected = payload.get("expected_revision")
                 if not isinstance(description, str) or not isinstance(current_label, str):
                     raise ValueError("description and current_label must be strings")
+                if expected is not None and (not isinstance(expected, int) or isinstance(expected, bool)):
+                    raise ValueError("expected_revision must be an integer")
                 package = generate_morph_package(description, current_label)
-                return self._json(200, {"package": package})
+                result = self.app.world.apply_somatic_morphology(
+                    package, actor_id="somatic-kernel", expected_revision=expected
+                )
+                return self._json(200, {
+                    "package": package,
+                    "result": {"revision": result.revision, **result.details},
+                    "state": self.app.world.somatic_morphology(),
+                })
             if self.path == "/api/tick":
                 return self._json(200, self.app.tick(payload.get("ticks", 1)))
             if self.path == "/api/tool":
