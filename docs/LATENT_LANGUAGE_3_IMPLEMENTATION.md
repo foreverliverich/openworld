@@ -25,7 +25,7 @@ This implementation follows the uploaded *Engine of Latent Language 3.0: Continu
 4. The current ISCE state is projected into the ephemeral latent workspace. Latent state is not persisted as a second organism state and does not supersede ISCE.
 5. Specialist processes execute concurrently against the same immutable snapshot and produce typed proposals and/or bounded subspace updates. Results are consolidated in stable specialist order.
 6. The global workspace scores proposals by salience, confidence, urgency, novelty and estimated cost; it applies capacity and conflict limits and broadcasts the selected set.
-7. A world mutation can occur only when a proposal is selected, evidence-bearing, confidence-qualified, unchanged since arbitration, and still matches the current RealityEngine revision. The gateway delegates to the existing ChimeraToolbox/RealityEngine transaction boundary.
+7. A world mutation can occur only when a proposal is selected, evidence-bearing, confidence-qualified, unchanged since arbitration, within the current ISCE resource reserve, and still matches the current RealityEngine revision. The runtime records the admitted estimated cost and charges it through the next ISCE transition. The gateway delegates the world mutation to the existing ChimeraToolbox/RealityEngine transaction boundary.
 8. Bounded novelty from new encoded observations—and prediction error only when a trained dynamics model is present—is returned as an ISCE feedback contract. The runtime consumes that feedback on the next authoritative organism tick through OrganismKernel, so sensory surprise affects actual ISCE memory/physiology transitions rather than only a display value.
 
 ## Implemented components
