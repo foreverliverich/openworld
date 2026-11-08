@@ -78,18 +78,27 @@ def _validate_package(package: Any) -> dict[str, Any]:
         package[key] = package[key][:2000]
     return package
 
-def generate_morph_package(description: str, current_label: str = "") -> dict[str, Any]:
+def generate_morph_package(description: str, current_label: str = "", current_context: dict[str, Any] | None = None) -> dict[str, Any]:
     description = description.strip()
     if not description or len(description) > MAX_DESCRIPTION:
         raise ValueError(f"description must contain 1..{MAX_DESCRIPTION} characters")
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
     if not api_key:
         raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY on the server.")
+    context_text = json.dumps({
+        "label": current_context.get("label", current_label) if current_context else current_label,
+        "persona": current_context.get("persona", "") if current_context else "",
+        "sdfScript": current_context.get("sdfScript", "") if current_context else "",
+        "color": current_context.get("color", [0.72, 0.43, 0.34]) if current_context else [0.72, 0.43, 0.34],
+        "material": current_context.get("material", {}) if current_context else {},
+    }, separators=(",", ":"))
     body = {
         "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
         "contents": [{"role": "user", "parts": [{"text":
             f"Transform the current creature ({current_label or 'genesis form'}) into: {description}. "
-            "Return the complete target SDF package. Preserve biological coherence."}]}],
+            "Use the current morphology context as the source form, preserving identity where compatible "
+            "with the requested transformation. Current morphology context: " + context_text +
+            " Return the complete target SDF package. Preserve biological coherence."}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
             "temperature": 0.35,
