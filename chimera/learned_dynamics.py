@@ -57,6 +57,7 @@ class TorchMorphogeneticDynamics:
         ).to(device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=2e-4, weight_decay=1e-5)
         self.trained = False
+        self.validated = False
         self.training_history: list[dict[str, float]] = []
 
     def _tensor_sequences(self, sequences: Sequence[Sequence[Sequence[float]]]):
@@ -93,6 +94,10 @@ class TorchMorphogeneticDynamics:
     ) -> list[dict[str, float]]:
         if epochs < 1 or batch_size < 1 or learning_rate <= 0:
             raise DynamicsTrainingError("Invalid training hyperparameters")
+        if not validation:
+            raise DynamicsTrainingError("Held-out validation trajectories are required")
+        # Validate the held-out data contract before modifying model weights.
+        self._tensor_sequences(validation)
         torch = self.torch
         x, y = self._tensor_sequences(trajectories)
         self.optimizer = torch.optim.AdamW(
@@ -148,6 +153,7 @@ class TorchMorphogeneticDynamics:
                 torch.linalg.vector_norm(predicted, dim=1) -
                 torch.linalg.vector_norm(x, dim=1)
             )
+        self.validated = True
         return {
             "one_step_mse": float(mse.cpu()),
             "derivative_rms": float(derivative_rms.cpu()),
@@ -156,8 +162,8 @@ class TorchMorphogeneticDynamics:
         }
 
     def evolve(self, vector: Sequence[float], *, dt: float = 0.05) -> tuple[float, ...]:
-        if not self.trained:
-            raise DynamicsTrainingError("Untrained morphogenetic dynamics cannot drive live state")
+        if not self.trained or not self.validated:
+            raise DynamicsTrainingError("Morphogenetic dynamics require training and held-out validation")
         if len(vector) != self.state_dim or not 0 < dt <= 0.25 or not math.isfinite(dt):
             raise DynamicsTrainingError("Invalid state vector or integration step")
         torch = self.torch
@@ -176,8 +182,8 @@ class TorchMorphogeneticDynamics:
         return tuple(float(v) for v in result[0].cpu().tolist())
 
     def save_checkpoint(self, path: str | Path) -> None:
-        if not self.trained:
-            raise DynamicsTrainingError("Cannot save an untrained dynamics checkpoint")
+        if not self.trained or not self.validated:
+            raise DynamicsTrainingError("Cannot save untrained or unvalidated dynamics")
         self.torch.save({
             "schema_version": 1, "state_dim": self.state_dim,
             "hidden_dim": self.hidden_dim, "max_derivative": self.max_derivative,
@@ -194,3 +200,4 @@ class TorchMorphogeneticDynamics:
         self.model.load_state_dict(checkpoint["model"], strict=True)
         self.training_history = list(checkpoint.get("training_history", []))
         self.trained = True
+        self.validated = True
