@@ -203,24 +203,50 @@ class ComputationalBloodstream:
 
         flows: list[FlowEvent] = []
         if circulation_enabled:
-            # Stable edge order makes replay deterministic. Each transfer is
-            # bounded by donor surplus above setpoint and receiver deficit.
+            # Propose every edge from the same pre-flow snapshot. Then scale
+            # simultaneous proposals by each donor's total available surplus
+            # and each receiver's total deficit. This prevents edge-order
+            # priority and prevents one tick from cascading through multiple
+            # organs merely because an edge happened to be listed first.
+            proposals: list[tuple[CirculationEdge, float]] = []
+            outgoing: dict[str, float] = {name: 0.0 for name in self.organs}
+            incoming: dict[str, float] = {name: 0.0 for name in self.organs}
+            donor_budget: dict[str, float] = {}
+            receiver_budget: dict[str, float] = {}
+            for name, spec in self.organs.items():
+                donor_budget[name] = max(0.0, current[name] - spec.setpoint)
+                receiver_budget[name] = max(0.0, min(
+                    spec.setpoint - current[name], spec.capacity - current[name]
+                ))
             for edge in self.edges:
-                donor = self.organs[edge.source]
-                receiver = self.organs[edge.target]
-                surplus = max(0.0, current[edge.source] - donor.setpoint)
-                deficit = max(0.0, receiver.setpoint - current[edge.target])
                 amount = min(
-                    edge.conductance * dt * surplus,
-                    deficit,
-                    current[edge.source] - donor.minimum,
-                    receiver.capacity - current[edge.target],
+                    edge.conductance * dt * donor_budget[edge.source],
+                    receiver_budget[edge.target],
                 )
-                amount = max(0.0, amount)
-                if amount:
-                    current[edge.source] -= amount
-                    current[edge.target] += amount
+                if amount > 0.0:
+                    proposals.append((edge, amount))
+                    outgoing[edge.source] += amount
+                    incoming[edge.target] += amount
+
+            donor_scale = {
+                name: min(1.0, donor_budget[name] / total) if total else 1.0
+                for name, total in outgoing.items()
+            }
+            receiver_scale = {
+                name: min(1.0, receiver_budget[name] / total) if total else 1.0
+                for name, total in incoming.items()
+            }
+            deltas = {name: 0.0 for name in self.organs}
+            for edge, proposed in proposals:
+                amount = proposed * min(
+                    donor_scale[edge.source], receiver_scale[edge.target]
+                )
+                if amount > 0.0:
+                    deltas[edge.source] -= amount
+                    deltas[edge.target] += amount
                     flows.append(FlowEvent(edge.source, edge.target, amount))
+            for name in current:
+                current[name] += deltas[name]
 
         requested: dict[str, float] = {}
         consumed: dict[str, float] = {}
