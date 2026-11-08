@@ -366,3 +366,26 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
 - Cell stepping now returns a proposal without mutating local state. The caller explicitly commits the cell result only after the paired ISCE/RealityEngine transaction succeeds; stale proposals are rejected.
 - Added tests for membrane gating, refractory suppression, pure proposal semantics, commit behavior and stale-result rejection.
 - This improves causal and transactional integrity but remains an experimental single-cell controller. CI and adaptive-versus-frozen/sham performance comparisons remain pending.
+
+
+### Digital-cell world-action integration — 2026-11-08
+
+- Added bounded `world_builder.harvest_energy`: it consumes energy from the
+  authoritative RealityEngine field through a revision-checked, journaled world
+  mutation; it does not mint energy.
+- Added the action to the existing OrganismActionGateway mutation allowlist, so
+  the existing viability and reserve admission checks apply.
+- Added `OrganismKernel.commit_state()` so an already computed ISCE transition
+  can be persisted without recomputing a different transition.
+- Added `DigitalCell.execute()`: observes caller-supplied local conditions,
+  proposes action and ISCE state, routes seek through the gateway, commits rest
+  and inspect through the existing organism transaction, and advances local
+  cell memory only after the durable commit succeeds.
+- Fixed refractory semantics so a cell that enters a tick refractory cannot
+  fire during that tick, even if its membrane potential is suprathreshold.
+- Added integration tests for world-field depletion, gateway/ISCE revisions,
+  event-chain integrity, and rest-state commit ordering.
+- Verification status: source and tests committed; execution is pending because
+  no workflow run is currently reported for the latest branch commit. This is
+  a one-step integration proof, not yet a long-horizon survival comparison or
+  evidence of adaptive advantage.
