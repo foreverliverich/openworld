@@ -329,6 +329,7 @@ class MultimodalProjectionModel:
             "history": self.history, "audio_trained": self.audio_trained,
             "validated": self.validated,
             "validated_modalities": sorted(self.validated_modalities),
+            "encoder_manifest": self.encoder_manifest,
         }, path)
 
     def load_checkpoint(self, path: str) -> None:
