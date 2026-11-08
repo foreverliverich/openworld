@@ -907,10 +907,24 @@ class CognitiveActionGateway:
             raise LatentLanguageError(
                 f"Stale proposal revision {proposal.world_revision}; world is {current_revision}"
             )
+        payload = proposal.payload
+        if not isinstance(payload, Mapping):
+            raise LatentLanguageError("World action payload must be a mapping")
+        tool_name = str(payload.get("tool", ""))
+        action_name = str(payload.get("action", ""))
+        arguments = payload.get("arguments")
+        if not isinstance(arguments, Mapping):
+            raise LatentLanguageError("World action arguments must be a mapping")
+        allowed = any(
+            definition["name"] == tool_name and action_name in definition["actions"]
+            for definition in self.toolbox.manifest()
+        )
+        if not allowed:
+            raise LatentLanguageError(f"Toolbox action is not allowlisted: {tool_name}.{action_name}")
         reserve_before = available_reserve
         # Debit the estimated action cost before the world mutation. If the action
-        # subsequently fails, the attempt still consumes its estimated compute cost;
-        # the system never commits an action and then loses its resource charge.
+        # subsequently fails world validation, the attempt still consumes its
+        # estimated compute cost; an action can never commit without its debit.
         charge_result = None
         action_revision = current_revision
         if proposal.estimated_cost > 0.0:
@@ -924,9 +938,8 @@ class CognitiveActionGateway:
                 expected_revision=current_revision,
             )
             action_revision = charge_result.revision
-        payload = proposal.payload
         result = self.toolbox.execute(
-            str(payload["tool"]), str(payload["action"]), dict(payload["arguments"]),
+            tool_name, action_name, dict(arguments),
             actor_id=actor_id, expected_revision=action_revision,
         )
         result["resource_charge"] = {
