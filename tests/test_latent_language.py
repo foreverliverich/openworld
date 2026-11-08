@@ -130,7 +130,7 @@ class LatentLanguageTests(unittest.TestCase):
                     SceneObject("platform", "platform", (0, 0.5, 0), (2, 1, 2),
                                 material="stone", dynamic=False),
                     SceneObject("marker", "marker", (1.2, 0.5, 0), (0.2, 0.2, 0.2),
-                                material="metal", dynamic=False),
+                                material="metal", dynamic=True),
                 ),
                 (SpatialRelation("next_to", "marker", "platform", gap=0.1),),
             )
