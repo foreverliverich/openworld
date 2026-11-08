@@ -53,6 +53,35 @@ Tests cover reserve conservation, deterministic replay, capacity bounds,
 work-cost calibration, starvation rejection, and the causal effect of enabling
 or disabling circulation on work admission.
 
+## Prior-art boundary
+
+This prototype is not claimed as novel. Relevant existing work already covers
+important pieces of the problem:
+
+- Xie et al., *Energy as a Common Currency for Understanding Embodied
+  Evolution* (2026), argues for open-system energy accounting that evaluates
+  both action and persistence rather than task score alone:
+  https://doi.org/10.34133/cbsystems.0680
+- Solé et al., *Fundamental Constraints to the Logic of Living Systems*
+  (2024), connects thermodynamic constraints, self-maintenance, information,
+  development and living organization:
+  https://doi.org/10.1098/rsfs.2024.0010
+- Parzych and Daymude, *Adaptive Self-Organization in Anonymous Dynamic
+  Networks* (DISC 2026), gives formal distributed self-organization results
+  under changing local signals and dynamic topology:
+  https://doi.org/10.4230/LIPIcs.DISC.2026.27
+- *Neural Cellular Automata: From Cells to Pixels* (SIGGRAPH 2026) advances
+  local self-organizing morphogenesis with an implicit decoder:
+  https://doi.org/10.1145/3799902.3811053
+
+Therefore the resource balance law, local flow, starvation and self-organization
+are not breakthrough claims by themselves. The unresolved Chimera question is
+whether measured computational demand, local reserve circulation, allostatic
+viability and developmental substrate changes can be joined in one causally
+closed running organism, and whether that joint mechanism yields a measurable
+capability or persistence advantage over strong separated-component baselines.
+That claim requires experiments; it is not established by this prototype.
+
 ## Open research gates
 
 1. Integrate the resource state into ISCE with an explicit schema version and
