@@ -184,6 +184,11 @@ class LatentDatasetTests(unittest.TestCase):
             def encode(self, payload):
                 return [0.1] * 768
 
+        class NoOpSpecialist:
+            name = "no_op"
+            def propose(self, state, context):
+                return ()
+
         class FailingRecorder:
             def record(self, **kwargs):
                 raise LatentDatasetError("simulated durable append failure")
@@ -191,7 +196,8 @@ class LatentDatasetTests(unittest.TestCase):
         registry = EncoderRegistry()
         registry.register("text", FixedEncoder())
         coordinator = LatentLanguageCoordinator(
-            registry, trajectory_recorder=FailingRecorder(),
+            registry, specialists=(NoOpSpecialist(),),
+            trajectory_recorder=FailingRecorder(),
         )
         before = coordinator.state.digest
         with self.assertRaises(LatentDatasetError):
