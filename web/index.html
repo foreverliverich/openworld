@@ -69,6 +69,15 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{fon
   <p class="note">The former rigid Body Forge control is retired. Creature anatomy is rendered as a WebGL2 signed-distance field with continuous A/B morphing, diffusion detail and soft biological shading.</p>
   <p><a href="/web/somatic.html" style="color:#69d5bd">Open Somatic Core morphogenesis →</a></p>
  </section>
+ <section class="section"><h2>Latent Language · Creative Studio</h2>
+  <p class="note">Submit an idea to the organism's specialist ensemble. The deterministic creative composer is the baseline; an optional Ollama creative model adds model-generated briefs. Selected artifacts appear here after workspace competition.</p>
+  <form id="creativeForm">
+   <div class="wide"><label>Creative direction</label><textarea name="prompt" rows="4" maxlength="4000" required placeholder="Describe a character, environment, object, story seed, or visual direction…"></textarea></div>
+   <div class="wide"><button class="primary" type="submit" id="creativeSubmit">Generate creative brief</button></div>
+  </form>
+  <p class="note" id="creativeStatus">Waiting for a creative direction.</p>
+  <div id="creativeOutput" aria-live="polite"></div>
+ </section>
  <section class="section"><h2>Tool Fabricator</h2><form id="toolForm">
   <div class="wide"><label>Tool name</label><input name="name" value="stone_hammer" required></div>
   <div class="wide"><label>Capabilities (comma-separated)</label><input name="capabilities" value="strike,break,shape" required></div>
@@ -103,6 +112,7 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{fon
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 const $=s=>document.querySelector(s);
+const escapeHTML=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x080d13);
 const camera=new THREE.PerspectiveCamera(55,1,.1,1000);camera.position.set(13,11,16);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;$('#scene').appendChild(renderer.domElement);
@@ -153,11 +163,54 @@ function geometryFor(e){return new THREE.BoxGeometry(e.size.x,e.size.y,e.size.z)
 function updateWorld(entities){const keep=new Set();for(const e of entities){keep.add(e.entity_id);let obj=meshes.get(e.entity_id);if(!obj){obj=new THREE.Mesh(geometryFor(e),materialFor(e));obj.castShadow=true;obj.receiveShadow=true;obj.userData.entity=e;worldGroup.add(obj);meshes.set(e.entity_id,obj)}obj.position.set(e.position.x,e.position.y,e.position.z);obj.userData.entity=e;if(obj.geometry.parameters.width!==e.size.x||obj.geometry.parameters.height!==e.size.y||obj.geometry.parameters.depth!==e.size.z){obj.geometry.dispose();obj.geometry=geometryFor(e)}}for(const [id,obj] of meshes){if(!keep.has(id)){worldGroup.remove(obj);obj.geometry.dispose();obj.material.dispose();meshes.delete(id)}}}
 function metric(name,value){const v=Math.max(0,Math.min(1,Number(value)||0));return '<div class="metric"><label>'+name+'</label><strong>'+v.toFixed(3)+'</strong><div class="bar"><i style="width:'+(v*100)+'%"></i></div></div>'}
 let lastRevision=0;
-function renderState(s){const o=s.organism.organism;$('#metrics').innerHTML=metric('Energy',o.energy)+metric('Stress',o.stress)+metric('Integrity',o.integrity)+metric('Fatigue',o.fatigue)+metric('Memory strength',o.memory_strength)+metric('Curiosity',o.curiosity);$('#goal').textContent='Goal: '+(o.active_goal||'none')+' · Tick '+o.tick+' · Age '+o.age_seconds.toFixed(2)+'s';$('#revision').textContent='REVISION '+s.world_revision;$('#clock').textContent=s.simulation_time.toFixed(2)+'s';updateWorld(s.entities||[]);const safe=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));$('#entities').innerHTML=(s.entities||[]).map(e=>'<div class="entity"><b>'+safe(e.kind)+'</b> · '+safe(e.entity_id.slice(0,8))+'<br><span class="note">('+e.position.x.toFixed(1)+', '+e.position.y.toFixed(1)+', '+e.position.z.toFixed(1)+') · '+safe(e.material)+'</span></div>').join('')||'<span class="note">World is empty.</span>';const selector=$('#moveEntity');const selected=selector.value;selector.innerHTML=(s.entities||[]).map(e=>'<option value="'+safe(e.entity_id)+'">'+safe(e.kind)+' · '+safe(e.entity_id.slice(0,8))+'</option>').join('');if((s.entities||[]).some(e=>e.entity_id===selected))selector.value=selected;$('#connection').textContent='CONNECTED · SQLITE WORLD · EVENT CHAIN '+(s.event_chain_valid?'VALID':'INVALID');lastRevision=s.world_revision}
+function renderCreativeResult(result){
+ const output=$('#creativeOutput');
+ const selected=(result&&result.selected)||[];
+ const artifacts=selected.filter(item=>item.kind==='creative_artifact'&&item.artifact);
+ if(!artifacts.length){
+  output.innerHTML='<p class="note">No creative artifact won this workspace cycle. The proposal may have been rejected by limited-capacity competition, or Latent Language may be disabled.</p>';
+  return;
+ }
+ output.innerHTML=artifacts.map(item=>{
+  const a=item.artifact;
+  const elements=(a.elements||[]).map(e=>'<li><b>'+escapeHTML(e.name)+'</b> — '+escapeHTML(e.detail)+'</li>').join('');
+  const variations=(a.variations||[]).map(v=>'<li>'+escapeHTML(v)+'</li>').join('');
+  const tags=(a.style_tags||[]).map(t=>'<span class="pill">'+escapeHTML(t)+'</span>').join(' ');
+  const constraints=(a.preserved_constraints||[]).map(v=>'<li>'+escapeHTML(v)+'</li>').join('');
+  return '<article class="entity"><b>'+escapeHTML(a.title||'Creative artifact')+'</b><p>'+escapeHTML(a.concept||'')+'</p>'+
+   (elements?'<b>Design elements</b><ul>'+elements+'</ul>':'')+
+   (variations?'<b>Variations</b><ul>'+variations+'</ul>':'')+
+   (constraints?'<b>Preserved constraints</b><ul>'+constraints+'</ul>':'')+
+   (tags?'<p>'+tags+'</p>':'')+
+   '<p class="note">Generator: '+escapeHTML(a.generator||item.specialist)+' · '+escapeHTML(item.specialist)+' · artifact-only authority</p></article>';
+ }).join('');
+}
+function renderState(s){const o=s.organism.organism;$('#metrics').innerHTML=metric('Energy',o.energy)+metric('Stress',o.stress)+metric('Integrity',o.integrity)+metric('Fatigue',o.fatigue)+metric('Memory strength',o.memory_strength)+metric('Curiosity',o.curiosity);$('#goal').textContent='Goal: '+(o.active_goal||'none')+' · Tick '+o.tick+' · Age '+o.age_seconds.toFixed(2)+'s';$('#revision').textContent='REVISION '+s.world_revision;$('#clock').textContent=s.simulation_time.toFixed(2)+'s';updateWorld(s.entities||[]);const safe=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));$('#entities').innerHTML=(s.entities||[]).map(e=>'<div class="entity"><b>'+safe(e.kind)+'</b> · '+safe(e.entity_id.slice(0,8))+'<br><span class="note">('+e.position.x.toFixed(1)+', '+e.position.y.toFixed(1)+', '+e.position.z.toFixed(1)+') · '+safe(e.material)+'</span></div>').join('')||'<span class="note">World is empty.</span>';const selector=$('#moveEntity');const selected=selector.value;selector.innerHTML=(s.entities||[]).map(e=>'<option value="'+safe(e.entity_id)+'">'+safe(e.kind)+' · '+safe(e.entity_id.slice(0,8))+'</option>').join('');if((s.entities||[]).some(e=>e.entity_id===selected))selector.value=selected;$('#connection').textContent='CONNECTED · SQLITE WORLD · EVENT CHAIN '+(s.event_chain_valid?'VALID':'INVALID');lastRevision=s.world_revision;renderCreativeResult(s.cognition) }
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const data=await r.json();if(!r.ok)throw new Error(data.message||data.error||r.statusText);return data}
 function log(s){$('#log').textContent=typeof s==='string'?s:JSON.stringify(s,null,2)}
 async function refreshBody(){const pose=await api('/api/body/pose');updateArticulatedBody(pose)}
 async function refresh(){const s=await api('/api/state');renderState(s);await refreshBody()}
+$('#creativeForm').onsubmit=async ev=>{
+ ev.preventDefault();
+ const prompt=new FormData(ev.target).get('prompt').trim();
+ if(!prompt)return;
+ const button=$('#creativeSubmit');button.disabled=true;
+ $('#creativeStatus').textContent='Queueing cognition cycle…';
+ try{
+  const queued=await api('/api/cognition',{text:prompt});
+  $('#creativeStatus').textContent='Queued '+queued.request_id+' · advancing one organism-owned tick…';
+  const result=await api('/api/tick',{ticks:1});
+  renderState(result.state);await refreshBody();
+  const cycle=result.frames[0].cognition_result;
+  renderCreativeResult(cycle||result.state.cognition);
+  const count=((cycle&&cycle.selected)||[]).filter(item=>item.kind==='creative_artifact').length;
+  $('#creativeStatus').textContent=count?'Workspace selected '+count+' creative artifact(s).':'Cycle completed; no creative artifact was selected.';
+  log(cycle||result.frames[0]);
+ }catch(e){
+  $('#creativeStatus').textContent=e.message;
+  await refresh().catch(()=>{});
+ }finally{button.disabled=false}
+};
 $('#tick').onclick=async()=>{try{$('#tick').disabled=true;const r=await api('/api/tick',{ticks:1});renderState(r.state);await refreshBody();log(r.frames[0])}catch(e){log(e.message)}finally{$('#tick').disabled=false}};
 $('#observe').onclick=()=>refresh().catch(e=>log(e.message));
 $('#events').onclick=async()=>{try{const r=await api('/api/events?after_revision=0&limit=100');log({chain_valid:r.chain_valid,revision:r.revision,events:r.events})}catch(e){log(e.message)}};
