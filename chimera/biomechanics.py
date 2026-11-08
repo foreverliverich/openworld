@@ -772,7 +772,7 @@ class BiomechanicsEngine:
                 )
                 relative_jacobian = tuple(
                     [jacobian_b[axis][column] - jacobian_a[axis][column]
-                     for column in range(len(rows[0]))]
+                     for column in range(len(layout))]
                     for axis in range(3)
                 )
                 reference = (0.0, 1.0, 0.0) if abs(normal[1]) < 0.9 else (1.0, 0.0, 0.0)
@@ -812,15 +812,15 @@ class BiomechanicsEngine:
             tangent_2 = contact.get("tangent2", (0.0, 0.0, 1.0))
             normal_row = [
                 sum(normal[axis] * rows[axis][column] for axis in range(3))
-                for column in range(len(layout))
+                for column in range(len(rows[0]))
             ]
             tangent_x_row = [
                 sum(tangent_1[axis] * rows[axis][column] for axis in range(3))
-                for column in range(len(layout))
+                for column in range(len(rows[0]))
             ]
             tangent_z_row = [
                 sum(tangent_2[axis] * rows[axis][column] for axis in range(3))
-                for column in range(len(layout))
+                for column in range(len(rows[0]))
             ]
             response_n = _solve_dense(mass_matrix, list(normal_row))
             response_x = _solve_dense(mass_matrix, list(tangent_x_row))
