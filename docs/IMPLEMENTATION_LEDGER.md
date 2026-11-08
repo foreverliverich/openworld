@@ -165,13 +165,13 @@ The new API integration test file is `tests/test_http_server.py`. The full suite
 
 The protected body requirement has moved from a backlog statement to a connected SDF morphogenesis implementation. The detailed record and run instructions are in [SOMATIC_CORE_IMPLEMENTATION.md](SOMATIC_CORE_IMPLEMENTATION.md).
 
-- chimera/somatic_kernel.py: server-side Gemini morphology generation conditioned on the canonical current SDF/context; API key is never exposed to browser code; structured package and GLSL safety validation.
+- chimera/somatic_kernel.py: server-side Gemini morphology generation conditioned on the canonical current SDF/context; API key is never exposed to browser code; structured package, bounded-loop/host-resource GLSL safety validation and no-op SDF rejection.
 - chimera/reality_engine.py: canonical SQLite somatic_morphology state containing the previous and current SDF, package metadata, iteration and morph start timestamp. Morph commits advance the world revision and append a hash-chained event.
 - chimera/http_server.py: state read, candidate generation and separate commit routes. The browser must compile/link the generated SDF before the durable commit is allowed.
 - web/somatic-core.js: WebGL2 raymarcher, A/B SDF blending, BioPBR noise/domain operators, diffusion/fur displacement, pores, subdermal variation, material IDs, soft-light SSS and AO.
 - web/somatic.html: dedicated natural-language morphology interface; restores the canonical SDF pair from RealityEngine; supports screenshot-conditioned refinement with a hard ten-iteration cap.
 - web/index.html: the rigid primitive Body Forge form is removed from the main UI and replaced with a link to Somatic Core.
-- tests/test_somatic_kernel.py, tests/test_somatic_reality.py and expanded tests/test_http_server.py: added package, credential, multimodal image validation, ten-iteration cap, candidate-without-mutation, durable A/B persistence, revision-conflict and event-chain integration tests.
+- tests/test_somatic_kernel.py, tests/test_somatic_reality.py and expanded tests/test_http_server.py: added package, credential, multimodal image validation, ten-iteration cap, no-op SDF rejection, candidate-without-mutation, durable A/B persistence, revision-conflict and event-chain integration tests.
 
 **Important transaction invariant:** model generation is not a world mutation. The candidate SDF is compiled with the current BioPBR library in the browser first. Only after successful compile/link does the browser submit the package and expected world revision for an atomic RealityEngine commit. Compile failure leaves both the displayed program and canonical state unchanged.
 
