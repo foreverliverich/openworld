@@ -83,6 +83,70 @@ class ArticulatedBodyTests(unittest.TestCase):
         with self.assertRaises(BiomechanicsError):
             self.engine.forward_kinematics((0, 1, 0), incomplete)
 
+    def test_quaternion_forward_kinematics_uses_three_axis_joint_orientation(self):
+        from dataclasses import replace
+        joints = tuple(
+            replace(joint, rotation_xyz=(0.0, 0.45, 0.0))
+            if joint.name == "thigh_l" else joint
+            for joint in self.state.joints
+        )
+        rotated = ArticulatedBodyState(joints=joints)
+        neutral_poses = {p.name: p for p in self.engine.forward_kinematics((0, 1, 0), self.state)}
+        rotated_poses = {p.name: p for p in self.engine.forward_kinematics((0, 1, 0), rotated)}
+        self.assertNotAlmostEqual(
+            neutral_poses["thigh_l"].end[0], rotated_poses["thigh_l"].end[0], places=5
+        )
+        self.assertNotEqual(rotated_poses["thigh_l"].orientation, (1.0, 0.0, 0.0, 0.0))
+
+    def test_three_axis_motor_targets_drive_hip_abduction_and_rotation(self):
+        result = self.engine.step(
+            self.state, (0, 1, 0), dt=0.2,
+            motor_commands=(("thigh_l", (0.35, 0.42, -0.28)),),
+        )
+        joint = {item.name: item for item in result.state.joints}["thigh_l"]
+        self.assertGreater(abs(joint.rotation_xyz[1]), 1e-4)
+        self.assertGreater(abs(joint.rotation_xyz[2]), 1e-4)
+        self.assertGreater(abs(joint.tendon_extension_xyz[1]), 0.0)
+        self.assertGreater(joint.activation, 0.0)
+
+    def test_three_axis_joint_limits_are_enforced_per_axis(self):
+        result = self.engine.step(
+            self.state, (0, 1, 0), dt=0.5,
+            motor_commands=(("thigh_l", (0.0, 8.0, -8.0)),),
+        )
+        joint = {item.name: item for item in result.state.joints}["thigh_l"]
+        spec = self.engine.skeleton.by_name()["thigh_l"]
+        self.assertLessEqual(joint.rotation_xyz[1], spec.max_rotation_xyz[1])
+        self.assertGreaterEqual(joint.rotation_xyz[2], spec.min_rotation_xyz[2])
+
+    def test_sagittal_persisted_joint_state_migrates_without_losing_primary_axis(self):
+        payload = self.state.to_dict()
+        payload["skeleton_version"] = "human-sagittal-1"
+        old_joints = []
+        for joint in payload["joints"]:
+            item = {"name": joint["name"], "angle": 0.0, "velocity": 0.0, "activation": 0.0}
+            if item["name"] == "thigh_l":
+                item.update(angle=0.23, velocity=-0.14)
+            old_joints.append(item)
+        payload["joints"] = old_joints
+        restored = ArticulatedBodyState.from_dict(payload)
+        hip = {joint.name: joint for joint in restored.joints}["thigh_l"]
+        self.assertEqual(restored.skeleton_version, "human-3d-1")
+        self.assertAlmostEqual(hip.rotation_xyz[0], 0.23)
+        self.assertAlmostEqual(hip.angular_velocity_xyz[0], -0.14)
+        self.assertEqual(hip.rotation_xyz[1:], (0.0, 0.0))
+
+    def test_disabled_joint_axis_cannot_be_loaded_from_persisted_state(self):
+        from dataclasses import replace
+        joints = tuple(
+            replace(joint, rotation_xyz=(0.0, 0.1, 0.0))
+            if joint.name == "shin_l" else joint
+            for joint in self.state.joints
+        )
+        invalid = ArticulatedBodyState(joints=joints)
+        with self.assertRaises(BiomechanicsError):
+            self.engine.forward_kinematics((0, 1, 0), invalid)
+
     def test_isce_transition_couples_muscle_work_to_physiology_and_pose(self):
         organism = OrganismState("articulated-test")
         result = ISCEKernel().transition(
