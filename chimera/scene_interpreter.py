@@ -114,7 +114,13 @@ class GeminiSceneInterpreter:
             target = item.get("object")
             if not all(isinstance(value, str) and value for value in (relation, subject, target)):
                 raise SceneInterpretationError(f"relations[{index}] identity fields must be non-empty strings")
+            if relation not in {"on_top", "next_to"}:
+                raise SceneInterpretationError(
+                    f"relations[{index}].relation must be on_top or next_to"
+                )
             gap = self._number(item.get("gap", 0.05), f"relations[{index}].gap")
+            if gap < 0:
+                raise SceneInterpretationError(f"relations[{index}].gap must be non-negative")
             relations.append(SpatialRelation(relation, subject, target, gap))
         try:
             graph = SceneGraph(resolved_scene_id, tuple(objects), tuple(relations))
