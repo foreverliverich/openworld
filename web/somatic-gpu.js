@@ -13,7 +13,7 @@ struct SomaticCell {
 };
 struct SimParams {
   dt: f32, gravity: f32, groundY: f32, restitution: f32,
-  friction: f32, energyDrain: f32, cellCount: u32, _pad: u32,
+  friction: f32, energyDrain: f32, cellCount: u32, baseCell: u32,
   attractionCenter: vec4<f32>,
   attractionStrength: f32, maxAttractionAcceleration: f32, _pad2: vec2<f32>,
 };
@@ -21,8 +21,8 @@ struct SimParams {
 @group(0) @binding(1) var<uniform> params: SimParams;
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let i=gid.x;
-  if(i>=params.cellCount || i>=arrayLength(&cells)){return;}
+  let i=gid.x+params.baseCell;
+  if(gid.x>=params.cellCount || i>=arrayLength(&cells)){return;}
   var c=cells[i];
   let dt=clamp(params.dt,0.0,0.0333333333);
   let mass=max(c.position.w,0.0001);
@@ -58,8 +58,11 @@ function align(n,a){return Math.ceil(n/a)*a;}
 
 export class SomaticGPU {
   static async create({cellCount=4096,seed=1,gravity=9.81,groundY=0,
-    restitution=0.05,friction=4,energyDrain=0.02,pageBytes=16*1024*1024}={}) {
+    restitution=0.05,friction=4,energyDrain=0.02,pageBytes=16*1024*1024,
+    rotationFrames=5,maxCellsPerFrame=262144}={}) {
     if(!Number.isSafeInteger(cellCount)||cellCount<1)throw new RangeError("cellCount must be positive");
+    if(!Number.isSafeInteger(rotationFrames)||rotationFrames<1)throw new RangeError("rotationFrames must be a positive integer");
+    if(!Number.isSafeInteger(maxCellsPerFrame)||maxCellsPerFrame<1)throw new RangeError("maxCellsPerFrame must be a positive integer");
     if(!navigator.gpu)throw new Error("WebGPU unavailable");
     const adapter=await navigator.gpu.requestAdapter();
     if(!adapter)throw new Error("No WebGPU adapter");
@@ -93,6 +96,7 @@ export class SomaticGPU {
       pages.push({buffer,uniform,bindGroup,count,offset});offset+=count;remaining-=count;
     }
     return new SomaticGPU({device,pipeline,pages,cellCount,gravity,groundY,restitution,friction,energyDrain,
+      rotationFrames,maxCellsPerFrame,cursor:0,
       attractionCenter:[0,0,0],attractionStrength:0,maxAttractionAcceleration:8});
   }
   constructor(options){Object.assign(this,options);this.disposed=false;this.steps=0;this.simulationTime=0;}
@@ -108,19 +112,34 @@ export class SomaticGPU {
   step(deltaSeconds){
     if(this.disposed)throw new Error("SomaticGPU disposed");
     if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw new RangeError("deltaSeconds must be finite and non-negative");
-    const dt=Math.min(deltaSeconds,MAX_DT),encoder=this.device.createCommandEncoder({label:"Somatic step"});
+    const dt=Math.min(deltaSeconds,MAX_DT);
+    // Rotate through a bounded slice of the global cell array each frame.
+    // The five-frame target is further capped to protect the GPU watchdog.
+    const targetChunk=Math.ceil(this.cellCount/this.rotationFrames);
+    const budget=Math.min(targetChunk,this.maxCellsPerFrame,this.cellCount);
+    let remaining=budget,globalStart=this.cursor,dispatches=0;
+    const encoder=this.device.createCommandEncoder({label:"Somatic bounded rotating step"});
     const pass=encoder.beginComputePass();pass.setPipeline(this.pipeline);
-    for(const page of this.pages){
+    while(remaining>0){
+      const page=this.pages.find(p=>globalStart>=p.offset && globalStart<p.offset+p.count);
+      if(!page)throw new Error("Somatic page map is incomplete");
+      const localStart=globalStart-page.offset;
+      const segment=Math.min(remaining,page.count-localStart);
       const data=new ArrayBuffer(64),f=new Float32Array(data),u=new Uint32Array(data);
-      f[0]=dt;f[1]=this.gravity;f[2]=this.groundY;f[3]=this.restitution;f[4]=this.friction;f[5]=this.energyDrain;u[6]=page.count;u[7]=0;
+      f[0]=dt;f[1]=this.gravity;f[2]=this.groundY;f[3]=this.restitution;f[4]=this.friction;f[5]=this.energyDrain;
+      u[6]=segment;u[7]=localStart;
       f[8]=this.attractionCenter[0];f[9]=this.attractionCenter[1];f[10]=this.attractionCenter[2];f[11]=0;
       f[12]=this.attractionStrength;f[13]=this.maxAttractionAcceleration;f[14]=0;f[15]=0;
       this.device.queue.writeBuffer(page.uniform,0,data);
-      pass.setBindGroup(0,page.bindGroup);pass.dispatchWorkgroups(Math.ceil(page.count/WORKGROUP_SIZE));
+      pass.setBindGroup(0,page.bindGroup);
+      pass.dispatchWorkgroups(Math.ceil(segment/WORKGROUP_SIZE));
+      dispatches++;remaining-=segment;globalStart=(globalStart+segment)%this.cellCount;
     }
     pass.end();this.device.queue.submit([encoder.finish()]);
+    this.cursor=(this.cursor+budget)%this.cellCount;
     this.steps++;this.simulationTime+=dt;
-    return{steps:this.steps,simulationTime:this.simulationTime,delta:dt,cells:this.cellCount,pages:this.pages.length};
+    return{steps:this.steps,simulationTime:this.simulationTime,delta:dt,cells:this.cellCount,
+      processedCells:budget,dispatches,cursor:this.cursor,rotationFrames:this.rotationFrames};
   }
   async readback(){
     if(this.disposed)throw new Error("SomaticGPU disposed");
