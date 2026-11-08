@@ -39,7 +39,7 @@ class TorchMorphogeneticDynamics:
             raise DynamicsTrainingError(
                 f"State dimension must match Latent Language schema ({LATENT_DIMENSIONS})"
             )
-        if hidden_dim < 32 or max_derivative <= 0:
+        if hidden_dim < 32 or not math.isfinite(max_derivative) or max_derivative <= 0:
             raise DynamicsTrainingError("Invalid hidden_dim or max_derivative")
         torch.manual_seed(seed)
         self.torch = torch
@@ -198,6 +198,7 @@ class TorchMorphogeneticDynamics:
         self.torch.save({
             "schema_version": 1, "state_dim": self.state_dim,
             "hidden_dim": self.hidden_dim, "max_derivative": self.max_derivative,
+            "training_dt": self.training_dt,
             "model": self.model.state_dict(),
             "training_history": self.training_history,
         }, str(path))
