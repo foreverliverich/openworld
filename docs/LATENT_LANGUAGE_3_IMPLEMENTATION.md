@@ -48,7 +48,7 @@ The base engine and its tests remain standard-library-only. For pretrained encod
 python -m pip install -r requirements-latent.txt
 ```
 
-The model adapters load public pretrained model weights on first construction. For a fully offline deployment, download and pin the model snapshots in advance, then pass local model directories as `model_id`. No model weights or API keys are embedded in this repository.
+All encoder features are L2-normalized before projection training and inference; audio waveforms must be mono floating-point samples in [-1, 1] and are resampled to the model's declared rate. The model adapters load public pretrained model weights on first construction. For a fully offline deployment, download and pin the model snapshots in advance, then pass local model directories as `model_id`. No model weights or API keys are embedded in this repository.
 
 ## Train cross-modal alignment
 
@@ -56,7 +56,7 @@ Use paired, semantically corresponding encoder outputs. Rows must align: row i i
 
 - text: 768-D BERT mean-pooled embeddings
 - image: 512-D CLIP image embeddings
-- audio: 768-D Wav2Vec2 mean-pooled hidden states
+- audio: 768-D L2-normalized Wav2Vec2 mean-pooled hidden states
 - optional audio: row-aligned with text/image
 
 The training class provides symmetric InfoNCE losses and an audio reconstruction constraint. Run `evaluate()` on a held-out split before using or checkpointing the audio compressor; retain recall@1, paired cosine and audio reconstruction metrics. The audio slot projection remains unavailable until paired audio training and held-out validation have both run. The repository does not include a project training corpus or claim that project weights have already been trained. Small synthetic tensors in the optional CI tests verify code paths only; they are not scientific training or validation evidence.
