@@ -83,6 +83,27 @@ class ActionGatewayTests(unittest.TestCase):
         self.assertEqual(self.world.revision(), 0)
         self.assertEqual(self.world.entities(), [])
 
+    def test_energy_harvest_mutates_authoritative_field_and_records_outcome(self):
+        self.world.inject_field(
+            "energy", self.organism.state.position, 0.2,
+            actor_id="environment", radius=0,
+        )
+        before = self.world.field_at(self.organism.state.position)["energy"]
+        receipt = self.gateway.execute(ActionProposal(
+            tool="world_builder",
+            action="harvest_energy",
+            arguments={"position": list(self.organism.state.position), "amount": 0.05},
+            expected_revision=self.world.revision(),
+            expected_success=0.8,
+            novelty=0.2,
+        ))
+        after = self.world.field_at(self.organism.state.position)["energy"]
+        self.assertAlmostEqual(before - after, 0.05)
+        self.assertEqual(receipt.action_revision, 2)
+        self.assertEqual(receipt.organism_revision, 3)
+        self.assertEqual(receipt.result["details"]["harvested"], 0.05)
+        self.assertTrue(self.world.verify_event_chain())
+
     def test_unsupported_or_read_only_action_rejects(self):
         with self.assertRaises(ActionGatewayError):
             self.gateway.execute(self.proposal(tool="research_lab", action="observe"))
