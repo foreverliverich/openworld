@@ -167,6 +167,7 @@ class ChimeraApplication:
 
         normalized_observations: list[dict[str, Any]] = []
         seen_text = False
+        scene_image_base64: str | None = None
         for index, item in enumerate(observations):
             if not isinstance(item, dict):
                 raise ValueError(f"observations[{index}] must be an object")
@@ -189,8 +190,15 @@ class ChimeraApplication:
             }
             if "timestamp" in item:
                 record["timestamp"] = float(item["timestamp"])
-            if modality == "image" and "image_base64" in item:
-                record["payload"] = {"image_base64": item["image_base64"]}
+            if modality == "image":
+                image_value = item.get("image_base64")
+                if image_value is None and isinstance(item.get("payload"), dict):
+                    image_value = item["payload"].get("image_base64")
+                if image_value is not None:
+                    if scene_image_base64 is not None:
+                        raise ValueError("Only one image may be used for a single scene interpretation")
+                    scene_image_base64 = image_value
+                    record["payload"] = {"image_base64": image_value}
             if modality == "audio":
                 audio_payload = item.get("payload", {})
                 if not isinstance(audio_payload, dict):
@@ -240,9 +248,11 @@ class ChimeraApplication:
                 raise RuntimeError(
                     "Semantic scene interpretation is disabled; start with --enable-scene-interpreter"
                 )
-            if not text.strip():
-                raise ValueError("interpret_scene requires a non-empty text prompt")
-            scene_graph = self.scene_interpreter.interpret(text, scene_id=request_id)
+            if not text.strip() and scene_image_base64 is None:
+                raise ValueError("interpret_scene requires text or a base64 image observation")
+            scene_graph = self.scene_interpreter.interpret(
+                text, scene_id=request_id, image_base64=scene_image_base64,
+            )
         if scene_data is not None:
             if not isinstance(scene_data, dict):
                 raise ValueError("scene_graph must be an object")
