@@ -100,6 +100,9 @@ class AutonomousWorldAgent:
         feedback = dict(cognitive_feedback or {})
         prediction_error = max(0.0, min(1.0, float(feedback.get("prediction_error", 0.0))))
         novelty_feedback = max(0.0, min(1.0, float(feedback.get("novelty", 0.0))))
+        cognitive_action_cost = max(0.0, float(feedback.get("action_energy_cost", 0.0)))
+        if not math.isfinite(cognitive_action_cost):
+            raise ValueError("cognitive action cost must be finite")
         goal = self.choose_goal()
         self.organism.set_goal(goal)
 
@@ -110,7 +113,7 @@ class AutonomousWorldAgent:
                 expected_revision=self.world.revision(),
             )
             self.organism.tick(
-                dt=dt, action_energy_cost=0.12, mechanical_strain=0.35,
+                dt=dt, action_energy_cost=0.12 + cognitive_action_cost, mechanical_strain=0.35,
                 prediction_error=max(0.25, prediction_error), novelty=max(0.9, novelty_feedback),
                 outcome="shelter_committed",
                 expected_revision=result.revision,
@@ -125,7 +128,7 @@ class AutonomousWorldAgent:
                 expected_revision=self.world.revision(),
             )
             self.organism.tick(
-                dt=dt, action_energy_cost=0.07, mechanical_strain=0.2,
+                dt=dt, action_energy_cost=0.07 + cognitive_action_cost, mechanical_strain=0.2,
                 prediction_error=max(0.2, prediction_error), novelty=max(0.65, novelty_feedback),
                 outcome="workbench_committed",
                 expected_revision=result.revision,
@@ -135,7 +138,7 @@ class AutonomousWorldAgent:
 
         if goal == "recover_and_regulate":
             result = self.organism.tick(
-                dt=dt, action_energy_cost=0.0, mechanical_strain=0.0,
+                dt=dt, action_energy_cost=cognitive_action_cost, mechanical_strain=0.0,
                 prediction_error=max(0.05, prediction_error), novelty=novelty_feedback,
                 outcome="rest_regulation", resting=True,
                 expected_revision=self.world.revision(),
@@ -152,7 +155,7 @@ class AutonomousWorldAgent:
         previous = self.organism.state.self_model.last_outcome or ""
         novelty = 0.15 if str(entity_count) not in previous else 0.02
         result = self.organism.tick(
-            dt=dt, action_energy_cost=0.002, mechanical_strain=0.0,
+            dt=dt, action_energy_cost=0.002 + cognitive_action_cost, mechanical_strain=0.0,
             prediction_error=max(0.08, prediction_error), novelty=max(novelty, novelty_feedback),
             outcome=f"observed_entities:{entity_count}",
             expected_revision=observation["revision"],
