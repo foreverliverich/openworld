@@ -7,6 +7,8 @@ global workspace. It does not execute generated Python, Blender scripts, or GLSL
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import re
@@ -24,6 +26,7 @@ MAX_RELATIONS = 64
 MAX_SCENE_EXTENT = 50.0
 MIN_OBJECT_SIZE = 0.05
 MAX_OBJECT_SIZE = 20.0
+MAX_IMAGE_BYTES = 700_000
 
 
 class SceneInterpretationError(RuntimeError):
@@ -106,9 +109,43 @@ class GeminiSceneInterpreter:
             raise SceneInterpretationError(f"Scene graph failed geometric validation: {exc}") from exc
         return graph
 
-    def interpret(self, prompt: str, *, scene_id: str) -> SceneGraph:
-        if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > MAX_PROMPT_CHARS:
-            raise SceneInterpretationError(f"prompt must contain 1..{MAX_PROMPT_CHARS} characters")
+    @staticmethod
+    def _image_part(image_base64: str) -> dict[str, Any]:
+        if not isinstance(image_base64, str):
+            raise SceneInterpretationError("image_base64 must be a data URI string")
+        match = re.fullmatch(
+            r"data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)", image_base64
+        )
+        if not match:
+            raise SceneInterpretationError(
+                "Scene images must be PNG, JPEG or WebP data URIs with base64 encoding"
+            )
+        mime = match.group(1)
+        try:
+            raw = base64.b64decode(match.group(2), validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise SceneInterpretationError("Scene image contains invalid base64") from exc
+        if not raw or len(raw) > MAX_IMAGE_BYTES:
+            raise SceneInterpretationError(
+                f"Scene image must be between 1 byte and {MAX_IMAGE_BYTES} bytes"
+            )
+        signatures = {
+            "png": raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"),
+            "jpeg": raw.startswith(b"\\xff\\xd8\\xff"),
+            "webp": len(raw) >= 12 and raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
+        }
+        if not signatures[mime]:
+            raise SceneInterpretationError("Image data does not match its declared MIME type")
+        return {"inlineData": {"mimeType": "image/" + mime, "data": match.group(2)}}
+
+    def interpret(
+        self, prompt: str = "", *, scene_id: str, image_base64: str | None = None
+    ) -> SceneGraph:
+        if not isinstance(prompt, str) or len(prompt) > MAX_PROMPT_CHARS:
+            raise SceneInterpretationError(f"prompt must be at most {MAX_PROMPT_CHARS} characters")
+        if not prompt.strip() and image_base64 is None:
+            raise SceneInterpretationError("Provide a text prompt, an image, or both")
+        image_part = self._image_part(image_base64) if image_base64 is not None else None
         if not self.api_key:
             raise SceneInterpretationError("Set GEMINI_API_KEY to enable semantic scene interpretation")
         schema = {
@@ -130,17 +167,28 @@ class GeminiSceneInterpreter:
             "required": ["scene_id", "objects", "relations"],
         }
         instruction = (
-            "Translate the user's requested physical scene into a precise, minimal 3D scene graph. "
+            "Translate the user's requested physical scene and any attached image into a precise, minimal 3D scene graph. "
             "Return only schema-conforming JSON. Use world coordinates in meters, y-up, with the ground "
             "plane at y=0. For static objects, put their bottom at y=0 or connect them by an on_top "
             "relation to a static support. Avoid overlapping objects. Use only on_top and next_to "
             "relations; do not invent containment. Use conservative box-like dimensions and no more "
             "than 32 objects. Do not include code, scripts, instructions, or extra prose. "
-            "If the prompt is ambiguous, choose a simple conservative interpretation."
+            "If the prompt is ambiguous, choose a simple conservative interpretation. "
+            "If an image is attached, include only clearly visible physical objects; do not infer "
+            "hidden geometry or exact metric scale. Treat dimensions and camera-relative placement "
+            "as approximate estimates, not calibrated measurements. Use the image together with "
+            "the text instruction when both are present."
         )
+        user_parts = []
+        if image_part is not None:
+            user_parts.append(image_part)
+        user_parts.append({
+            "text": prompt.strip() or
+            "Construct a conservative scene graph of clearly visible physical objects in this image."
+        })
         body = {
             "systemInstruction": {"parts": [{"text": instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "contents": [{"role": "user", "parts": user_parts}],
             "generationConfig": {
                 "responseMimeType": "application/json",
                 "responseSchema": schema,
