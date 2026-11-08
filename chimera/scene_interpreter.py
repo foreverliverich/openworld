@@ -41,7 +41,10 @@ class GeminiSceneInterpreter:
     def _number(value: Any, field: str) -> float:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise SceneInterpretationError(f"{field} must be a finite JSON number")
-        number = float(value)
+        try:
+            number = float(value)
+        except (OverflowError, ValueError) as exc:
+            raise SceneInterpretationError(f"{field} is outside the numeric range") from exc
         if not math.isfinite(number):
             raise SceneInterpretationError(f"{field} must be finite")
         return number
