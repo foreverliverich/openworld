@@ -1,6 +1,7 @@
 """Tests for ISCE-owned organism state and world-field causal coupling."""
 
 import json
+import math
 import os
 import tempfile
 import unittest
@@ -94,7 +95,26 @@ class OrganismKernelTests(unittest.TestCase):
         migrated.tick(dt=0.5, expected_revision=self.world.revision())
         persisted = self.world.get_organism_state()
         self.assertEqual(persisted["schema_version"], 1)
-        self.assertEqual(persisted["position"], [3.0, 1.5, -2.0])
+        # Migration identity/position were asserted exactly before the tick.
+        # The first tick now runs free-body gravity, root attitude and contact,
+        # so the pelvis origin is allowed to move as the articulated body falls.
+        # Verify the durable row matches the kernel's authoritative committed
+        # state and that the physical transition remains finite and bounded.
+        self.assertEqual(tuple(persisted["position"]), migrated.state.position)
+        self.assertTrue(all(math.isfinite(v) for v in persisted["position"]))
+        displacement = math.sqrt(sum(
+            (persisted["position"][axis] - (3.0, 1.5, -2.0)[axis]) ** 2
+            for axis in range(3)
+        ))
+        self.assertLess(displacement, 2.0)
+        # The migrated body now participates in real gravity/contact during
+        # the first committed ISCE tick instead of retaining a display-only
+        # floating position.
+        self.assertGreater(persisted["position"][1], 0.0)
+        self.assertLess(persisted["position"][1], 1.5)
+        self.assertEqual(
+            persisted["articulation"]["skeleton_version"], "human-3d-1"
+        )
         self.assertFalse(migrated.snapshot()["migration_pending"])
         self.assertTrue(self.world.verify_event_chain())
 

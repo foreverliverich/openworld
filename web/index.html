@@ -25,7 +25,7 @@ h2{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:#a9bbc9;ma
 .bar{height:5px;background:#263746;border-radius:9px;margin-top:7px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);width:0}
 form{display:grid;grid-template-columns:1fr 1fr;gap:8px}form .wide{grid-column:1/-1}input,select{width:100%;padding:9px;background:#0a121a;border:1px solid #304354;border-radius:7px;color:var(--text);min-width:0}
 label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{font:11px/1.5 ui-monospace,monospace;color:#b4c5d2;max-height:180px;overflow:auto;white-space:pre-wrap}
-#entities{display:grid;gap:5px}.entity{padding:7px 9px;border:1px solid #263746;border-radius:7px;color:#c8d6e1;font-size:12px}
+#bodyForm input{font-variant-numeric:tabular-nums}#bodyStatus{margin-top:8px}#entities{display:grid;gap:5px}.entity{padding:7px 9px;border:1px solid #263746;border-radius:7px;color:#c8d6e1;font-size:12px}
 .note{color:var(--muted);font-size:11px}.pill{display:inline-block;border:1px solid #2d4b50;color:var(--accent);border-radius:99px;padding:2px 7px;font-size:10px}
 @media(max-width:900px){main{grid-template-columns:1fr}#viewport{min-height:55vh}aside{max-height:none;border-left:0;border-top:1px solid var(--line)}}
 </style>
@@ -48,6 +48,23 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{fon
   <div><label>Position Z</label><input name="z" type="number" step=".1" value="0"></div><div><label>Size (uniform)</label><input name="size" type="number" step=".1" min=".1" value="1"></div>
   <div class="wide"><button class="primary" type="submit">Commit object to world</button></div>
  </form></section>
+ <section class="section"><h2>Articulated body · motor control</h2>
+  <p class="note">Live quaternion-based 3D body pose: ball joints at spine, neck, shoulders and hips; two-axis wrists and ankles; bounded hinge knees/elbows. Joint angles are radians. Motor commands pass through compliant tendon dynamics and the revision-checked ISCE actuator.</p>
+  <form id="bodyForm">
+   <div><label>Left hip · flexion (rad)</label><input name="thigh_l" type="number" step=".05" min="-.95" max="1.65" value=".45"></div>
+   <div><label>Left hip · abduction (rad)</label><input name="thigh_l_y" type="number" step="any" min="-.78" max=".78" value=".20"></div>
+   <div><label>Left hip · rotation (rad)</label><input name="thigh_l_z" type="number" step="any" min="-.72" max=".72" value="0"></div>
+   <div><label>Left knee · hinge (rad)</label><input name="shin_l" type="number" step=".05" min="-2.45" max=".12" value="-.3"></div>
+   <div><label>Left shoulder · flexion (rad)</label><input name="upper_arm_l" type="number" step=".05" min="-2.7" max="2.7" value=".25"></div>
+   <div><label>Left shoulder · abduction (rad)</label><input name="upper_arm_l_y" type="number" step="any" min="-1.9" max="1.9" value=".15"></div>
+   <div><label>Left shoulder · axial rotation (rad)</label><input name="upper_arm_l_z" type="number" step="any" min="-2.7" max="2.7" value="0"></div>
+   <div><label>Left elbow · hinge (rad)</label><input name="forearm_l" type="number" step=".05" min="-2.35" max=".12" value="-.4"></div>
+   <div><label>Root acceleration X (m/s²)</label><input name="ax" type="number" step=".1" value="0"></div>
+   <div><label>Root acceleration Z (m/s²)</label><input name="az" type="number" step=".1" value="0"></div>
+   <div class="wide"><button class="primary" type="submit">Commit motor targets</button></div>
+  </form>
+  <p class="note" id="bodyStatus">Waiting for articulated pose…</p>
+ </section>
  <section class="section"><h2>Somatic Core · Living morphology</h2>
   <p class="note">The former rigid Body Forge control is retired. Creature anatomy is rendered as a WebGL2 signed-distance field with continuous A/B morphing, diffusion detail and soft biological shading.</p>
   <p><a href="/web/somatic.html" style="color:#69d5bd">Open Somatic Core morphogenesis →</a></p>
@@ -71,7 +88,7 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{fon
   <div><label>Target X</label><input name="x" type="number" step=".1" value="0"></div><div><label>Target Y</label><input name="y" type="number" step=".1" value="1"></div>
   <div><label>Target Z</label><input name="z" type="number" step=".1" value="3"></div>
   <div class="wide"><button type="submit">Move selected entity</button></div>
- </form><p class="note">Movement is validated and committed by RealityEngine; the current body model is still a rigid primitive.</p></section>
+ </form><p class="note">This editor moves independent world entities. Organism articulation is controlled in the motor-control panel above.</p></section>
  <section class="section"><h2>Research Lab</h2><form id="fieldForm">
   <div><label>Probe X</label><input name="x" type="number" step=".1" value="0"></div><div><label>Probe Y</label><input name="y" type="number" step=".1" value="1"></div>
   <div><label>Probe Z</label><input name="z" type="number" step=".1" value="0"></div>
@@ -95,6 +112,40 @@ const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(8,16,10);sun
 const grid=new THREE.GridHelper(80,80,0x315064,0x1b2c39);grid.position.y=.005;scene.add(grid);
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(128,128),new THREE.MeshStandardMaterial({color:0x101a23,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=-.02;floor.receiveShadow=true;scene.add(floor);
 const worldGroup=new THREE.Group();scene.add(worldGroup);const meshes=new Map();
+const organismGroup=new THREE.Group();scene.add(organismGroup);const bodySegments=new Map(),bodyJoints=new Map();
+const bodyMaterial=new THREE.MeshStandardMaterial({color:0xc58e79,roughness:.72,metalness:0});
+const jointMaterial=new THREE.MeshStandardMaterial({color:0xe0ad96,roughness:.68,metalness:0});
+const upAxis=new THREE.Vector3(0,1,0);
+function updateArticulatedBody(pose){
+ const keep=new Set(),jointKeep=new Set();
+ for(const segment of pose.segments){
+  keep.add(segment.name);
+  let mesh=bodySegments.get(segment.name);
+  const length=Math.hypot(segment.end[0]-segment.start[0],segment.end[1]-segment.start[1],segment.end[2]-segment.start[2]);
+  if(!mesh){
+   mesh=new THREE.Mesh(new THREE.CylinderGeometry(segment.radius*.82,segment.radius,length,14,1),bodyMaterial);
+   mesh.castShadow=true;mesh.receiveShadow=true;organismGroup.add(mesh);bodySegments.set(segment.name,mesh);
+  }
+  mesh.position.set(...segment.center);
+  const worldQ=segment.orientation;
+  const localAlign=new THREE.Quaternion().setFromUnitVectors(
+   upAxis,new THREE.Vector3(...segment.local_direction).normalize()
+  );
+  mesh.quaternion.set(worldQ[1],worldQ[2],worldQ[3],worldQ[0]).multiply(localAlign);
+  mesh.userData.segment=segment.name;
+  mesh.userData.orientation=worldQ;
+  jointKeep.add(segment.name);
+  let joint=bodyJoints.get(segment.name);
+  if(!joint){
+   joint=new THREE.Mesh(new THREE.SphereGeometry(segment.radius*1.08,12,8),jointMaterial);
+   joint.castShadow=true;organismGroup.add(joint);bodyJoints.set(segment.name,joint);
+  }
+  joint.position.set(...segment.start);
+ }
+ for(const [name,mesh] of bodySegments){if(!keep.has(name)){organismGroup.remove(mesh);mesh.geometry.dispose();bodySegments.delete(name)}}
+ for(const [name,mesh] of bodyJoints){if(!jointKeep.has(name)){organismGroup.remove(mesh);mesh.geometry.dispose();bodyJoints.delete(name)}}
+ $('#bodyStatus').textContent=pose.skeleton_version+' · '+pose.segments.length+' segments · '+pose.joints.length+' joints · contacts: '+(pose.contacts.join(', ')||'none')+' · revision '+pose.world_revision;
+}
 const palette={stone:0x788795,wood:0x9a704a,organic_composite:0x53bba5,biomorphic:0x5eaa9c,default:0x8c9aa8};
 function resize(){const w=$('#scene').clientWidth,h=$('#scene').clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}window.addEventListener('resize',resize);resize();
 function materialFor(e){const m=e.material||'default';return new THREE.MeshStandardMaterial({color:palette[m]??palette.default,roughness:.78,metalness:.08})}
@@ -105,10 +156,12 @@ let lastRevision=0;
 function renderState(s){const o=s.organism.organism;$('#metrics').innerHTML=metric('Energy',o.energy)+metric('Stress',o.stress)+metric('Integrity',o.integrity)+metric('Fatigue',o.fatigue)+metric('Memory strength',o.memory_strength)+metric('Curiosity',o.curiosity);$('#goal').textContent='Goal: '+(o.active_goal||'none')+' · Tick '+o.tick+' · Age '+o.age_seconds.toFixed(2)+'s';$('#revision').textContent='REVISION '+s.world_revision;$('#clock').textContent=s.simulation_time.toFixed(2)+'s';updateWorld(s.entities||[]);const safe=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));$('#entities').innerHTML=(s.entities||[]).map(e=>'<div class="entity"><b>'+safe(e.kind)+'</b> · '+safe(e.entity_id.slice(0,8))+'<br><span class="note">('+e.position.x.toFixed(1)+', '+e.position.y.toFixed(1)+', '+e.position.z.toFixed(1)+') · '+safe(e.material)+'</span></div>').join('')||'<span class="note">World is empty.</span>';const selector=$('#moveEntity');const selected=selector.value;selector.innerHTML=(s.entities||[]).map(e=>'<option value="'+safe(e.entity_id)+'">'+safe(e.kind)+' · '+safe(e.entity_id.slice(0,8))+'</option>').join('');if((s.entities||[]).some(e=>e.entity_id===selected))selector.value=selected;$('#connection').textContent='CONNECTED · SQLITE WORLD · EVENT CHAIN '+(s.event_chain_valid?'VALID':'INVALID');lastRevision=s.world_revision}
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const data=await r.json();if(!r.ok)throw new Error(data.message||data.error||r.statusText);return data}
 function log(s){$('#log').textContent=typeof s==='string'?s:JSON.stringify(s,null,2)}
-async function refresh(){const s=await api('/api/state');renderState(s)}
-$('#tick').onclick=async()=>{try{$('#tick').disabled=true;const r=await api('/api/tick',{ticks:1});renderState(r.state);log(r.frames[0])}catch(e){log(e.message)}finally{$('#tick').disabled=false}};
+async function refreshBody(){const pose=await api('/api/body/pose');updateArticulatedBody(pose)}
+async function refresh(){const s=await api('/api/state');renderState(s);await refreshBody()}
+$('#tick').onclick=async()=>{try{$('#tick').disabled=true;const r=await api('/api/tick',{ticks:1});renderState(r.state);await refreshBody();log(r.frames[0])}catch(e){log(e.message)}finally{$('#tick').disabled=false}};
 $('#observe').onclick=()=>refresh().catch(e=>log(e.message));
 $('#events').onclick=async()=>{try{const r=await api('/api/events?after_revision=0&limit=100');log({chain_valid:r.chain_valid,revision:r.revision,events:r.events})}catch(e){log(e.message)}};
+$('#bodyForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);const commands={thigh_l:[Number(f.get('thigh_l')),Number(f.get('thigh_l_y')),Number(f.get('thigh_l_z'))],shin_l:Number(f.get('shin_l')),upper_arm_l:[Number(f.get('upper_arm_l')),Number(f.get('upper_arm_l_y')),Number(f.get('upper_arm_l_z'))],forearm_l:Number(f.get('forearm_l'))};try{const r=await api('/api/body/actuate',{expected_revision:lastRevision,motor_commands:commands,root_acceleration:[Number(f.get('ax')),0,Number(f.get('az'))]});renderState(r.state);updateArticulatedBody(r.body);log({actuation:r.result,contacts:r.body.contacts,joints:r.body.joints})}catch(e){log(e.message);await refresh()}};
 $('#objectForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'world_builder',action:'create_object',expected_revision:lastRevision,arguments:{kind:f.get('kind'),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n,n],material:'stone',dynamic:true}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
 $('#toolForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'tool_fabricator',action:'fabricate',expected_revision:lastRevision,arguments:{name:f.get('name'),capabilities:f.get('capabilities').split(',').map(v=>v.trim()).filter(Boolean),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n,n],material:'wood',dynamic:true,specification:{fabricated_in:'browser_toolbox'}}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
 $('#lifeForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'life_generator',action:'spawn',expected_revision:lastRevision,arguments:{species:f.get('species'),identity:f.get('identity'),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n*1.5,n],material:'biomorphic',dynamic:true}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};

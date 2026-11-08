@@ -74,7 +74,7 @@ Implementation detail: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KERNEL_IMPLEMENTATIO
 | Area | Source | Current implementation | Not yet implemented |
 |---|---|---|---|
 | World authority | `chimera/reality_engine.py` | SQLite WAL, revision checks, atomic structures, AABB collision/support, fixed-step gravity, scalar fields, snapshots, observations, hash-chained events | Articulated/deformable mechanics, fluid/terrain, complete deterministic replay |
-| Physiology / ISCE | `chimera/isce.py`, `chimera/organism_kernel.py` | One versioned ISCE state; deterministic fixed-graph transitions; allostasis, interoception, sensorimotor, temporal, self-model, attention, reserve; legacy state conversion; atomic world-field persistence | Full ICCR/CCPL validation, vascular/metabolic transport, tissue repair mechanics, organ-specific physiology, body-derived strain/sensing |
+| Physiology / ISCE | `chimera/isce.py`, `chimera/organism_kernel.py`, `chimera/biomechanics.py` | One versioned ISCE state; deterministic fixed-graph transitions; allostasis, interoception, sensorimotor, temporal, self-model, attention, reserve; versioned 16-segment/15-joint articulated body; PD actuators, hinge limits, gravity loading, root integration, foot/ground contact; body-derived work/strain/proprioception; legacy neutral-articulation migration; atomic world-field persistence | Full ICCR/CCPL validation, vascular/metabolic transport, tissue-level mechanics, coupled multibody constraints, 3D multi-axis joints, self-collision/terrain/friction, body-derived multimodal sensing |
 | Agent | `chimera/autonomous_agent.py` | Deterministic shelter/workbench/rest/observe baseline | General goal generation, learned policy, sensory grounding, action selection through executable toolbox |
 | Runtime | `chimera/runtime.py` | One clock, physics tick, agent step and observation | Event bus, continuous runtime service, scheduling/multiple organism lifecycle |
 | Toolbox | `chimera/toolbox.py` | Six named domains; validated world mutations and inspection | Executable tool drivers, grasp/use/repair/build skills, autonomous capability discovery |
@@ -175,13 +175,73 @@ The protected body requirement has moved from a backlog statement to a connected
 
 **Important transaction invariant:** model generation is not a world mutation. The candidate SDF is compiled with the current BioPBR library in the browser first. Only after successful compile/link does the browser submit the package and expected world revision for an atomic RealityEngine commit. Compile failure leaves both the displayed program and canonical state unchanged.
 
-**Verification status:** local Python syntax and package-validation smoke checks passed. New automated tests are committed but hosted CI has not yet been confirmed for this implementation. A real WebGL2 browser run and the whitepaper's repeated T1–T7 acceptance suite have not been observed; local headless Chromium could not initialize EGL/SwiftShader in this environment. P0 is therefore **in progress, not certified complete**. Image-conditioned ten-step refinement and pointer-orbit/wheel-zoom camera controls are now implemented; visual-quality verification against live Gemini output and the repeated browser acceptance run remain open. Long-running request cancellation/retry remains open. No articulation, locomotion, GPU particle-count or sentience claims are made.
+**Verification status:** GitHub Actions run [42430631014](https://github.com/foreverliverich/openworld/actions/runs/42430631014) passed the standard-library unit suite and the real Chromium/ANGLE/SwiftShader WebGL2 acceptance job. The browser test verifies SDF entrypoint parsing, shader compile/link, framebuffer output, invalid-candidate rejection without replacing the active program, valid A/B installation and no post-morph WebGL error. The whitepaper's repeated T1–T7 visual-quality suite, live Gemini morphology quality, and long-running request cancellation/retry remain open. P0 is therefore **in progress, not certified complete**. No GPU particle-count or sentience claims are made.
 
 
-## Somatic Core real-browser verification gate
+## Articulated biological body mechanics — implementation added
 
-- Added `tests/browser_acceptance.py`, which launches Chromium through Playwright with ANGLE/SwiftShader and requires an actual WebGL2 context.
-- The browser test compiles and links the genesis A/B shader, draws and reads back the framebuffer, rejects a deliberately invalid SDF without replacing the active program, compiles a valid target SDF, installs the A/B pair, and checks for WebGL errors after rendering.
-- Added a separate `webgl2-browser` GitHub Actions job. It installs Playwright/Chromium and runs the browser acceptance independently of the standard-library Python unit suite.
-- This test is intentionally a renderer integration gate, not a substitute for the full whitepaper T1–T7 visual-quality and real Gemini acceptance run. It does not certify creature anatomy, material realism, or generated morphology quality.
-- Status is pending hosted CI execution on this branch; do not mark WebGL2 as verified until the browser job reports success.
+The former body-mechanics backlog has an executable first implementation on branch `articulated-biomechanics`.
+
+- `chimera/biomechanics.py`: versioned `human-3d-1` segment tree (16 rigid segments, 15 joints), three-axis spine/neck/shoulder/hip joints, two-axis wrist/ankle joints, hinge knees/elbows, quaternion-composed forward kinematics, Jacobian-assembled generalized mass matrix, finite-difference Christoffel/Coriolis bias, world-frame gravity projection, deterministic pivoted linear solve, bounded activation/force-length/force-velocity actuators, compliant series-elastic tendon state, joint-specific torque and angular-speed envelopes, all-segment capsule ground contact and <=20ms semi-implicit substeps.
+- `chimera/isce.py`: articulation is nested inside the single authoritative `OrganismState`; motor commands and root acceleration enter through validated `TransitionInput`; mechanical strain/work/metabolic cost/proprioception are derived from the solver and coupled into physiology, sensorimotor state, energy and reserve.
+- `chimera/organism_kernel.py` forwards revision-checked joint targets and root acceleration into ISCE. `chimera/http_server.py` exposes `GET /api/body/pose` for committed segment/joint transforms and `POST /api/body/actuate` for fixed-step, revision-checked motor commands; invalid joints and stale revisions are rejected.
+- `web/index.html` now projects returned segment quaternions and local axes in the Three.js world scene and exposes hip/shoulder three-axis controls plus scalar knee/elbow controls. The UI refreshes from committed body-pose responses; it does not animate a second local physics state.
+- Existing RealityEngine persistence remains the only durable organism-state path. Articulation is serialized in the existing schema-v1 organism payload; old schema-v1 payloads without the additive articulation field load with a neutral canonical skeleton.
+- `tests/test_biomechanics.py`: coverage for skeleton topology, quaternion kinematics, three-axis actuation, tendon compliance, per-axis limits and speed saturation, mass-matrix symmetry/inter-joint coupling, Coriolis bias, capsule ground contact, root translation, round-trip persistence, invalid commands, sagittal-to-3D migration and ISCE coupling.
+- `tests/browser_body_acceptance.py`: launches the local HTTP application in Chromium with ANGLE/SwiftShader, verifies the live Three.js WebGL2 body projection, checks native motor-form validity, submits a three-axis hip command through the UI, and reads the committed pose from the authoritative API.
+- Full model assumptions, equations, state contracts, units, verification requirements and remaining limitations are documented in [ARTICULATED_BIOMECHANICS.md](ARTICULATED_BIOMECHANICS.md).
+
+**Verification status:** GitHub Actions run [42433374952](https://github.com/foreverliverich/openworld/actions/runs/42433374952) passed both gates: all **100 standard-library tests** and the real Chromium/ANGLE/SwiftShader Three.js browser acceptance. The browser test verifies the live WebGL2 scene, all 16 segment projections, valid 3D motor controls, a hip abduction command submitted through the UI, and the committed joint pose returned by the application API. The mechanics gate includes quaternion 3D kinematics, compliant tendon state, force-length/force-velocity torque scaling, bounded angular speed, Jacobian-assembled generalized mass matrix, finite-difference Christoffel/Coriolis terms, pivoted linear solve, whole-body capsule ground contact, sagittal-to-3D migration, HTTP/API and ISCE persistence regressions. This is a deterministic rigid-segment articulated model, not a complete biological digital twin. Generalized contact impulses, root degrees of freedom in the mass matrix, self-collision, friction cones, antagonistic muscle pairs, calibrated tissue mechanics, multimodal sensory grounding and high-fidelity skin/SDF deformation remain open.
+
+
+
+## Contact-constrained articulated dynamics — 2026-11-07
+
+The next embodiment gate extends the articulated solver from joint-only generalized dynamics plus penalty-style root support to a coupled root-translation/joint system with impulse-based ground constraints.
+
+- `chimera/biomechanics.py`: the generalized coordinate layout now includes world root translation (X/Y/Z) before all enabled joint rotations. Root translational Jacobian columns contribute to the same segment kinetic-energy mass matrix; root/joint inertial cross terms are retained. Gravity and Coriolis terms operate over the expanded coordinate vector. A requested root acceleration is converted through the full mass matrix into generalized force.
+- Contact points are selected from the lower endpoint of each segment capsule. Their point Jacobians include root translation and all ancestor rotational coordinates.
+- A projected Gauss-Seidel contact solver computes effective masses using `M^-1 J^T`, enforces non-negative unilateral normal impulses, and projects two tangential impulses onto a circular Coulomb friction cone (current coefficient 0.75). Contact impulses update root and joint velocities in the same generalized system; joint coordinates are reintegrated from constrained velocities.
+- Residual penetration uses split positional stabilization after the velocity-level constraint solve. The contact model is non-restitutive and ground-plane-only.
+- `tests/test_biomechanics.py`: added checks for root translational mass coupling, normal impact response, friction response, and the absence of ground friction while separated.
+- `docs/ARTICULATED_BIOMECHANICS.md`: equations, assumptions, contact algorithm, and limitations updated.
+
+**Model boundary:** root translation is now a generalized coordinate; root orientation/angular momentum are still not generalized coordinates. This does not yet implement self-collision, uneven terrain, grasping, multi-body contact, or calibrated friction. The solver remains a deterministic rigid-segment model with approximate anthropometric parameters, not a validated biological simulator.
+
+**Verification:** GitHub Actions run [42438951673](https://github.com/foreverliverich/openworld/actions/runs/42438951673) passed all **103 standard-library tests** and the real Chromium/ANGLE/SwiftShader WebGL2 acceptance job. The test run covered the exact implementation and regression-test commit `cf3758acb6ecf40b79b2c611bd55ef9b17283e76`; the subsequent ledger-only documentation update does not alter executable code.
+
+
+## Articulated capsule self-collision — 2026-11-07
+
+The generalized contact solver now handles non-adjacent body-segment collisions, not only the ground plane.
+
+- `chimera/biomechanics.py`: added robust closest-point calculations for finite 3D centerline segments, with capsule radii converted into signed separation gaps.
+- The collision broad phase evaluates the 16-segment body pair set and excludes parent/child and grandparent/descendant pairs whose overlap represents a shared anatomical joint.
+- Each self-contact uses the relative point Jacobian `J_body_B - J_body_A`; root translation cancels naturally for internal collisions.
+- Contact normals and a stable orthogonal tangent basis are constructed per collision. The same projected Gauss-Seidel solver enforces non-negative normal impulses and Coulomb-bounded tangential impulses.
+- Penetrating self-contacts receive a bounded separation-velocity target. Resulting impulses alter the same authoritative joint/root velocities and are integrated into the actual body state; no renderer-only collision response is used.
+- `ArticulatedBodyState.neutral(skeleton)` now preserves the supplied skeleton version, enabling deterministic custom skeleton tests without weakening version validation.
+- `tests/test_biomechanics.py`: added a crossing-limb acceptance case that begins with overlapping non-adjacent capsules and verifies the committed body geometry separates after the contact impulse.
+- `docs/ARTICULATED_BIOMECHANICS.md`: documented the self-collision model and remaining root-rotation/terrain/grasp limitations.
+
+**Model boundary:** this is rigid capsule self-collision for one articulated organism. It does not yet implement soft-tissue collision, broadphase spatial acceleration, inter-organism collision, grasping, or uneven terrain. The pair search is currently quadratic in the number of body segments and is suitable for the canonical 16-segment skeleton, not an unbounded particle system.
+
+**Verification:** pending hosted CI for this branch. Do not treat this gate as closed until the standard-library suite and real Chromium/WebGL2 acceptance both pass.
+
+
+## Root attitude and angular-momentum dynamics — 2026-11-08
+
+The articulated generalized system now includes the root's six rigid-body velocity coordinates: world translation X/Y/Z and world angular velocity X/Y/Z, followed by all enabled joint rotations.
+
+- `ArticulatedBodyState` now owns a normalized root orientation quaternion and world-frame root angular velocity. Existing serialized payloads default to identity orientation and zero angular velocity, preserving compatibility.
+- Root orientation is composed into the entire forward-kinematic tree.
+- Every rigid segment contributes root rotational Jacobian terms to the generalized mass matrix: point velocity from `omega × (COM - root)` and angular velocity about each world axis. Root rotation therefore couples to segment translation, segment inertia, joint motion and gravity.
+- The finite-difference mass-matrix derivative perturbs root attitude on SO(3) using a world-axis quaternion increment; generalized velocity includes root angular velocity.
+- Root orientation is integrated with a world-frame exponential-map quaternion update. Contact and self-collision impulses act on root angular velocity through the expanded generalized Jacobian.
+- Root angular acceleration currently emerges from the coupled dynamics and contact impulses. There is not yet an external root torque/command interface.
+- Tests added for world-space root rotation of the kinematic tree, positive rotational inertia and translation/rotation coupling, angular velocity integration, and state serialization round-trip.
+- The browser acceptance test continues to validate the existing committed body pose UI. It does not yet provide direct root attitude controls.
+
+**Model boundary:** this is quaternion attitude integration with world-frame generalized angular velocity, not a full Lie-group variational integrator. Independent rigid-body-engine comparisons, external root torque control, uneven terrain, manipulation contacts, soft-tissue collision, and calibrated anthropometry remain open.
+
+**Verification:** pending hosted CI for this branch. Do not close this gate until all standard-library tests and real Chromium/WebGL2 acceptance pass.

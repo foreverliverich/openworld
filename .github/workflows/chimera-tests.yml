@@ -40,3 +40,21 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Run real Chromium WebGL2 acceptance
         run: python tests/browser_acceptance.py
+
+  threejs-body-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Chromium and WebGL2 test runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Run real Chromium Three.js body acceptance
+        run: python tests/browser_body_acceptance.py
