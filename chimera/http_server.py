@@ -230,7 +230,6 @@ class ChimeraApplication:
                 material=item.get("material", "default"),
                 dynamic=item.get("dynamic", True),
                 mass=float(item.get("mass", 1.0)),
-                metadata=item.get("metadata", {}),
             ) for item in objects_data)
             relations = tuple(SpatialRelation(
                 relation=item["relation"],
@@ -248,14 +247,13 @@ class ChimeraApplication:
             text=item["text"],
             embedding=tuple(item["embedding"]),
             timestamp=float(item["timestamp"]),
-            confidence=float(item.get("confidence", 1.0)),
         ) for item in memory_records_data)
 
         speaker_id = payload.get("speaker_id", "user")
         participant_count = payload.get("participant_count", 1)
         if not isinstance(speaker_id, str):
             raise ValueError("speaker_id must be a string")
-        if isinstance(participant_count, bool) or not isinstance(participant_count, int) or participant_count < 0:
+        if isinstance(participant_count, bool) or not isinstance(participant_count, int) or participant_count < 1:
             raise ValueError("participant_count must be a non-negative integer")
         source_refs = payload.get("source_refs", [])
         if not isinstance(source_refs, list) or any(not isinstance(ref, str) for ref in source_refs):
