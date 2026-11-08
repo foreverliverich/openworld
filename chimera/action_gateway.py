@@ -64,6 +64,7 @@ class OrganismActionGateway:
     _MUTATING_ACTIONS = {
         ("world_builder", "create_object"),
         ("world_builder", "create_structure"),
+        ("world_builder", "harvest_energy"),
         ("tool_fabricator", "fabricate"),
         ("life_generator", "spawn"),
         ("movement_lab", "move"),
