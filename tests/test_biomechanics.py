@@ -50,14 +50,18 @@ class ArticulatedBodyTests(unittest.TestCase):
         self.assertLessEqual(joint.angle, spec.max_angle)
 
     def test_angular_speed_is_bounded_and_overrun_becomes_strain(self):
-        result = self.engine.step(
-            self.state, (0, 1, 0), dt=0.2,
-            motor_commands=(("hand_l", (0.8, 0.0, 0.5)),),
+        from dataclasses import replace
+        joints = tuple(
+            replace(joint, velocity=25.0, angular_velocity_xyz=(25.0, 0.0, 0.0))
+            if joint.name == "hand_l" else joint
+            for joint in self.state.joints
         )
+        fast_state = ArticulatedBodyState(joints=joints)
+        result = self.engine.step(fast_state, (0, 1, 0), dt=0.02)
         joint = {item.name: item for item in result.state.joints}["hand_l"]
         limit = self.engine.skeleton.by_name()["hand_l"].angular_speed_limit
         self.assertLessEqual(max(abs(v) for v in joint.angular_velocity_xyz), limit + 1e-9)
-        self.assertGreaterEqual(result.mechanical_strain, 0.0)
+        self.assertGreater(result.mechanical_strain, 0.0)
 
     def test_gravity_and_ground_contact_resolve_without_penetration(self):
         # Start with the feet intentionally intersecting the ground plane;
