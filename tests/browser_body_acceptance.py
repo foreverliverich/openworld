@@ -81,9 +81,11 @@ class ArticulatedBodyBrowserAcceptance(unittest.TestCase):
                     page.locator('input[name="thigh_l_y"]').fill("0.45")
                     page.locator('#bodyForm button[type="submit"]').click()
                     page.wait_for_function(
-                        """() => document.querySelector('#log')?.textContent.includes('"actuation"')""",
+                        """() => (document.querySelector('#log')?.textContent || '').trim().length > 0""",
                         timeout=30000,
                     )
+                    action_log = page.locator('#log').inner_text()
+                    self.assertIn('"actuation"', action_log, action_log)
                     pose = page.evaluate(
                         """async () => await (await fetch('/api/body/pose')).json()"""
                     )
