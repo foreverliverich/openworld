@@ -245,3 +245,12 @@ The world action and organism update remain sequential transactions. The causal 
 **Verification:** GitHub Actions run 42511781699 passed 100 Python 3.11 standard-library tests in 5.792 seconds. The action gateway test verifies that the organism-tick event causation_id/correlation_id match the preceding world action_id, while the event hash chain remains valid. The autonomous-agent regression verifies action IDs are preserved through AgentStep.
 
 Details: CAUSAL_ACTION_LINKS.md.
+
+
+## Somatic GPU hot path — 2026-11-08
+
+Added `web/somatic-gpu.js`, an opt-in WebGPU compute module, plus `tests/test_somatic_gpu_contract.py`. The Somatic Core page exposes a 65,536-cell start/stop control. The kernel preserves the 48-byte / three-vec4 ABI, pages buffers according to the actual adapter limits, uploads initial cell state once, and keeps simulation state GPU-resident between explicit diagnostic readbacks.
+
+Implemented in this slice: semi-implicit Euler integration, gravity, horizontal ground contact, restitution, tangential friction and bounded stress-dependent energy drain. The kernel validates dt and disposal, checks shader compilation, and has explicit teardown. It is intentionally not wired as a replacement for RealityEngine's authoritative world state.
+
+Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell learning, Rapier, deformable SDF contact, high-count performance claims or continuous background execution. The 5M-cell example is not adopted; 240 MB of cell data alone may exceed per-binding limits and would require paging plus device-specific performance measurement. `queue.writeBuffer` is a host-to-GPU upload, not zero-copy. See `docs/SOMATIC_GPU_HOT_PATH.md`.
