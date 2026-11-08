@@ -34,6 +34,7 @@ class MultimodalProjectionModel:
         self, *, text_dim: int = 768, image_dim: int = 512,
         audio_dim: int = 768, shared_dim: int = 512, audio_slot_dim: int = 128,
         seed: int = 29, device: str = "cpu",
+        encoder_manifest: Mapping[str, str] | None = None,
     ):
         torch, nn, _ = _torch_modules()
         if (text_dim, image_dim, audio_dim, shared_dim, audio_slot_dim) != (
@@ -43,6 +44,18 @@ class MultimodalProjectionModel:
         torch.manual_seed(seed)
         self.torch = torch
         self.device = device
+        manifest = dict(encoder_manifest or {
+            "text": "hf:bert-base-uncased",
+            "image": "hf:openai/clip-vit-base-patch32",
+            "audio": "hf:facebook/wav2vec2-base",
+        })
+        if set(manifest) != {"text", "image", "audio"} or any(
+            not isinstance(value, str) or not value.strip() for value in manifest.values()
+        ):
+            raise AlignmentTrainingError(
+                "encoder_manifest must name text, image and audio model revisions"
+            )
+        self.encoder_manifest = manifest
         self.text_projection = nn.Linear(text_dim, shared_dim, bias=False).to(device)
         self.image_projection = nn.Linear(image_dim, shared_dim, bias=False).to(device)
         self.audio_projection = nn.Linear(audio_dim, shared_dim, bias=False).to(device)
