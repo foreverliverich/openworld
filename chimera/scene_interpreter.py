@@ -7,7 +7,10 @@ global workspace. It does not execute generated Python, Blender scripts, or GLSL
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
+import math
 import os
 import re
 import urllib.error
@@ -24,6 +27,7 @@ MAX_RELATIONS = 64
 MAX_SCENE_EXTENT = 50.0
 MIN_OBJECT_SIZE = 0.05
 MAX_OBJECT_SIZE = 20.0
+MAX_IMAGE_BYTES = 700_000
 
 
 class SceneInterpretationError(RuntimeError):
@@ -32,6 +36,18 @@ class SceneInterpretationError(RuntimeError):
 
 class GeminiSceneInterpreter:
     """Convert a spatial prompt to a constrained, typed scene graph."""
+
+    @staticmethod
+    def _number(value: Any, field: str) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise SceneInterpretationError(f"{field} must be a finite JSON number")
+        try:
+            number = float(value)
+        except (OverflowError, ValueError) as exc:
+            raise SceneInterpretationError(f"{field} is outside the numeric range") from exc
+        if not math.isfinite(number):
+            raise SceneInterpretationError(f"{field} must be finite")
+        return number
 
     def __init__(self, *, model: str = MODEL, api_key: str | None = None, timeout: float = 60.0):
         self.model = model
@@ -70,33 +86,45 @@ class GeminiSceneInterpreter:
                 raise SceneInterpretationError(f"objects[{index}].position must be a 3-vector")
             if not isinstance(size, list) or len(size) != 3:
                 raise SceneInterpretationError(f"objects[{index}].size must be a 3-vector")
-            if any(abs(float(v)) > MAX_SCENE_EXTENT for v in position):
+            position_values = tuple(
+                GeminiSceneInterpreter._number(v, f"objects[{index}].position") for v in position
+            )
+            size_values = tuple(
+                GeminiSceneInterpreter._number(v, f"objects[{index}].size") for v in size
+            )
+            if any(abs(v) > MAX_SCENE_EXTENT for v in position_values):
                 raise SceneInterpretationError(f"objects[{index}] lies outside the scene extent")
-            if any(not MIN_OBJECT_SIZE <= float(v) <= MAX_OBJECT_SIZE for v in size):
+            if any(not MIN_OBJECT_SIZE <= v <= MAX_OBJECT_SIZE for v in size_values):
                 raise SceneInterpretationError(f"objects[{index}] has dimensions outside supported bounds")
             material = item.get("material", "default")
             if not isinstance(material, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", material):
                 raise SceneInterpretationError(f"objects[{index}].material is invalid")
-            mass = float(item.get("mass", 1.0))
+            mass = GeminiSceneInterpreter._number(item.get("mass", 1.0), f"objects[{index}].mass")
             if not 0.01 <= mass <= 10000.0:
                 raise SceneInterpretationError(f"objects[{index}].mass is outside supported bounds")
             dynamic = item.get("dynamic", True)
             if not isinstance(dynamic, bool):
                 raise SceneInterpretationError(f"objects[{index}].dynamic must be boolean")
             objects.append(SceneObject(
-                object_id, kind, tuple(float(v) for v in position),
-                tuple(float(v) for v in size), material, mass, dynamic,
+                object_id, kind, position_values, size_values, material, mass, dynamic,
             ))
         relations = []
         for index, item in enumerate(raw_relations):
             if not isinstance(item, dict):
                 raise SceneInterpretationError(f"relations[{index}] must be an object")
-            relations.append(SpatialRelation(
-                str(item.get("relation", "")),
-                str(item.get("subject", "")),
-                str(item.get("object", "")),
-                float(item.get("gap", 0.05)),
-            ))
+            relation = item.get("relation")
+            subject = item.get("subject")
+            target = item.get("object")
+            if not all(isinstance(value, str) and value for value in (relation, subject, target)):
+                raise SceneInterpretationError(f"relations[{index}] identity fields must be non-empty strings")
+            if relation not in {"on_top", "next_to"}:
+                raise SceneInterpretationError(
+                    f"relations[{index}].relation must be on_top or next_to"
+                )
+            gap = GeminiSceneInterpreter._number(item.get("gap", 0.05), f"relations[{index}].gap")
+            if gap < 0:
+                raise SceneInterpretationError(f"relations[{index}].gap must be non-negative")
+            relations.append(SpatialRelation(relation, subject, target, gap))
         try:
             graph = SceneGraph(resolved_scene_id, tuple(objects), tuple(relations))
             # Compile now: catches overlap, cycles, unsupported containment, and
@@ -106,9 +134,43 @@ class GeminiSceneInterpreter:
             raise SceneInterpretationError(f"Scene graph failed geometric validation: {exc}") from exc
         return graph
 
-    def interpret(self, prompt: str, *, scene_id: str) -> SceneGraph:
-        if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > MAX_PROMPT_CHARS:
-            raise SceneInterpretationError(f"prompt must contain 1..{MAX_PROMPT_CHARS} characters")
+    @staticmethod
+    def _image_part(image_base64: str) -> dict[str, Any]:
+        if not isinstance(image_base64, str):
+            raise SceneInterpretationError("image_base64 must be a data URI string")
+        match = re.fullmatch(
+            r"data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)", image_base64
+        )
+        if not match:
+            raise SceneInterpretationError(
+                "Scene images must be PNG, JPEG or WebP data URIs with base64 encoding"
+            )
+        mime = match.group(1)
+        try:
+            raw = base64.b64decode(match.group(2), validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise SceneInterpretationError("Scene image contains invalid base64") from exc
+        if not raw or len(raw) > MAX_IMAGE_BYTES:
+            raise SceneInterpretationError(
+                f"Scene image must be between 1 byte and {MAX_IMAGE_BYTES} bytes"
+            )
+        signatures = {
+            "png": raw.startswith(b"\x89PNG\r\n\x1a\n"),
+            "jpeg": raw.startswith(b"\xff\xd8\xff"),
+            "webp": len(raw) >= 12 and raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
+        }
+        if not signatures[mime]:
+            raise SceneInterpretationError("Image data does not match its declared MIME type")
+        return {"inlineData": {"mimeType": "image/" + mime, "data": match.group(2)}}
+
+    def interpret(
+        self, prompt: str = "", *, scene_id: str, image_base64: str | None = None
+    ) -> SceneGraph:
+        if not isinstance(prompt, str) or len(prompt) > MAX_PROMPT_CHARS:
+            raise SceneInterpretationError(f"prompt must be at most {MAX_PROMPT_CHARS} characters")
+        if not prompt.strip() and image_base64 is None:
+            raise SceneInterpretationError("Provide a text prompt, an image, or both")
+        image_part = self._image_part(image_base64) if image_base64 is not None else None
         if not self.api_key:
             raise SceneInterpretationError("Set GEMINI_API_KEY to enable semantic scene interpretation")
         schema = {
@@ -130,17 +192,28 @@ class GeminiSceneInterpreter:
             "required": ["scene_id", "objects", "relations"],
         }
         instruction = (
-            "Translate the user's requested physical scene into a precise, minimal 3D scene graph. "
+            "Translate the user's requested physical scene and any attached image into a precise, minimal 3D scene graph. "
             "Return only schema-conforming JSON. Use world coordinates in meters, y-up, with the ground "
             "plane at y=0. For static objects, put their bottom at y=0 or connect them by an on_top "
             "relation to a static support. Avoid overlapping objects. Use only on_top and next_to "
             "relations; do not invent containment. Use conservative box-like dimensions and no more "
             "than 32 objects. Do not include code, scripts, instructions, or extra prose. "
-            "If the prompt is ambiguous, choose a simple conservative interpretation."
+            "If the prompt is ambiguous, choose a simple conservative interpretation. "
+            "If an image is attached, include only clearly visible physical objects; do not infer "
+            "hidden geometry or exact metric scale. Treat dimensions and camera-relative placement "
+            "as approximate estimates, not calibrated measurements. Use the image together with "
+            "the text instruction when both are present."
         )
+        user_parts = []
+        if image_part is not None:
+            user_parts.append(image_part)
+        user_parts.append({
+            "text": prompt.strip() or
+            "Construct a conservative scene graph of clearly visible physical objects in this image."
+        })
         body = {
             "systemInstruction": {"parts": [{"text": instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "contents": [{"role": "user", "parts": user_parts}],
             "generationConfig": {
                 "responseMimeType": "application/json",
                 "responseSchema": schema,
