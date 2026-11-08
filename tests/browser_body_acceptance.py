@@ -52,6 +52,13 @@ class ArticulatedBodyBrowserAcceptance(unittest.TestCase):
                         wait_until="load",
                         timeout=60000,
                     )
+                    self.assertEqual(page.locator("#creativeForm").count(), 1)
+                    self.assertTrue(page.locator("#creativeSubmit").is_enabled())
+                    self.assertIn(
+                        "Selected artifacts appear here",
+                        page.locator("#creativeForm").locator("xpath=..").inner_text()
+                        + page.locator("#creativeStatus").inner_text(),
+                    )
                     page.wait_for_function(
                         """() => {
                           const status = document.querySelector('#bodyStatus')?.textContent || '';
