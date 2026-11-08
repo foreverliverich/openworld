@@ -16,6 +16,17 @@ class EncoderDependencyError(RuntimeError):
     pass
 
 
+class SharedSpaceEmbedding:
+    """Aligned embedding for cross-modal comparison, outside ISCE latent slots."""
+
+    def __init__(self, modality: str, embedding: Sequence[float], shared_space: str):
+        self.modality = modality
+        self.embedding = tuple(float(v) for v in embedding)
+        self.shared_space = shared_space
+        if not self.embedding or not all(math.isfinite(v) for v in self.embedding):
+            raise LatentLanguageError("Shared-space embedding must be finite and non-empty")
+
+
 class HuggingFaceTextEncoder:
     """BERT-family mean-pooled text encoder with a 768-dimensional contract."""
 
@@ -79,6 +90,9 @@ class HuggingFaceCLIPImageEncoder:
         self.device = device
         self.encoder_id = f"hf:{model_id}"
 
+    def encode_aligned(self, payload: Any) -> SharedSpaceEmbedding:
+        return SharedSpaceEmbedding("image", self.encode(payload), self.shared_space)
+
     def encode(self, payload: Any) -> Sequence[float]:
         # Accept a PIL image or a path readable by PIL; raw bytes are not silently decoded.
         try:
@@ -121,6 +135,9 @@ class HuggingFaceCLIPTextEncoder:
         self.model = CLIPModel.from_pretrained(model_id).to(device).eval()
         self.device = device
         self.encoder_id = f"hf:{model_id}:text"
+
+    def encode_aligned(self, payload: Any) -> SharedSpaceEmbedding:
+        return SharedSpaceEmbedding("text", self.encode(payload), self.shared_space)
 
     def encode(self, payload: Any) -> Sequence[float]:
         if not isinstance(payload, str) or not payload.strip():
