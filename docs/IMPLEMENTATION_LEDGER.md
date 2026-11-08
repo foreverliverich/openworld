@@ -165,7 +165,7 @@ The new API integration test file is `tests/test_http_server.py`. The full suite
 
 The protected body requirement has moved from a backlog statement to a connected SDF morphogenesis implementation. The detailed record and run instructions are in [SOMATIC_CORE_IMPLEMENTATION.md](SOMATIC_CORE_IMPLEMENTATION.md).
 
-- chimera/somatic_kernel.py: server-side Gemini morphology generation; API key is never exposed to browser code; structured package and GLSL entry-point validation.
+- chimera/somatic_kernel.py: server-side Gemini morphology generation conditioned on the canonical current SDF/context; API key is never exposed to browser code; structured package and GLSL safety validation.
 - chimera/reality_engine.py: canonical SQLite somatic_morphology state containing the previous and current SDF, package metadata, iteration and morph start timestamp. Morph commits advance the world revision and append a hash-chained event.
 - chimera/http_server.py: state read, candidate generation and separate commit routes. The browser must compile/link the generated SDF before the durable commit is allowed.
 - web/somatic-core.js: WebGL2 raymarcher, A/B SDF blending, BioPBR noise/domain operators, diffusion/fur displacement, pores, subdermal variation, material IDs, soft-light SSS and AO.
