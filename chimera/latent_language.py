@@ -663,10 +663,29 @@ class GlobalWorkspace:
 
 
 @dataclass(frozen=True)
+class ISCEFeedback:
+    """Bounded observations fed into the next authoritative ISCE transition."""
+
+    novelty: float
+    prediction_error: float | None
+    modality_novelty: Mapping[str, float]
+
+    def __post_init__(self) -> None:
+        _unit(self.novelty, "feedback.novelty")
+        if self.prediction_error is not None:
+            _unit(self.prediction_error, "feedback.prediction_error")
+        for name, value in self.modality_novelty.items():
+            if name not in MODALITY_TO_SUBSPACE:
+                raise LatentLanguageError(f"Unknown feedback modality: {name}")
+            _unit(value, f"{name}.novelty")
+
+
+@dataclass(frozen=True)
 class CognitiveCycleResult:
     state: LatentState
     broadcast: WorkspaceBroadcast
     proposals: tuple[SpecialistProposal, ...]
+    feedback: ISCEFeedback
 
 
 class LatentLanguageCoordinator:
@@ -693,6 +712,7 @@ class LatentLanguageCoordinator:
             raise LatentLanguageError("max_specialist_workers must be positive")
         self.max_specialist_workers = max_specialist_workers
         self.state = LatentState.empty()
+        self._previous_cycle_vector: tuple[float, ...] | None = None
 
     def _run_specialists(self, state: LatentState, context: SpecialistContext):
         if not self.specialists:
@@ -713,6 +733,8 @@ class LatentLanguageCoordinator:
             raise LatentLanguageError("dt must be finite and positive")
         if organism_state is not None:
             self.state = project_isce_state(organism_state, timestamp=context.timestamp)
+        modality_novelty: dict[str, float] = {}
+        encoded_observations: list[EncodedObservation] = []
         for item in observations:
             encoded = self.encoders.encode(
                 str(item["modality"]), item["payload"],
@@ -720,7 +742,35 @@ class LatentLanguageCoordinator:
                 confidence=float(item.get("confidence", 1.0)),
                 source_id=str(item["source_id"]),
             )
+            subspace = MODALITY_TO_SUBSPACE[encoded.modality]
+            prior = self.state.subspaces[subspace]
+            prior_norm = math.sqrt(sum(value * value for value in prior))
+            new_norm = math.sqrt(sum(value * value for value in encoded.embedding))
+            novelty = 0.0 if new_norm == 0.0 else (
+                1.0 if prior_norm == 0.0 else max(0.0, min(1.0,
+                    0.5 * (1.0 - _cosine(prior, encoded.embedding))))
+            )
+            modality_novelty[encoded.modality] = max(
+                modality_novelty.get(encoded.modality, 0.0), novelty
+            )
+            encoded_observations.append(encoded)
             self.state = self.fusion.update(self.state, encoded)
+        prediction_error = None
+        if self.dynamics is not None:
+            if not getattr(self.dynamics, "trained", False):
+                raise LatentLanguageError("Configured morphogenetic dynamics must be trained")
+            if self._previous_cycle_vector is not None:
+                predicted = self.dynamics.evolve(self._previous_cycle_vector, dt=dt)
+                residual = [
+                    actual - expected
+                    for actual, expected in zip(self.state.vector, predicted)
+                ]
+                rms = math.sqrt(sum(value * value for value in residual) / len(residual))
+                prediction_error = max(0.0, min(1.0, rms / 2.0))
+        novelty_value = (
+            sum(modality_novelty.values()) / len(modality_novelty)
+            if modality_novelty else 0.0
+        )
         generated = self._run_specialists(self.state, context)
         for proposal in generated:
             if proposal.kind == "subspace_update":
@@ -753,7 +803,9 @@ class LatentLanguageCoordinator:
             if proposal.kind not in {"subspace_update", "intent", "memory_retrieval"}
         )
         broadcast = self.workspace.compete(self.state, proposals)
-        return CognitiveCycleResult(self.state, broadcast, proposals)
+        self._previous_cycle_vector = tuple(self.state.vector)
+        feedback = ISCEFeedback(novelty_value, prediction_error, modality_novelty)
+        return CognitiveCycleResult(self.state, broadcast, proposals, feedback)
 
 
 def _offsets():
