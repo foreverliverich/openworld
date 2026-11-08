@@ -8,6 +8,8 @@ from chimera.learned_dynamics import DynamicsTrainingError, TorchMorphogeneticDy
 from chimera.latent_language import (
     LATENT_DIMENSIONS, EncoderRegistry, LatentLanguageCoordinator, SpecialistContext,
 )
+from chimera.organism_kernel import OrganismKernel
+from chimera.reality_engine import RealityEngine, WorldConfig
 
 
 @unittest.skipUnless(importlib.util.find_spec("torch"), "optional PyTorch extra not installed")
@@ -43,11 +45,21 @@ class LearnedDynamicsTests(unittest.TestCase):
                 len(restored.evolve(trajectories[0][0], dt=0.02)),
                 LATENT_DIMENSIONS,
             )
-        coordinator = LatentLanguageCoordinator(EncoderRegistry(), dynamics=restored)
-        first = coordinator.cycle([], SpecialistContext(1.0, 0))
-        second = coordinator.cycle([], SpecialistContext(1.05, 0), dt=0.05)
-        self.assertIsNone(first.feedback.prediction_error)
-        self.assertIsNotNone(second.feedback.prediction_error)
+        with tempfile.TemporaryDirectory() as tmp:
+            world = RealityEngine(WorldConfig(database=os.path.join(tmp, "dynamics-isce.sqlite3")))
+            organism = OrganismKernel(world, "dynamics-integration")
+            coordinator = LatentLanguageCoordinator(EncoderRegistry(), dynamics=restored)
+            first = coordinator.cycle(
+                [], SpecialistContext(1.0, world.revision()),
+                organism_state=organism.state,
+            )
+            second = coordinator.cycle(
+                [], SpecialistContext(1.05, world.revision()), dt=0.05,
+                organism_state=organism.state,
+            )
+            self.assertIsNone(first.feedback.prediction_error)
+            self.assertIsNotNone(second.feedback.prediction_error)
+            world.close()
 
 
 if __name__ == "__main__":
