@@ -311,12 +311,15 @@ class SceneGraph:
             elif rel.relation == "next_to":
                 cp[0] = pp[0] + parent.size[0] / 2 + child.size[0] / 2 + rel.gap
             else:
-                if any(child.size[i] > parent.size[i] for i in range(3)):
-                    raise LatentLanguageError("Contained object exceeds container dimensions")
-                cp[:] = pp[:]
+                if any(child.size[i] + 2.0 * rel.gap > parent.size[i] for i in range(3)):
+                    raise LatentLanguageError("Contained object plus clearance exceeds container dimensions")
+                cp[0] = pp[0]
+                cp[1] = pp[1] - parent.size[1] / 2.0 + child.size[1] / 2.0 + rel.gap
+                cp[2] = pp[2]
             assigned.add(rel.subject)
         supported_by_relation = {
-            rel.subject for rel in self.relations if rel.relation in {"on_top", "inside"}
+            rel.subject for rel in self.relations
+            if rel.relation in {"on_top", "inside"} and not objects[rel.object].dynamic
         }
         for item in self.objects:
             if not item.dynamic:
