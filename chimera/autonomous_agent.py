@@ -156,5 +156,14 @@ class AutonomousWorldAgent:
             goal, "observe_and_consolidate", result.revision,
             {"entity_count": entity_count,
              "observed_revision": observation["revision"],
+             "sensory": {
+                 "visible_count": evidence.visible_count,
+                 "nearest_distance": evidence.nearest_distance,
+                 "proximity": evidence.proximity,
+                 "density": evidence.density,
+                 "salience": evidence.salience,
+                 "prediction_error": evidence.prediction_error,
+                 "novelty": evidence.novelty,
+             },
              "organism": self.organism.snapshot()},
         )
