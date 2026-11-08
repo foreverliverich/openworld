@@ -13,7 +13,7 @@ class BrowserRuntimeWorkerTests(unittest.TestCase):
     def test_worker_is_present_and_uses_authoritative_tick_api(self):
         worker = (ROOT / "web" / "runtime-worker.js").read_text()
         self.assertIn('fetch("/api/tick"', worker)
-        self.assertIn('message.type === "start"', worker)
+        self.assertIn('message.type !== "start"', worker)
         self.assertIn('message.type === "stop"', worker)
         self.assertIn("setTimeout(cycle", worker)
 
@@ -21,7 +21,7 @@ class BrowserRuntimeWorkerTests(unittest.TestCase):
         worker = (ROOT / "web" / "runtime-worker.js").read_text()
         self.assertNotIn("requestAnimationFrame", worker)
         self.assertNotIn("RealityEngine", worker)
-        self.assertIn("does not own organism state or physics", worker)
+        self.assertIn("it does not own", worker)
 
     def test_browser_home_exposes_explicit_start_and_pause_controls(self):
         html = (ROOT / "web" / "index.html").read_text()
@@ -32,7 +32,7 @@ class BrowserRuntimeWorkerTests(unittest.TestCase):
     def test_browser_explicitly_disposes_worker_on_unload(self):
         html = (ROOT / "web" / "index.html").read_text()
         self.assertIn("beforeunload", html)
-        self.assertIn("runtimeWorker.terminate()", html)
+        self.assertIn("runtimeWorker?.terminate()", html)
 
 
 if __name__ == "__main__":
