@@ -68,7 +68,7 @@ class ArticulatedBodyTests(unittest.TestCase):
         # one fixed substep must resolve the contact without tunnelling.
         result = self.engine.step(self.state, (0, 0.5, 0), dt=0.02)
         self.assertTrue(set(result.contacts).issubset(
-            {"foot_l", "foot_r", "shin_l", "shin_r"}
+            {segment.name for segment in self.engine.skeleton.segments}
         ))
         lowest = min(
             min(pose.start[1], pose.end[1]) - pose.radius
