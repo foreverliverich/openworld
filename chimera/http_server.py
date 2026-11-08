@@ -165,6 +165,8 @@ class ChimeraApplication:
             modality = item.get("modality")
             if modality not in {"text", "image", "audio", "sensor"}:
                 raise ValueError(f"Unsupported modality at observations[{index}]")
+            if not self.cognition.encoders.supports(modality):
+                raise ValueError(f"No configured {modality} encoder; configure its pretrained model/checkpoint first")
             source_id = item.get("source_id", f"{request_id}:{modality}:{index}")
             if not isinstance(source_id, str) or not source_id:
                 raise ValueError("observation source_id must be a non-empty string")
