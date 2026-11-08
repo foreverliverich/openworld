@@ -14,7 +14,11 @@ from .encoders import (
     HuggingFaceCLIPImageEncoder,
     HuggingFaceTextEncoder,
 )
-from .latent_language import CognitiveActionGateway, EncoderRegistry, LatentLanguageCoordinator
+from .latent_language import (
+    CognitiveActionGateway, CognitiveSpecialist, CreativeSpecialist, EmotionSpecialist,
+    EncoderRegistry, LatentLanguageCoordinator, MemorySpecialist, SocialSpecialist,
+    SpatialSpecialist, TemporalSpecialist,
+)
 from .latent_training import MultimodalProjectionModel
 from .learned_dynamics import TorchMorphogeneticDynamics
 from .ollama_specialist import OllamaReasoningSpecialist
@@ -76,13 +80,13 @@ def build_latent_language(
     specialists = None
     if ollama_model:
         specialists = (
-            __import__("chimera.latent_language", fromlist=["EmotionSpecialist"]).EmotionSpecialist(),
-            __import__("chimera.latent_language", fromlist=["CognitiveSpecialist"]).CognitiveSpecialist(),
-            __import__("chimera.latent_language", fromlist=["MemorySpecialist"]).MemorySpecialist(),
-            __import__("chimera.latent_language", fromlist=["SocialSpecialist"]).SocialSpecialist(),
-            __import__("chimera.latent_language", fromlist=["TemporalSpecialist"]).TemporalSpecialist(),
-            __import__("chimera.latent_language", fromlist=["SpatialSpecialist"]).SpatialSpecialist(),
-            __import__("chimera.latent_language", fromlist=["CreativeSpecialist"]).CreativeSpecialist(),
+            EmotionSpecialist(),
+            CognitiveSpecialist(),
+            MemorySpecialist(),
+            SocialSpecialist(),
+            TemporalSpecialist(),
+            SpatialSpecialist(),
+            CreativeSpecialist(),
             OllamaReasoningSpecialist(
                 ollama_model, base_url=ollama_base_url, timeout=ollama_timeout,
             ),
