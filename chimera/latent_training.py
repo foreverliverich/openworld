@@ -154,11 +154,17 @@ class MultimodalProjectionModel:
             raise AlignmentTrainingError("Text/image pairs must align and contain at least 2 rows")
         audio = None
         if "audio" in pairs:
+            if not self.audio_trained:
+                raise AlignmentTrainingError("Audio projection was not trained")
             audio = self._batch(pairs["audio"], 768, "audio")
             if audio.shape[0] != text.shape[0]:
                 raise AlignmentTrainingError("Audio pairs must align row-for-row with text")
         if epochs < 1 or batch_size < 2 or learning_rate <= 0 or temperature <= 0:
             raise AlignmentTrainingError("Invalid alignment training hyperparameters")
+        self.trained = False
+        self.audio_trained = False
+        self.validated = False
+        self.validated_modalities.clear()
         parameters = (
             list(self.text_projection.parameters()) +
             list(self.image_projection.parameters()) +
