@@ -86,6 +86,13 @@ class OllamaCreativeSpecialistTests(unittest.TestCase):
         self.assertEqual(proposals, ())
         self.assertIn("unsupported artifact_type", specialist.last_error)
 
+    def test_rejects_unrecognized_tool_or_action_fields(self):
+        invalid = dict(self.output)
+        invalid["tool"] = "world_builder"
+        invalid["action"] = "create_structure"
+        with self.assertRaises(OllamaCreativeError):
+            OllamaCreativeSpecialist._validate_output(invalid)
+
     def test_output_bounds_reject_unbounded_generated_content(self):
         invalid = dict(self.output)
         invalid["elements"] = [
