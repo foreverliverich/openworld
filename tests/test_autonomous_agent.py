@@ -26,6 +26,7 @@ class AutonomousAgentTests(unittest.TestCase):
         first = self.agent.step()
         self.assertEqual(first.goal, "create_shelter")
         self.assertEqual(first.action, "construct_structure")
+        self.assertTrue(first.action_id)
         self.assertEqual(first.result["part_count"], 6)
         self.assertIn("first_shelter", {
             e.metadata.get("structure_name") for e in self.world.entities()
@@ -39,6 +40,9 @@ class AutonomousAgentTests(unittest.TestCase):
         self.assertEqual(third.goal, "inspect_world_and_consolidate_memory")
         self.assertEqual(third.action, "observe_and_consolidate")
         self.assertGreater(self.organism.state.self_model.memory_strength, 0.0)
+        self.assertIn("sensory", third.result)
+        self.assertGreaterEqual(third.result["sensory"]["salience"], 0.0)
+        self.assertTrue(self.organism.state.self_model.last_outcome.startswith("sense1:"))
         self.assertTrue(self.world.verify_event_chain())
 
     def test_agent_recovers_when_energy_is_low(self):

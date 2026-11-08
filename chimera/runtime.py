@@ -64,6 +64,7 @@ class AutonomousRuntime:
             agent_result={
                 "goal": agent_result.goal,
                 "action": agent_result.action,
+                "action_id": agent_result.action_id,
                 "revision": agent_result.world_revision,
                 "result": agent_result.result,
             },

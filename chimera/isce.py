@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Mapping, Optional, Tuple
 
 SCHEMA_VERSION = 1
-KERNEL_VERSION = "0.1.0"
+KERNEL_VERSION = "0.2.0"
 
 
 class ISCEError(ValueError):
@@ -249,6 +249,7 @@ class TransitionInput:
     resting: bool = False
     outcome: Optional[str] = None
     measured_work_units: float = 0.0
+    sensory_salience: float = 0.0
 
     def validate(self) -> None:
         dt = _finite("dt", self.dt)
@@ -259,7 +260,7 @@ class TransitionInput:
         if _finite("measured_work_units", self.measured_work_units) < 0:
             raise ISCEError("measured_work_units cannot be negative")
         for name in (
-            "mechanical_strain", "prediction_error", "novelty", "action_success",
+            "mechanical_strain", "prediction_error", "novelty", "sensory_salience", "action_success",
             "environmental_energy", "environmental_stress",
             "environmental_memory", "environmental_cohesion",
         ):
@@ -423,8 +424,9 @@ class ISCEKernel:
             + (graph_input["self_model"] - sm.confidence) * 0.01
         )
         urgency = _clamp(
-            0.65 * a.urgency + 0.33 * (stress + allostatic_error * 0.25)
+            0.60 * a.urgency + 0.30 * (stress + allostatic_error * 0.25)
             + 0.02 * graph_input["attention"]
+            + 0.08 * inputs.sensory_salience
         )
         focus = _clamp(
             0.7 * a.focus + 0.3 * (urgency * 0.6 + precision * 0.4)

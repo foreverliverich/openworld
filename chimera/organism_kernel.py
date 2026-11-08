@@ -10,7 +10,7 @@ import math
 from typing import Optional
 
 from .isce import (
-    AttentionState, BodyState, ISCEKernel, InteroceptiveState,
+    AttentionState, BodyState, ISCEKernel, InteroceptiveState, KERNEL_VERSION,
     OrganismState as ISCEOrganismState, ResourceState, SelfModelState,
     SensorimotorState, TemporalState, TransitionInput,
 )
@@ -132,6 +132,10 @@ class OrganismKernel:
         resting: bool = False,
         expected_revision: Optional[int] = None,
         measured_work_units: float = 0.0,
+        action_success: float = 0.5,
+        sensory_salience: float = 0.0,
+        causation_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> WorldResult:
         position = self.state.position
         local = self.world.field_at(position)
@@ -148,6 +152,8 @@ class OrganismKernel:
             resting=resting,
             outcome=outcome,
             measured_work_units=measured_work_units,
+            action_success=action_success,
+            sensory_salience=sensory_salience,
         )
         transition = self.kernel.transition(self.state, transition_input)
         next_state = transition.state
@@ -167,9 +173,45 @@ class OrganismKernel:
                 self.world.revision()
                 if expected_revision is None else expected_revision
             ),
+            causation_id=causation_id,
+            correlation_id=correlation_id,
         )
         # Publish the next in-memory state only after the durable transaction
         # commits. A failed optimistic write leaves the prior state authoritative.
+        self.state = next_state
+        self._migration_pending = False
+        return result
+
+    def commit_state(
+        self,
+        next_state: ISCEOrganismState,
+        *,
+        expected_revision: Optional[int] = None,
+        causation_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> WorldResult:
+        """Persist a previously computed ISCE transition without recomputing it."""
+        if not isinstance(next_state, ISCEOrganismState):
+            raise TypeError("next_state must be an ISCE OrganismState")
+        if next_state.organism_id != self.organism_id:
+            raise ValueError("Cannot commit state for a different organism")
+        if next_state.temporal.tick != self.state.temporal.tick + 1:
+            raise ValueError("Proposed ISCE state must advance exactly one tick")
+        field_values = {
+            "energy": next_state.body.energy,
+            "stress": next_state.body.stress,
+            "memory": next_state.self_model.memory_strength,
+            "cohesion": _unit(
+                next_state.body.integrity * (1.0 - 0.5 * next_state.body.fatigue)
+            ),
+        }
+        result = self.world.commit_organism_tick(
+            next_state.to_dict(), field_values, actor_id=self.organism_id,
+            expected_revision=(
+                self.world.revision() if expected_revision is None else expected_revision
+            ),
+            causation_id=causation_id, correlation_id=correlation_id,
+        )
         self.state = next_state
         self._migration_pending = False
         return result
@@ -202,7 +244,7 @@ class OrganismKernel:
             "organism": organism,
             "can_act": self.can_act,
             "world_revision": self.world.revision(),
-            "kernel_version": "isce/0.1.0",
+            "kernel_version": f"isce/{KERNEL_VERSION}",
             "migration_pending": self._migration_pending,
         }
 

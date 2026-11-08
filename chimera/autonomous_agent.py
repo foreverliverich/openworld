@@ -11,8 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .action_gateway import ActionProposal, OrganismActionGateway
 from .organism_kernel import OrganismKernel
 from .reality_engine import RealityEngine, WorldResult
+from .toolbox import ChimeraToolbox
+from .sensory import capture_sensory_evidence
 
 
 @dataclass(frozen=True)
@@ -21,6 +24,7 @@ class AgentStep:
     action: str
     world_revision: int
     result: dict[str, Any]
+    action_id: str | None = None
 
 
 class AutonomousWorldAgent:
@@ -31,6 +35,10 @@ class AutonomousWorldAgent:
         self.organism = organism
         if organism.world is not world:
             raise ValueError("Agent and organism kernel must share one RealityEngine")
+        self.toolbox = ChimeraToolbox(world, actor_id=organism.organism_id)
+        self.action_gateway = OrganismActionGateway(
+            world, organism, self.toolbox
+        )
 
     @staticmethod
     def _shelter_blueprint() -> dict[str, Any]:
@@ -98,34 +106,28 @@ class AutonomousWorldAgent:
         self.organism.set_goal(goal)
 
         if goal == "create_shelter":
-            result = self.world.create_structure(
-                self._shelter_blueprint(),
-                actor_id=self.organism.organism_id,
+            receipt = self.action_gateway.execute(ActionProposal(
+                tool="world_builder", action="create_structure",
+                arguments={"blueprint": self._shelter_blueprint()},
                 expected_revision=self.world.revision(),
+                expected_success=0.75, novelty=0.9,
+            ))
+            return AgentStep(
+                goal, "construct_structure", receipt.organism_revision,
+                receipt.result["details"], receipt.action_id,
             )
-            self.organism.tick(
-                dt=dt, action_energy_cost=0.12, mechanical_strain=0.35,
-                prediction_error=0.25, novelty=0.9,
-                outcome="shelter_committed",
-                expected_revision=result.revision,
-            )
-            return AgentStep(goal, "construct_structure",
-                             self.world.revision(), result.details)
 
         if goal == "create_workbench":
-            result = self.world.create_structure(
-                self._workbench_blueprint(),
-                actor_id=self.organism.organism_id,
+            receipt = self.action_gateway.execute(ActionProposal(
+                tool="world_builder", action="create_structure",
+                arguments={"blueprint": self._workbench_blueprint()},
                 expected_revision=self.world.revision(),
+                expected_success=0.8, novelty=0.65,
+            ))
+            return AgentStep(
+                goal, "construct_structure", receipt.organism_revision,
+                receipt.result["details"], receipt.action_id,
             )
-            self.organism.tick(
-                dt=dt, action_energy_cost=0.07, mechanical_strain=0.2,
-                prediction_error=0.2, novelty=0.65,
-                outcome="workbench_committed",
-                expected_revision=result.revision,
-            )
-            return AgentStep(goal, "construct_structure",
-                             self.world.revision(), result.details)
 
         if goal == "recover_and_regulate":
             result = self.organism.tick(
@@ -137,23 +139,32 @@ class AutonomousWorldAgent:
             return AgentStep(goal, "rest_regulation",
                              result.revision, result.details)
 
-        observation = self.world.observe(
-            center=self.organism.state.position, radius=20.0
+        evidence = capture_sensory_evidence(
+            self.world, self.organism.state.position, radius=20.0,
+            previous_token=self.organism.state.self_model.last_outcome,
         )
-        entity_count = observation["entity_count"]
-        # A deterministic surprise proxy for this baseline: a change in observed
-        # entity count relative to the organism's stored previous outcome.
-        previous = self.organism.state.self_model.last_outcome or ""
-        novelty = 0.15 if str(entity_count) not in previous else 0.02
+        observation = evidence.observation
+        entity_count = evidence.total_entity_count
         result = self.organism.tick(
             dt=dt, action_energy_cost=0.002, mechanical_strain=0.0,
-            prediction_error=0.08, novelty=novelty,
-            outcome=f"observed_entities:{entity_count}",
+            prediction_error=evidence.prediction_error, novelty=evidence.novelty,
+            sensory_salience=evidence.salience,
+            measured_work_units=0.25,
+            outcome=evidence.memory_token,
             expected_revision=observation["revision"],
         )
         return AgentStep(
             goal, "observe_and_consolidate", result.revision,
             {"entity_count": entity_count,
              "observed_revision": observation["revision"],
+             "sensory": {
+                 "visible_count": evidence.visible_count,
+                 "nearest_distance": evidence.nearest_distance,
+                 "proximity": evidence.proximity,
+                 "density": evidence.density,
+                 "salience": evidence.salience,
+                 "prediction_error": evidence.prediction_error,
+                 "novelty": evidence.novelty,
+             },
              "organism": self.organism.snapshot()},
         )
