@@ -28,7 +28,8 @@ class LearnedDynamicsTests(unittest.TestCase):
         with self.assertRaises(DynamicsTrainingError):
             model.evolve(trajectories[0][0])
         history = model.fit(
-            trajectories[:3], validation=trajectories[3:], epochs=2, batch_size=4
+            trajectories[:3], validation=trajectories[3:], epochs=2, batch_size=4,
+            sample_dt=0.04
         )
         self.assertEqual(len(history), 2)
         metrics = model.evaluate(trajectories[3:])
@@ -41,6 +42,7 @@ class LearnedDynamicsTests(unittest.TestCase):
             model.save_checkpoint(path)
             restored = TorchMorphogeneticDynamics(hidden_dim=32, seed=99)
             restored.load_checkpoint(path)
+            self.assertAlmostEqual(restored.training_dt, 0.04)
             self.assertEqual(
                 len(restored.evolve(trajectories[0][0], dt=0.02)),
                 LATENT_DIMENSIONS,
