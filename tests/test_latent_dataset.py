@@ -126,6 +126,17 @@ class LatentDatasetTests(unittest.TestCase):
         with self.assertRaises(LatentDatasetError):
             load_trajectory_sessions(self.path)
 
+    def test_dataset_rejects_metadata_tampering_even_when_latent_vector_is_unchanged(self):
+        self.append_session("metadata-tamper")
+        with open(self.path, "r", encoding="utf-8") as handle:
+            rows = [json.loads(line) for line in handle]
+        rows[0]["world_revision"] = 999999
+        with open(self.path, "w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row) + "\\n")
+        with self.assertRaises(LatentDatasetError):
+            load_trajectory_sessions(self.path)
+
     def test_dataset_requires_consistent_runtime_integration_step(self):
         self.append_session("dt-a", dt=0.05)
         self.append_session("dt-b", dt=0.04)
