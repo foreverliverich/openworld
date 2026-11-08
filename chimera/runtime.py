@@ -197,7 +197,7 @@ class AutonomousRuntime:
             "cognition": (
                 {
                     "latent_revision": self.cognition.state.revision,
-                    "latent_digest": self.cognition.state.digest(),
+                    "latent_digest": self.cognition.state.digest,
                     "workspace_tick": self.cognition.workspace.tick,
                     "latest": self._last_cognition_result,
                     "selected": [
