@@ -87,6 +87,7 @@ This PR supplies executable interfaces and first working baselines; the followin
 5. **Visual/audio sensor lifecycle:** browser capture, timestamp synchronization, worker ownership, permissions and durable sensor replay are not yet connected end-to-end.
 6. **Creative asset backends:** structured scene/concept artifacts are implemented; image diffusion, mesh generation, Blender execution/export and behavioral animation backends remain separate adapters.
 7. **Causal physiology experiments:** global-workspace and latent dynamics need CCPL intervention, sham, double-intervention and mediation batteries before any causal or consciousness-related interpretation.
-8. **Legacy baseline policy:** the existing deterministic autonomous agent remains in place for compatibility. Its legacy direct construction path is not yet migrated to the new proposal gateway; all new Latent Language world actions use the gateway.
+8. **Morphology decoder:** the learned vector field evolves the 2,464-D latent state; it does not yet decode that state into the 64-gene body representation, SomaticCore SDF, soft-tissue geometry or articulated-body morphology. SomaticKernel and articulated mechanics remain separate executable systems until a paired latent-to-morphology dataset and validated decoder are supplied.
+9. **Legacy baseline policy:** the existing deterministic autonomous agent remains in place for compatibility. Its legacy direct construction path is not yet migrated to the new proposal gateway; all new Latent Language world actions use the gateway.
 
 No component here establishes sentience or subjective experience. The evidence produced is software behavior, deterministic tests, model-training metrics and causal intervention results only.
