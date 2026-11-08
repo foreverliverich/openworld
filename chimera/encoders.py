@@ -91,6 +91,7 @@ class HuggingFaceCLIPImageEncoder:
         self.model = CLIPModel.from_pretrained(model_id).to(device).eval()
         self.device = device
         self.encoder_id = f"hf:{model_id}"
+        self.shared_space = f"hf-clip:{model_id}"
 
     def encode_aligned(self, payload: Any) -> SharedSpaceEmbedding:
         return SharedSpaceEmbedding("image", self.encode(payload), self.shared_space)
