@@ -167,6 +167,29 @@ class LatentDatasetTests(unittest.TestCase):
         self.assertEqual(len(record["modalities"]["image"]["training_embedding"]), 512)
         self.assertEqual(record["latent_state_digest"], result.state.digest)
 
+    def test_failed_dataset_append_does_not_publish_latent_cycle(self):
+        class FixedEncoder:
+            encoder_id = "text-v1"
+            def encode(self, payload):
+                return [0.1] * 768
+
+        class FailingRecorder:
+            def record(self, **kwargs):
+                raise LatentDatasetError("simulated durable append failure")
+
+        registry = EncoderRegistry()
+        registry.register("text", FixedEncoder())
+        coordinator = LatentLanguageCoordinator(
+            registry, trajectory_recorder=FailingRecorder(),
+        )
+        before = coordinator.state.digest
+        with self.assertRaises(LatentDatasetError):
+            coordinator.cycle(
+                [{"modality": "text", "payload": "test", "source_id": "test-source"}],
+                SpecialistContext(1.0, 0, text="test", source_refs=("test-source",)),
+            )
+        self.assertEqual(coordinator.state.digest, before)
+
     def test_registry_preserves_raw_audio_training_features(self):
         class AudioEncoder:
             encoder_id = "audio-runtime-projected"
