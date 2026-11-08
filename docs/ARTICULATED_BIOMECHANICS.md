@@ -51,7 +51,7 @@ Activation follows a first-order response with the segment's activation time con
 \tau_{capacity}=\tau_{max}\,a\,f_l(q)\,f_v(\dot q)\sqrt{E}
 \]
 
-The compliant tendon stage uses a stable first-order series-elastic response: tendon extension relaxes toward the muscle-torque/stiffness target with a 25 ms time constant, and transmitted torque is the spring term plus tendon damping. The model then integrates each enabled rotational component with semi-implicit Euler at internal steps no larger than 20 ms.
+The compliant tendon stage uses a stable first-order series-elastic response: tendon extension relaxes toward the muscle-torque/stiffness target with a 25 ms time constant, and transmitted torque is the spring term plus tendon damping. Joint-specific torque/gain envelopes and an 18 rad/s angular-speed ceiling prevent small distal segments from receiving physically implausible accelerations from a high torque-to-inertia ratio; speed saturation contributes to mechanical strain. The model then integrates each enabled rotational component with semi-implicit Euler at internal steps no larger than 20 ms.
 
 The generalized rotational coordinates are coupled through a dense articulated mass matrix. For every rigid segment, the solver computes each ancestor joint's linear and angular Jacobian columns at the segment centre of mass. Segment contributions are assembled as:
 
@@ -112,7 +112,7 @@ A failed RealityEngine optimistic commit still cannot publish the speculative ne
 
 ## 7. Required regression coverage
 
-`tests/test_biomechanics.py` covers tree validity, connected quaternion forward kinematics, 3-axis motor response, tendon compliance, per-axis limits, mass-matrix symmetry and inter-joint coupling, finite-difference Coriolis bias, gravity/ground contact, root translation, state round-trip, invalid commands/state rejection, sagittal-to-3D migration, and coupling of mechanical work/proprioception into ISCE physiology.
+`tests/test_biomechanics.py` covers tree validity, connected quaternion forward kinematics, 3-axis motor response, tendon compliance, per-axis limits and angular-speed saturation, mass-matrix symmetry and inter-joint coupling, finite-difference Coriolis bias, capsule/ground contact, root translation, state round-trip, invalid commands/state rejection, sagittal-to-3D migration, and coupling of mechanical work/proprioception into ISCE physiology.
 
 The existing organism-kernel persistence/restart tests also exercise the expanded ISCE payload through the same SQLite state row and event-chain contract.
 
