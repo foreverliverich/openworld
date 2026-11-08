@@ -855,10 +855,15 @@ class LatentLanguageCoordinator:
 
         generated = self._run_specialists(working_state, context)
         if self.alignment_model is not None:
+            validated_modalities = set(
+                getattr(self.alignment_model, "validated_modalities", ())
+            )
             aligned_modalities = {
                 name: [encoded_by_modality[name]]
                 for name in ("text", "image", "audio")
-                if name in encoded_by_modality and confidence_by_modality[name] > 0.0
+                if name in encoded_by_modality
+                and name in validated_modalities
+                and confidence_by_modality[name] > 0.0
             }
             if len(aligned_modalities) >= 2:
                 aligned = self.alignment_model.fuse_encoded_shared(
