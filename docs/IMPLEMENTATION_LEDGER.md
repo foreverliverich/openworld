@@ -336,3 +336,10 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
 - Integrated through `SomaticGPU.createRadixSorter()`; existing simulation API, 48-byte cell ABI, physics and audio path remain intact.
 - Added static source-contract tests and limitations documentation.
 - Known constraints: unstable ordering for equal depth keys; prefix scan is serial per bucket across workgroups and may bottleneck; all global key/index buffers must fit storage-binding limits; no splat draw pipeline; no actual browser/GPU validation or 5M benchmark yet.
+
+
+## 2026-11-08 — hierarchical radix prefix refinement
+- Replaced the single-workgroup serial per-bucket prefix loop with 256-group tiled local scans plus a compact block-prefix stage.
+- Added explicit maximum storage-buffer and workgroup-dispatch limit checks.
+- Preserves the existing histogram/scatter/ping-pong API and original SomaticCell ABI.
+- Still requires WGSL compilation and GPU benchmark; atomic local rank means equal-depth tie ordering is not stable.

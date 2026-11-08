@@ -3,7 +3,7 @@
  * No per-frame readback. The returned index buffer is consumed by a future
  * indexed/indirect splat renderer; this module does not draw splats.
  */
-const WG=256, RADIX=16, PASSES=8;
+const WG=256, RADIX=16, PASSES=8, GROUPS_PER_SCAN=256;
 const DEPTH_WGSL=String.raw\`
 struct SomaticCell { position: vec4<f32>, velocity: vec4<f32>, state: vec4<f32>, };
 struct DepthParams { view: mat4x4<f32>, count: u32, baseIndex: u32, _pad: vec2<u32>, };
@@ -36,21 +36,48 @@ fn main(@builtin(workgroup_id) wid:vec3<u32>,@builtin(local_invocation_index) li
   workgroupBarrier();
   if(lid<16u){histogram[wid.x*16u+lid]=atomicLoad(&bins[lid]);}
 }\`;
-const PREFIX_WGSL=String.raw\`
-struct Params { count:u32, groupCount:u32, bitShift:u32, _pad:u32, };
+const PREFIX_LOCAL_WGSL=String.raw\`
+struct Params { count:u32, groupCount:u32, blockCount:u32, _pad:u32, };
 @group(0) @binding(0) var<storage, read> histogram:array<u32>;
-@group(0) @binding(1) var<storage, read_write> offsets:array<u32>;
+@group(0) @binding(1) var<storage, read_write> localOffsets:array<u32>;
+@group(0) @binding(2) var<storage, read_write> blockSums:array<u32>;
+@group(0) @binding(3) var<uniform> params:Params;
+var<workgroup> scan:array<u32,256>;
+@compute @workgroup_size(256)
+fn main(@builtin(workgroup_id) wid:vec3<u32>,@builtin(local_invocation_index) lid:u32){
+  let bucket=wid.y;let block=wid.x;let group=block*256u+lid;
+  var value=0u;
+  if(group<params.groupCount){value=histogram[group*16u+bucket];}
+  scan[lid]=value;workgroupBarrier();
+  var offset=1u;
+  loop{
+    if(offset>=256u){break;}
+    var addend=0u;
+    if(lid>=offset){addend=scan[lid-offset];}
+    workgroupBarrier();
+    scan[lid]=scan[lid]+addend;
+    workgroupBarrier();
+    offset=offset*2u;
+  }
+  if(group<params.groupCount){localOffsets[group*16u+bucket]=scan[lid]-value;}
+  if(lid==255u){blockSums[block*16u+bucket]=scan[lid];}
+}\`;
+const PREFIX_BLOCKS_WGSL=String.raw\`
+struct Params { count:u32, groupCount:u32, blockCount:u32, _pad:u32, };
+@group(0) @binding(0) var<storage, read> blockSums:array<u32>;
+@group(0) @binding(1) var<storage, read_write> blockBases:array<u32>;
 @group(0) @binding(2) var<uniform> params:Params;
 @compute @workgroup_size(16)
 fn main(@builtin(global_invocation_id) gid:vec3<u32>){
   let bucket=gid.x;if(bucket>=16u){return;}
   var bucketBase=0u;
   for(var lower=0u;lower<bucket;lower++){
-    for(var g=0u;g<params.groupCount;g++){bucketBase+=histogram[g*16u+lower];}
+    for(var b=0u;b<params.blockCount;b++){bucketBase+=blockSums[b*16u+lower];}
   }
   var running=bucketBase;
-  for(var g=0u;g<params.groupCount;g++){
-    let slot=g*16u+bucket;offsets[slot]=running;running+=histogram[slot];
+  for(var b=0u;b<params.blockCount;b++){
+    blockBases[b*16u+bucket]=running;
+    running+=blockSums[b*16u+bucket];
   }
 }\`;
 const SCATTER_WGSL=String.raw\`
@@ -59,8 +86,9 @@ struct Params { count:u32, groupCount:u32, bitShift:u32, _pad:u32, };
 @group(0) @binding(1) var<storage, read> valuesIn:array<u32>;
 @group(0) @binding(2) var<storage, read_write> keysOut:array<u32>;
 @group(0) @binding(3) var<storage, read_write> valuesOut:array<u32>;
-@group(0) @binding(4) var<storage, read> offsets:array<u32>;
-@group(0) @binding(5) var<uniform> params:Params;
+@group(0) @binding(4) var<storage, read> localOffsets:array<u32>;
+@group(0) @binding(5) var<storage, read> blockBases:array<u32>;
+@group(0) @binding(6) var<uniform> params:Params;
 var<workgroup> bins:array<atomic<u32>,16>;
 @compute @workgroup_size(256)
 fn main(@builtin(workgroup_id) wid:vec3<u32>,@builtin(local_invocation_index) lid:u32){
@@ -73,7 +101,7 @@ fn main(@builtin(workgroup_id) wid:vec3<u32>,@builtin(local_invocation_index) li
   }
   workgroupBarrier();
   if(i<params.count){
-    let destination=offsets[wid.x*16u+bucket]+localRank;
+    let block=wid.x/256u;\n    let destination=blockBases[block*16u+bucket]+localOffsets[wid.x*16u+bucket]+localRank;
     keysOut[destination]=keysIn[i];valuesOut[destination]=valuesIn[i];
   }
 }\`;
@@ -92,21 +120,21 @@ export class SomaticRadixSorter {
     if(!device||!Array.isArray(pages)||!pages.length)throw new TypeError("device and non-empty Somatic pages are required");
     if(!Number.isSafeInteger(cellCount)||cellCount<1)throw new RangeError("cellCount must be positive");
     const bytes=cellCount*4,groupCount=Math.ceil(cellCount/WG),scratchBytes=groupCount*RADIX*4;
-    if(bytes>maxStorageBufferBindingSize||scratchBytes>maxStorageBufferBindingSize)
+    if(bytes>maxStorageBufferBindingSize||scratchBytes>maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize||scratchBytes>device.limits.maxBufferSize)
       throw new RangeError("Radix buffers exceed maxStorageBufferBindingSize; use a hierarchical multi-level sorter");
     let expected=0;
     for(const p of pages){if(p.offset!==expected||!Number.isSafeInteger(p.count)||p.count<1||!p.buffer)throw new Error("Somatic pages must be contiguous and ordered");expected+=p.count;}
     if(expected!==cellCount)throw new Error("Somatic page count does not match cellCount");
-    const modules=[DEPTH_WGSL,HIST_WGSL,PREFIX_WGSL,SCATTER_WGSL].map((code,i)=>device.createShaderModule({label:["Somatic depth keys","Somatic radix histogram","Somatic radix prefix","Somatic radix scatter"][i],code}));
+    const blockCount=Math.ceil(groupCount/GROUPS_PER_SCAN);\n    if(groupCount>device.limits.maxComputeWorkgroupsPerDimension)throw new RangeError("Radix dispatch exceeds maxComputeWorkgroupsPerDimension");\n    const modules=[DEPTH_WGSL,HIST_WGSL,PREFIX_LOCAL_WGSL,PREFIX_BLOCKS_WGSL,SCATTER_WGSL].map((code,i)=>device.createShaderModule({label:["Somatic depth keys","Somatic radix histogram","Somatic radix prefix","Somatic radix scatter"][i],code}));
     for(const m of modules){const info=await m.getCompilationInfo();const errors=info.messages.filter(x=>x.type==="error");if(errors.length)throw new Error(errors.map(x=>x.message).join("\\n"));}
     const pipelines=await Promise.all(modules.map((module,i)=>device.createComputePipelineAsync({layout:"auto",compute:{module,entryPoint:"main"}})));
-    const [depthPipeline,histPipeline,prefixPipeline,scatterPipeline]=pipelines;
+    const [depthPipeline,histPipeline,prefixLocalPipeline,prefixBlocksPipeline,scatterPipeline]=pipelines;
     const keysA=makeBuffer(device,"Somatic radix keys A",bytes);
     const keysB=makeBuffer(device,"Somatic radix keys B",bytes);
     const valuesA=makeBuffer(device,"Somatic radix indices A",bytes);
     const valuesB=makeBuffer(device,"Somatic radix indices B",bytes);
     const histogram=makeBuffer(device,"Somatic radix histogram",scratchBytes);
-    const offsets=makeBuffer(device,"Somatic radix offsets",scratchBytes);
+    const localOffsets=makeBuffer(device,"Somatic radix local offsets",scratchBytes);\n    const blockScratchBytes=blockCount*RADIX*4;\n    const blockSums=makeBuffer(device,"Somatic radix block sums",blockScratchBytes);\n    const blockBases=makeBuffer(device,"Somatic radix block bases",blockScratchBytes);
     const depthGroups=pages.map(p=>{
       const uniform=device.createBuffer({label:"Somatic depth camera/page params",size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
       const bindGroup=device.createBindGroup({layout:depthPipeline.getBindGroupLayout(0),entries:[
@@ -118,10 +146,16 @@ export class SomaticRadixSorter {
       return {page:p,uniform,bindGroup};
     });
     const prefixUniform=device.createBuffer({label:"Somatic radix prefix params",size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-    device.queue.writeBuffer(prefixUniform,0,new Uint32Array([cellCount,groupCount,0,0]));
-    const prefixGroup=device.createBindGroup({layout:prefixPipeline.getBindGroupLayout(0),entries:[
+    device.queue.writeBuffer(prefixUniform,0,new Uint32Array([cellCount,groupCount,blockCount,0]));
+    const prefixLocalGroup=device.createBindGroup({layout:prefixLocalPipeline.getBindGroupLayout(0),entries:[
       {binding:0,resource:{buffer:histogram,size:scratchBytes}},
-      {binding:1,resource:{buffer:offsets,size:scratchBytes}},
+      {binding:1,resource:{buffer:localOffsets,size:scratchBytes}},
+      {binding:2,resource:{buffer:blockSums,size:blockScratchBytes}},
+      {binding:3,resource:{buffer:prefixUniform}}
+    ]});
+    const prefixBlocksGroup=device.createBindGroup({layout:prefixBlocksPipeline.getBindGroupLayout(0),entries:[
+      {binding:0,resource:{buffer:blockSums,size:blockScratchBytes}},
+      {binding:1,resource:{buffer:blockBases,size:blockScratchBytes}},
       {binding:2,resource:{buffer:prefixUniform}}
     ]});
     const rounds=[];
@@ -164,8 +198,11 @@ export class SomaticRadixSorter {
       let pass=commandEncoder.beginComputePass({label:"Somatic radix histogram"});
       pass.setPipeline(this.histPipeline);pass.setBindGroup(0,round.histGroup);
       pass.dispatchWorkgroups(this.groupCount);pass.end();
-      pass=commandEncoder.beginComputePass({label:"Somatic radix prefix"});
-      pass.setPipeline(this.prefixPipeline);pass.setBindGroup(0,this.prefixGroup);
+      pass=commandEncoder.beginComputePass({label:"Somatic radix hierarchical local prefix"});
+      pass.setPipeline(this.prefixLocalPipeline);pass.setBindGroup(0,this.prefixLocalGroup);
+      pass.dispatchWorkgroups(this.blockCount,16);pass.end();
+      pass=commandEncoder.beginComputePass({label:"Somatic radix block prefix"});
+      pass.setPipeline(this.prefixBlocksPipeline);pass.setBindGroup(0,this.prefixBlocksGroup);
       pass.dispatchWorkgroups(1);pass.end();
       pass=commandEncoder.beginComputePass({label:"Somatic radix scatter"});
       pass.setPipeline(this.scatterPipeline);pass.setBindGroup(0,round.scatterGroup);
@@ -186,9 +223,9 @@ export class SomaticRadixSorter {
     for(const x of this.depthGroups){x.uniform.destroy();}
     this.prefixUniform.destroy();
     for(const x of this.rounds)x.uniform.destroy();
-    for(const b of [this.keysA,this.keysB,this.valuesA,this.valuesB,this.histogram,this.offsets])b.destroy();
+    for(const b of [this.keysA,this.keysB,this.valuesA,this.valuesB,this.histogram,this.localOffsets,this.blockSums,this.blockBases])b.destroy();
     this.disposed=true;
   }
 }
 export {DEPTH_WGSL as SOMATIC_SORT_DEPTH_WGSL,HIST_WGSL as SOMATIC_RADIX_HISTOGRAM_WGSL,
-  PREFIX_WGSL as SOMATIC_RADIX_PREFIX_WGSL,SCATTER_WGSL as SOMATIC_RADIX_SCATTER_WGSL};
+  PREFIX_LOCAL_WGSL as SOMATIC_RADIX_PREFIX_LOCAL_WGSL,PREFIX_BLOCKS_WGSL as SOMATIC_RADIX_PREFIX_BLOCKS_WGSL,SCATTER_WGSL as SOMATIC_RADIX_SCATTER_WGSL};

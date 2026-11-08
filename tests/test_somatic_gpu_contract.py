@@ -60,3 +60,12 @@ if __name__=="__main__":unittest.main()
   self.assertIn("Equal-depth ordering is not stable",s)
   self.assertIn("maxStorageBufferBindingSize",s)
   self.assertIn("this.valuesA",s)
+
+ def test_radix_prefix_is_hierarchical_and_bounded(self):
+  s=(ROOT/"web"/"somatic-gpu-sort.js").read_text()
+  self.assertIn("GROUPS_PER_SCAN=256",s)
+  self.assertIn("PREFIX_LOCAL_WGSL",s)
+  self.assertIn("PREFIX_BLOCKS_WGSL",s)
+  self.assertIn("localOffsets[group*16u+bucket]",s)
+  self.assertIn("blockBases[block*16u+bucket]",s)
+  self.assertIn("maxComputeWorkgroupsPerDimension",s)

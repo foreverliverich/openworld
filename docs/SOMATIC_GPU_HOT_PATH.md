@@ -103,3 +103,13 @@ ping-pong buffers plus about 2.5 MB of histogram/offset scratch. The
 original 48-byte particle ABI is unchanged. This produces an index buffer;
 a Gaussian splat draw pipeline and renderer integration are still separate
 work. No five-million-particle performance or watchdog claim is made.
+
+
+### Prefix-scan improvement
+
+The initial single-workgroup serial scan has been replaced with a hierarchical
+scan: each 256-group tile computes local exclusive prefixes in parallel,
+then a compact block-prefix stage computes bucket and tile bases. Scatter
+combines both levels. This removes the serial loop over every workgroup from
+the critical scatter-prefix path. Equal-key ordering remains intentionally
+unstable because local bucket ranks use atomics.
