@@ -329,3 +329,10 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
 - Uses finite nonnegative right-handed view depth and monotonic positive IEEE-754 bit ordering, inverted for far-to-near ascending uint sort.
 - Added static source-contract test and documented exact scope.
 - Not implemented: radix histograms, hierarchical prefix scan, stable local rank/scatter, ping-pong orchestration, splat draw pipeline, or five-million-element benchmark. User-provided scatter pseudocode is not accepted as complete because the required prefix-scan/rank stages are absent.
+
+
+## 2026-11-08 — first complete GPU radix-sort pipeline
+- Added `web/somatic-gpu-sort.js`: camera-space depth-key generation from existing SomaticGPU pages; eight 4-bit LSD passes; per-workgroup histograms; per-bucket/group prefix offsets; atomic local scatter; key/index ping-pong; sorted index GPU buffer output.
+- Integrated through `SomaticGPU.createRadixSorter()`; existing simulation API, 48-byte cell ABI, physics and audio path remain intact.
+- Added static source-contract tests and limitations documentation.
+- Known constraints: unstable ordering for equal depth keys; prefix scan is serial per bucket across workgroups and may bottleneck; all global key/index buffers must fit storage-binding limits; no splat draw pipeline; no actual browser/GPU validation or 5M benchmark yet.

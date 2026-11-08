@@ -75,3 +75,31 @@ buffers, build histograms, scan bucket offsets, or scatter. The complete
 stable radix pipeline remains unimplemented. The caller must supply a
 right-handed view matrix and matching storage buffers. Invalid/behind-camera
 depths receive key zero and therefore sort after visible far-to-near keys.
+
+
+## Gaussian radix sorting — first complete GPU sort path
+
+`web/somatic-gpu-sort.js` adds a GPU-resident 4-bit LSD radix pipeline over
+the existing SomaticGPU page buffers. It generates camera-space depth keys,
+then performs eight histogram → bucket-prefix → scatter rounds, ping-ponging
+key and original-index buffers. It returns the sorted original-index buffer
+without reading keys or indices back to the CPU. Access it from an existing
+simulation with `const sorter = await somatic.createRadixSorter()`, then call
+`sorter.sort(viewMatrix)` after each camera update.
+
+The implementation uses per-workgroup atomic bucket counters. This guarantees
+unique scatter destinations but does **not** preserve input order for equal
+keys; ties may be reordered. The prefix stage currently uses one 16-thread
+workgroup with a serial loop over all workgroups per bucket. That is simple
+and auditable for an initial implementation, but may become the bottleneck at
+large populations and should be replaced by a hierarchical scan after GPU
+benchmarking.
+
+The sorter allocates four full-size 32-bit arrays plus histogram/offset
+scratch. It checks storage-binding limits and fails explicitly if the
+population cannot fit; it does not yet implement multi-level paging of the
+sort arrays. At five million particles this is roughly 80 MB for key/index
+ping-pong buffers plus about 2.5 MB of histogram/offset scratch. The
+original 48-byte particle ABI is unchanged. This produces an index buffer;
+a Gaussian splat draw pipeline and renderer integration are still separate
+work. No five-million-particle performance or watchdog claim is made.

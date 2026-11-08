@@ -1,3 +1,5 @@
+import { SomaticRadixSorter } from "./somatic-gpu-sort.js";
+
 /* Somatic GPU hot path. The 48-byte ABI is three vec4<f32> values.
  * State is uploaded once, remains GPU-resident, and is paged to respect the
  * adapter's actual storage-binding limit. This is not zero-copy.
@@ -174,6 +176,10 @@ export class SomaticGPU {
     this.steps++;this.simulationTime+=dt;
     return{steps:this.steps,simulationTime:this.simulationTime,delta:dt,cells:this.cellCount,
       processedCells:budget,dispatches,cursor:this.cursor,rotationFrames:this.rotationFrames};
+  }
+  async createRadixSorter(){
+    if(this.disposed)throw new Error("SomaticGPU disposed");
+    return SomaticRadixSorter.create({device:this.device,pages:this.pages,cellCount:this.cellCount});
   }
   async readback(){
     if(this.disposed)throw new Error("SomaticGPU disposed");

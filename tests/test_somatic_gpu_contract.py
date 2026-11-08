@@ -49,3 +49,14 @@ if __name__=="__main__":unittest.main()
   self.assertIn("~bitcast<u32>(depth)",s)
   self.assertIn("keys[index] = key",s)
   self.assertIn("values[index] = index",s)
+
+ def test_radix_sorter_has_histogram_prefix_scatter_and_ping_pong(self):
+  s=(ROOT/"web"/"somatic-gpu-sort.js").read_text()
+  for term in ("HIST_WGSL","PREFIX_WGSL","SCATTER_WGSL","atomicAdd(&bins[bucket],1u)","bucketBase","keysOut[destination]","valuesOut[destination]","pass%2===0","PASSES=8"):
+   self.assertIn(term,s)
+  self.assertIn("createRadixSorter()",SOURCE.read_text())
+ def test_sorter_does_not_claim_stable_tie_order_or_zero_copy(self):
+  s=(ROOT/"web"/"somatic-gpu-sort.js").read_text()
+  self.assertIn("Equal-depth ordering is not stable",s)
+  self.assertIn("maxStorageBufferBindingSize",s)
+  self.assertIn("this.valuesA",s)
