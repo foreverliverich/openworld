@@ -3,7 +3,7 @@ import unittest
 
 from chimera.biomechanics import (
     ArticulatedBodyState, BiomechanicsEngine, BiomechanicsError,
-    SkeletonDefinition,
+    SkeletonDefinition, SegmentSpec,
 )
 from chimera.isce import ISCEKernel, OrganismState, TransitionInput
 
@@ -86,6 +86,54 @@ class ArticulatedBodyTests(unittest.TestCase):
                 min(pose.start[1], pose.end[1]) - pose.radius,
                 self.engine.ground_height - 1e-6,
             )
+
+    def test_nonadjacent_capsules_receive_self_collision_impulses(self):
+        skeleton = SkeletonDefinition("crossing-limbs-1", (
+            SegmentSpec(
+                "root", None, (0, 0, 0), (0, 1, 0), 0.1, 1.0, 0.05,
+                0.0, 1e-6, 1.0, 1.0, 1.0,
+            ),
+            SegmentSpec(
+                "arm_a", "root", (-0.15, 0, 0), (1, 0, 0), 0.3, 1.0, 0.08,
+                -1.0, 1.0, 10.0, 20.0, 2.0,
+                dof_mask=(False, False, True),
+                min_rotation_xyz=(0.0, 0.0, -1.0),
+                max_rotation_xyz=(0.0, 0.0, 1.0),
+            ),
+            SegmentSpec(
+                "arm_b", "root", (0, -0.15, 0), (0, 1, 0), 0.3, 1.0, 0.08,
+                -1.0, 1.0, 10.0, 20.0, 2.0,
+                dof_mask=(False, False, True),
+                min_rotation_xyz=(0.0, 0.0, -1.0),
+                max_rotation_xyz=(0.0, 0.0, 1.0),
+            ),
+        ))
+        engine = BiomechanicsEngine(skeleton)
+        state = ArticulatedBodyState.neutral(skeleton)
+        initial = {pose.name: pose for pose in engine.forward_kinematics((0, 2, 0), state)}
+        point_a, point_b = engine._closest_points_on_segments(
+            initial["arm_a"].start, initial["arm_a"].end,
+            initial["arm_b"].start, initial["arm_b"].end,
+        )
+        initial_gap = (
+            sum((point_a[i] - point_b[i]) ** 2 for i in range(3)) ** 0.5
+            - initial["arm_a"].radius - initial["arm_b"].radius
+        )
+        self.assertLess(initial_gap, 0.0)
+
+        result = engine.step(state, (0, 2, 0), dt=0.02)
+        final = {pose.name: pose for pose in result.poses}
+        point_a, point_b = engine._closest_points_on_segments(
+            final["arm_a"].start, final["arm_a"].end,
+            final["arm_b"].start, final["arm_b"].end,
+        )
+        final_gap = (
+            sum((point_a[i] - point_b[i]) ** 2 for i in range(3)) ** 0.5
+            - final["arm_a"].radius - final["arm_b"].radius
+        )
+        self.assertGreater(final_gap, initial_gap)
+        joints = {joint.name: joint for joint in result.state.joints}
+        self.assertGreater(abs(joints["arm_b"].angular_velocity_xyz[2]), 0.0)
 
     def test_root_translation_is_part_of_the_coupled_mass_matrix(self):
         layout = self.engine._dof_layout()
