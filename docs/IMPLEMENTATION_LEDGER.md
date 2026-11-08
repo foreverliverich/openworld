@@ -234,3 +234,14 @@ Added web/runtime-worker.js and explicit Run organism / Pause controls to web/in
 **Verification:** GitHub Actions run 42511589801 passed 100 Python 3.11 standard-library tests in 5.810 seconds. This includes the CCPL, action-gateway, sensory adapter, browser-worker wiring and existing project regressions. Actual browser/WebGL2 execution remains unverified.
 
 Details: BROWSER_WORKER_LIFECYCLE.md.
+
+
+## Durable action-to-organism causal links — 2026-11-08
+
+The action gateway now carries the RealityEngine action_id into the following ISCE organism-tick event as causation_id and correlation_id. RealityEngine stores these references in the existing hash-chained event payload; AgentStep and RuntimeFrame expose the originating action_id. This creates an auditable link between an external world mutation and the organism's measured outcome update without adding a second event store or changing the database schema.
+
+The world action and organism update remain sequential transactions. The causal link makes a partial failure detectable; it does not make the pair atomic and does not auto-replay the committed world action.
+
+**Verification:** GitHub Actions run 42511781699 passed 100 Python 3.11 standard-library tests in 5.792 seconds. The action gateway test verifies that the organism-tick event causation_id/correlation_id match the preceding world action_id, while the event hash chain remains valid. The autonomous-agent regression verifies action IDs are preserved through AgentStep.
+
+Details: CAUSAL_ACTION_LINKS.md.
