@@ -74,7 +74,22 @@ class SegmentSpec:
         object.__setattr__(self, "offset", _vec3("segment offset", self.offset))
         object.__setattr__(self, "direction", _vec3("segment direction", self.direction))
         object.__setattr__(self, "axis", _vec3("joint axis", self.axis))
-        for key in ("length", "mass", "radius", "torque_limit", "kp", "kd"):
+        mask = tuple(bool(v) for v in self.dof_mask)
+        if len(mask) != 3:
+            raise BiomechanicsError("dof_mask must contain three axis flags")
+        object.__setattr__(self, "dof_mask", mask)
+        low = self.min_rotation_xyz or (self.min_angle, 0.0, 0.0)
+        high = self.max_rotation_xyz or (self.max_angle, 0.0, 0.0)
+        low, high = _vec3("minimum joint rotation", low), _vec3("maximum joint rotation", high)
+        for axis_index, enabled in enumerate(mask):
+            if low[axis_index] > high[axis_index]:
+                raise BiomechanicsError("Joint rotation lower limit must not exceed upper limit")
+            if not enabled and (abs(low[axis_index]) > 1e-9 or abs(high[axis_index]) > 1e-9):
+                raise BiomechanicsError("Disabled joint axes must have zero limits")
+        object.__setattr__(self, "min_rotation_xyz", low)
+        object.__setattr__(self, "max_rotation_xyz", high)
+        for key in ("length", "mass", "radius", "torque_limit", "kp", "kd",
+                    "tendon_stiffness", "tendon_damping", "activation_tau"):
             value = _finite(key, getattr(self, key))
             if value <= 0:
                 raise BiomechanicsError(f"{key} must be positive")
