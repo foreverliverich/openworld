@@ -18,7 +18,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   if(index>=arrayLength(&keys)||index>=arrayLength(&values)){return;}
   let viewPosition=params.view*vec4<f32>(cells[gid.x].position.xyz,1.0);
   let depth=-viewPosition.z;
-  var key=0u;
+  var key=0xFFFFFFFFu;
   if(depth>=0.0 && depth<=3.402823e+38){key=~bitcast<u32>(depth);}
   keys[index]=key;values[index]=index;
 }\`;
