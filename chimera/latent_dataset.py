@@ -85,6 +85,11 @@ class LatentTrajectoryRecorder:
         sample_dt = float(sample_dt)
         if not math.isfinite(sample_dt) or not 0 < sample_dt <= 0.25:
             raise LatentDatasetError("sample_dt must be finite and in (0, 0.25]")
+        if isinstance(sample_dt, bool) or not isinstance(sample_dt, (int, float)):
+            raise LatentDatasetError("sample_dt must be numeric")
+        sample_dt = float(sample_dt)
+        if not math.isfinite(sample_dt) or not 0 < sample_dt <= 1.0:
+            raise LatentDatasetError("sample_dt must be finite and in (0, 1]")
         if isinstance(world_revision, bool) or not isinstance(world_revision, int) or world_revision < 0:
             raise LatentDatasetError("world_revision must be a non-negative integer")
         if not isinstance(alignment_pair, bool):
