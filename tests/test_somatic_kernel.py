@@ -35,6 +35,23 @@ class SomaticKernelValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate_package(value)
 
+    def test_rejects_unbounded_shader_loop(self):
+        value = package()
+        value["sdfScript"] = "vec2 map_object(vec3 p) { while(true) { p.x += 1.0; } return vec2(length(p), 1.0); }"
+        with self.assertRaises(ValueError):
+            _validate_package(value)
+
+    def test_rejects_non_constant_loop_bound(self):
+        value = package()
+        value["sdfScript"] = "vec2 map_object(vec3 p) { for(int i=0;i<MAX_STEPS;i++){p.x+=0.0;} return vec2(length(p),1.0); }"
+        with self.assertRaises(ValueError):
+            _validate_package(value)
+
+    def test_accepts_bounded_shader_loop(self):
+        value = package()
+        value["sdfScript"] = "vec2 map_object(vec3 p) { for(int i=0;i<5;i++){p.x+=0.001;} return vec2(length(p)-1.0,1.0); }"
+        self.assertEqual(_validate_package(value)["label"], "Wolf")
+
     def test_rejects_shader_entrypoint(self):
         value = package()
         value["sdfScript"] = "vec2 map_object(vec3 p) { void main() {} return vec2(1.); }"
