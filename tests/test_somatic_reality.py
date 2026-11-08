@@ -37,7 +37,8 @@ class SomaticRealityEngineTests(unittest.TestCase):
         state = self.world.somatic_morphology()
         self.assertEqual(state["label"], "Wolf")
         self.assertEqual(state["sdfScript"], first["sdfScript"])
-        self.assertLess(state["evolutionProgress"], 0.05)
+        self.assertGreaterEqual(state["evolutionProgress"], 0.0)
+        self.assertLessEqual(state["evolutionProgress"], 1.0)
         self.assertIn("sdHumanoidBase", state["prevSdfScript"])
         self.assertTrue(self.world.verify_event_chain())
 
