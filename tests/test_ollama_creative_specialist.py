@@ -20,8 +20,8 @@ class FakeResponse:
     def __exit__(self, *args):
         return False
 
-    def read(self):
-        return self.payload
+    def read(self, size=-1):
+        return self.payload if size < 0 else self.payload[:size]
 
 
 def response(content):
@@ -92,6 +92,20 @@ class OllamaCreativeSpecialistTests(unittest.TestCase):
         invalid["action"] = "create_structure"
         with self.assertRaises(OllamaCreativeError):
             OllamaCreativeSpecialist._validate_output(invalid)
+
+    @patch("chimera.ollama_creative_specialist.urllib.request.urlopen")
+    def test_oversized_provider_response_is_rejected(self, urlopen):
+        class OversizedResponse(FakeResponse):
+            def read(self, size=-1):
+                return b"x" * (size + 1)
+        urlopen.return_value = OversizedResponse({})
+        specialist = OllamaCreativeSpecialist("qwen2.5:7b")
+        proposals = specialist.propose(
+            LatentState.empty(),
+            SpecialistContext(1.0, 0, text="Design a character."),
+        )
+        self.assertEqual(proposals, ())
+        self.assertIn("32 KiB limit", specialist.last_error)
 
     def test_output_bounds_reject_unbounded_generated_content(self):
         invalid = dict(self.output)
