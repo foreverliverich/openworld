@@ -87,6 +87,42 @@ class ArticulatedBodyTests(unittest.TestCase):
                 self.engine.ground_height - 1e-6,
             )
 
+    def test_root_translation_is_part_of_the_coupled_mass_matrix(self):
+        layout = self.engine._dof_layout()
+        self.assertEqual(layout[:3], (
+            ("__root__", 0), ("__root__", 1), ("__root__", 2)
+        ))
+        mass, _ = self.engine._mass_matrix_and_gravity(
+            (0, 1, 0), self.state, layout
+        )
+        total_mass = sum(segment.mass for segment in self.engine.skeleton.segments)
+        for axis in range(3):
+            self.assertAlmostEqual(mass[axis][axis], total_mass, places=5)
+        # Translation and articulation share one kinetic-energy matrix; a
+        # torso rotation therefore has a non-zero root-translation cross term.
+        spine_x = layout.index(("spine", 0))
+        root_z = layout.index(("__root__", 2))
+        self.assertGreater(abs(mass[root_z][spine_x]), 1e-6)
+
+    def test_ground_contacts_apply_normal_and_friction_impulses(self):
+        moving = ArticulatedBodyState(
+            joints=self.state.joints,
+            root_velocity=(2.0, -2.0, 0.0),
+        )
+        result = self.engine.step(moving, (0, 1, 0), dt=0.02)
+        self.assertTrue(result.contacts)
+        self.assertGreaterEqual(result.state.root_velocity[1], -1e-5)
+        self.assertLess(abs(result.state.root_velocity[0]), 2.0)
+
+    def test_separated_body_does_not_receive_ground_friction_impulse(self):
+        moving = ArticulatedBodyState(
+            joints=self.state.joints,
+            root_velocity=(2.0, 0.0, 0.0),
+        )
+        result = self.engine.step(moving, (0, 4, 0), dt=0.02)
+        self.assertFalse(result.contacts)
+        self.assertAlmostEqual(result.state.root_velocity[0], 2.0, places=6)
+
     def test_root_acceleration_integrates_world_translation(self):
         result = self.engine.step(
             self.state, (0, 4, 0), dt=0.2,
