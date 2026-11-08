@@ -100,6 +100,8 @@ class TorchMorphogeneticDynamics:
         self._tensor_sequences(validation)
         torch = self.torch
         x, y = self._tensor_sequences(trajectories)
+        self.trained = False
+        self.validated = False
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=learning_rate, weight_decay=1e-5
         )
