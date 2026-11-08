@@ -76,6 +76,33 @@ python -m unittest discover -s tests -v
 
 The acceptance suite checks dimensions, provenance, confidence fusion, stale-observation rejection, scene-graph geometry, workspace capacity, proposal mutation protection, ISCE resource admission, sensor calibration, runtime feedback and committed RealityEngine effects. A separate CI job installs CPU PyTorch and executes both learned-model training/evaluation suites.
 
+
+## Local HTTP runtime activation
+
+`chimera/latent_runtime.py` is the production model loader. The default HTTP app
+does not download models or pretend that untrained projections are ready. Enable
+it explicitly with `python -m pip install -r requirements-latent.txt` and
+`python -m chimera.http_server --enable-latent-language`. The loader installs
+BERT text and CLIP image encoders; it loads audio only when the supplied alignment
+checkpoint has a trained and validated audio projection. Optional validated
+alignment and dynamics checkpoints are supplied with `--alignment-checkpoint`
+and `--dynamics-checkpoint`. Checkpoints are bound to the exact configured
+pretrained encoder IDs and are rejected on mismatch.
+
+The local API accepts `POST /api/cognition` to queue text, image, audio and
+calibrated sensor observations plus an optional typed scene graph. The next
+`POST /api/tick` runs the cycle on the organism-owned clock and returns the
+global-workspace selected proposal IDs. `POST /api/cognition/execute` accepts
+only a proposal ID from the latest broadcast; it cannot execute rejected,
+modified, stale or non-world-action proposals. `GET /api/state` exposes the
+latest latent digest and selected proposal metadata.
+
+The API is loopback-only by default and has no authentication. Do not expose it
+to a network until authentication, origin/CSRF protection and a security review
+are implemented. The model loader does not download or fabricate project-trained
+checkpoints; those must be produced from real paired data using the training
+classes above.
+
 ## Explicit remaining gates
 
 This PR supplies executable interfaces and first working baselines; the following require additional data or infrastructure and are not represented as complete:
