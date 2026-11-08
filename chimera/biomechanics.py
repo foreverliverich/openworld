@@ -247,7 +247,11 @@ class ArticulatedBodyState:
         norm = math.sqrt(sum(value * value for value in orientation))
         if norm < 1e-12:
             raise BiomechanicsError("root_orientation quaternion norm cannot be zero")
-        object.__setattr__(self, "root_orientation", tuple(value / norm for value in orientation))
+        # Preserve already-normalized serialized quaternions byte-for-byte;
+        # repeated normalization otherwise introduces round-trip float drift.
+        if abs(norm - 1.0) > 1e-12:
+            orientation = tuple(value / norm for value in orientation)
+        object.__setattr__(self, "root_orientation", orientation)
         object.__setattr__(self, "root_angular_velocity", _vec3(
             "root_angular_velocity", self.root_angular_velocity
         ))
@@ -1276,7 +1280,8 @@ class BiomechanicsEngine:
             )
 
         root_velocity = tuple(
-            _clamp(constrained_velocity[dof_index[("__root__", axis)]], -12.0, 12.0)
+            0.0 if abs(constrained_velocity[dof_index[("__root__", axis)]]) < 1e-4
+            else _clamp(constrained_velocity[dof_index[("__root__", axis)]], -12.0, 12.0)
             for axis in range(3)
         )
         root_angular_velocity = tuple(
