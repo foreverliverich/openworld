@@ -343,3 +343,18 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
 - Added explicit maximum storage-buffer and workgroup-dispatch limit checks.
 - Preserves the existing histogram/scatter/ping-pong API and original SomaticCell ABI.
 - Still requires WGSL compilation and GPU benchmark; atomic local rank means equal-depth tie ordering is not stable.
+
+
+## Digital-cell integration gate — 2026-11-08
+
+- Added `chimera/digital_cell.py`: a small deterministic cell controller with
+  bounded energy/stress, leaky membrane potential, refractory gating, three
+  actions, reward-prediction memory and a pure transition into ISCE.
+- Added `tests/test_digital_cell.py` for state bounds, deterministic behavior,
+  action-memory updates, depleted-energy gating and ISCE tick coupling.
+- Added `docs/DIGITAL_CELL_EXPERIMENT.md` with scope and a paired adaptive /
+  frozen-memory / shuffled-outcome acceptance protocol.
+- This is an experiment seam, not a production cell population, gene-expression
+  system, tissue model or proof of learning. Environment observations are
+  supplied by the caller; no RealityEngine sensor or GPU coupling is claimed.
+- Verification is pending until the branch CI runs the new tests.
