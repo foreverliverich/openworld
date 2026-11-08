@@ -22,7 +22,7 @@ from .autonomous_agent import AutonomousWorldAgent, AgentStep
 from .runtime import AutonomousRuntime, RuntimeFrame
 from .toolbox import ChimeraToolbox, ToolboxError, ToolDefinition
 from .latent_language import (
-    CognitiveActionGateway, CognitiveCycleResult, CreativeSpecialist,
+    CognitiveActionGateway, CognitiveCycleResult, CreativeSpecialist, ISCEFeedback,
     EncodedObservation, EncoderRegistry, EmotionSpecialist, GlobalWorkspace,
     LatentLanguageCoordinator, LatentLanguageError, LatentState, MemoryRecord,
     MemorySpecialist, MultimodalFusion, SceneGraph, SceneObject, SocialSpecialist,
@@ -49,7 +49,7 @@ __all__ = [
     "ToolDefinition", "LatentLanguageCoordinator", "LatentLanguageError",
     "LatentState", "EncodedObservation", "EncoderRegistry", "MultimodalFusion",
     "GlobalWorkspace", "SpecialistContext", "SpecialistProposal",
-    "CognitiveCycleResult", "CognitiveActionGateway", "SceneGraph", "SceneObject",
+    "CognitiveCycleResult", "CognitiveActionGateway", "ISCEFeedback", "SceneGraph", "SceneObject",
     "SpatialRelation", "MemoryRecord", "EmotionSpecialist", "MemorySpecialist",
     "SocialSpecialist", "TemporalSpecialist", "SpatialSpecialist",
     "CreativeSpecialist", "project_isce_state", "EncoderDependencyError",
