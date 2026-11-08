@@ -21,6 +21,21 @@ from .isce import (
 from .autonomous_agent import AutonomousWorldAgent, AgentStep
 from .runtime import AutonomousRuntime, RuntimeFrame
 from .toolbox import ChimeraToolbox, ToolboxError, ToolDefinition
+from .latent_language import (
+    CognitiveActionGateway, CognitiveCycleResult, CreativeSpecialist, ISCEFeedback,
+    EncodedObservation, EncoderRegistry, EmotionSpecialist, GlobalWorkspace,
+    LatentLanguageCoordinator, LatentLanguageError, LatentState, MemoryRecord,
+    MemorySpecialist, MultimodalFusion, SceneGraph, SceneObject, SocialSpecialist,
+    SpatialRelation, SpatialSpecialist, SpecialistContext, SpecialistProposal,
+    TemporalSpecialist, project_isce_state,
+)
+from .encoders import (
+    CalibratedSensorEncoder, EncoderDependencyError, HuggingFaceAudioEncoder,
+    HuggingFaceCLIPImageEncoder, HuggingFaceCLIPTextEncoder,
+    HuggingFaceTextEncoder, SharedSpaceEmbedding,
+)
+from .latent_training import AlignmentTrainingError, MultimodalProjectionModel
+from .learned_dynamics import DynamicsTrainingError, TorchMorphogeneticDynamics
 
 __all__ = [
     "ActionType", "Entity", "InvalidWorldAction", "RealityEngine",
@@ -31,5 +46,16 @@ __all__ = [
     "SensorimotorState", "TemporalState", "SelfModelState", "AttentionState",
     "ResourceState", "AutonomousWorldAgent", "AgentStep",
     "AutonomousRuntime", "RuntimeFrame", "ChimeraToolbox", "ToolboxError",
-    "ToolDefinition",
+    "ToolDefinition", "LatentLanguageCoordinator", "LatentLanguageError",
+    "LatentState", "EncodedObservation", "EncoderRegistry", "MultimodalFusion",
+    "GlobalWorkspace", "SpecialistContext", "SpecialistProposal",
+    "CognitiveCycleResult", "CognitiveActionGateway", "ISCEFeedback", "SceneGraph", "SceneObject",
+    "SpatialRelation", "MemoryRecord", "EmotionSpecialist", "MemorySpecialist",
+    "SocialSpecialist", "TemporalSpecialist", "SpatialSpecialist",
+    "CreativeSpecialist", "project_isce_state", "EncoderDependencyError",
+    "HuggingFaceTextEncoder", "HuggingFaceCLIPImageEncoder",
+    "HuggingFaceCLIPTextEncoder", "HuggingFaceAudioEncoder",
+    "CalibratedSensorEncoder", "SharedSpaceEmbedding",
+    "AlignmentTrainingError", "MultimodalProjectionModel",
+    "DynamicsTrainingError", "TorchMorphogeneticDynamics",
 ]

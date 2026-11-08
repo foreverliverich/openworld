@@ -1,14 +1,13 @@
-"""Organism-owned autonomous runtime for the Chimera world.
+"""Organism-owned runtime with optional Latent Language cognition cycles.
 
-The runtime, not the renderer, owns simulation advancement. Each tick advances
-physics, runs one autonomous world decision, commits the organism's coupled
-physiology/cognitive state, and emits a grounded snapshot.
+The runtime owns the clock. ISCE owns intrinsic organism state; RealityEngine owns
+the external world. Latent Language is an ephemeral projection/workspace that
+produces proposals, and only its revision-checked gateway can commit those proposals.
 """
-
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Optional
 
 from .autonomous_agent import AutonomousWorldAgent
@@ -23,6 +22,7 @@ class RuntimeFrame:
     physics_result: dict[str, Any]
     agent_result: dict[str, Any]
     observation: dict[str, Any]
+    cognition_result: dict[str, Any] | None = None
 
 
 class AutonomousRuntime:
@@ -32,27 +32,107 @@ class AutonomousRuntime:
         agent: AutonomousWorldAgent,
         *,
         observer_radius: float = 24.0,
+        cognition: Any | None = None,
+        cognition_gateway: Any | None = None,
     ):
         if agent.world is not world:
             raise ValueError("Runtime and autonomous agent must share one world")
+        if cognition_gateway is not None and cognition is None:
+            raise ValueError("A cognition gateway requires a cognition coordinator")
+        if cognition_gateway is not None and cognition_gateway.workspace is not cognition.workspace:
+            raise ValueError("Cognition coordinator and action gateway must share one workspace")
+        if cognition_gateway is not None and cognition_gateway.organism is not agent.organism:
+            raise ValueError("Cognition gateway must use the runtime's authoritative ISCE organism")
         self.world = world
         self.agent = agent
         self.observer_radius = observer_radius
+        self.cognition = cognition
+        self.cognition_gateway = cognition_gateway
+        self._pending_cognition: list[tuple[list[dict[str, Any]], Any]] = []
+        self._pending_feedback: dict[str, float] = {}
+        self._last_cognition_result: dict[str, Any] | None = None
         self._tick = 0
         self._running = False
 
+    def queue_cognition_cycle(
+        self, observations: list[dict[str, Any]], context: Any
+    ) -> None:
+        """Queue real encoded sensor inputs for the next organism-owned tick."""
+        if self.cognition is None:
+            raise RuntimeError("No Latent Language coordinator is configured")
+        if not isinstance(observations, list):
+            raise ValueError("observations must be a list of modality payload records")
+        self._pending_cognition.append((list(observations), context))
+
+    def execute_cognitive_proposal(
+        self, proposal: Any, *, actor_id: str = "chimera"
+    ) -> dict[str, Any]:
+        """Commit a workspace-selected proposal through the sole cognitive gateway."""
+        if self.cognition_gateway is None:
+            raise RuntimeError("No governed cognitive action gateway is configured")
+        return self.cognition_gateway.execute(proposal, actor_id=actor_id)
+
+    def execute_selected_proposal(
+        self, proposal_id: str, *, actor_id: str = "chimera"
+    ) -> dict[str, Any]:
+        """Execute only a proposal selected in the latest global-workspace broadcast."""
+        if self.cognition is None or self.cognition.workspace.latest is None:
+            raise RuntimeError("No global-workspace broadcast is available")
+        if not isinstance(proposal_id, str) or not proposal_id:
+            raise ValueError("proposal_id must be a non-empty string")
+        proposal = next(
+            (item for item in self.cognition.workspace.latest.selected
+             if item.proposal_id == proposal_id),
+            None,
+        )
+        if proposal is None:
+            raise ValueError("proposal_id is not selected in the latest workspace broadcast")
+        return self.execute_cognitive_proposal(proposal, actor_id=actor_id)
+
     def tick(self) -> RuntimeFrame:
-        """Advance one complete physics → goal → action → learning cycle."""
+        """Advance physics, baseline policy, perception and one queued cognition cycle."""
         physics = self.world.step(
             actor_id="reality-runtime",
             expected_revision=self.world.revision(),
         )
-        agent_result = self.agent.step()
+        agent_result = self.agent.step(cognitive_feedback=self._pending_feedback)
+        self._pending_feedback = {}
         self._tick += 1
         organism_position = self.agent.organism.state.position
         observation = self.world.observe(
             center=organism_position, radius=self.observer_radius
         )
+        cognition_result = None
+        if self._pending_cognition:
+            observations, context = self._pending_cognition.pop(0)
+            context = replace(
+                context, world_revision=self.world.revision(),
+                timestamp=self.world.simulation_time(),
+            )
+            cycle = self.cognition.cycle(
+                observations, context, dt=self.world.config.fixed_dt,
+                organism_state=self.agent.organism.state,
+            )
+            cognition_result = {
+                "state_digest": cycle.state.digest,
+                "workspace_tick": cycle.broadcast.tick,
+                "selected": [
+                    {"proposal_id": p.proposal_id, "specialist": p.specialist,
+                     "kind": p.kind, "confidence": p.confidence,
+                     "world_revision": p.world_revision}
+                    for p in cycle.broadcast.selected
+                ],
+                "rejected_count": len(cycle.broadcast.rejected),
+                "feedback": {
+                    "novelty": cycle.feedback.novelty,
+                    "prediction_error": cycle.feedback.prediction_error,
+                    "modality_novelty": dict(cycle.feedback.modality_novelty),
+                },
+            }
+            self._pending_feedback = {"novelty": cycle.feedback.novelty}
+            if cycle.feedback.prediction_error is not None:
+                self._pending_feedback["prediction_error"] = cycle.feedback.prediction_error
+            self._last_cognition_result = cognition_result
         return RuntimeFrame(
             tick=self._tick,
             world_revision=observation["revision"],
@@ -68,6 +148,7 @@ class AutonomousRuntime:
                 "result": agent_result.result,
             },
             observation=observation,
+            cognition_result=cognition_result,
         )
 
     async def run(
@@ -108,5 +189,26 @@ class AutonomousRuntime:
             "observation": self.world.observe(
                 center=self.agent.organism.state.position,
                 radius=self.observer_radius,
+            ),
+            "cognition_workspace_tick": (
+                self.cognition.workspace.tick if self.cognition is not None else None
+            ),
+            "pending_cognitive_feedback": dict(self._pending_feedback),
+            "cognition": (
+                {
+                    "latent_revision": self.cognition.state.revision,
+                    "latent_digest": self.cognition.state.digest,
+                    "workspace_tick": self.cognition.workspace.tick,
+                    "latest": self._last_cognition_result,
+                    "selected": [
+                        {"proposal_id": item.proposal_id, "specialist": item.specialist,
+                         "kind": item.kind, "confidence": item.confidence}
+                        for item in (
+                            self.cognition.workspace.latest.selected
+                            if self.cognition.workspace.latest is not None else ()
+                        )
+                    ],
+                }
+                if self.cognition is not None else None
             ),
         }

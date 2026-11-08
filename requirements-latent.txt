@@ -1,0 +1,7 @@
+# Optional pretrained encoders and learned Latent Language 3.0 training.
+# Core Chimera remains standard-library Python; install this only for model training/inference.
+torch>=2.4,<3
+transformers>=4.45,<5
+Pillow>=10,<13
+numpy>=1.26
+safetensors>=0.4

@@ -139,6 +139,19 @@ Tool definitions are discoverable with `tools.manifest()`. Every mutation suppor
 python -m unittest discover -s tests -p "test_toolbox.py" -v
 ```
 
+## Latent Language 3.0 cognition
+
+The repository now includes an executable multimodal latent workspace, pretrained
+encoder adapters, specialist proposals, global-workspace arbitration, structured
+spatial composition, contrastive alignment training, and trainable morphogenetic
+dynamics. The latent vector is an ephemeral projection of ISCE—not a second
+organism-state owner—and world actions pass through a revision-checked gateway.
+
+See [docs/LATENT_LANGUAGE_3_IMPLEMENTATION.md](docs/LATENT_LANGUAGE_3_IMPLEMENTATION.md)
+for the exact 2,464-D schema, model setup, training/evaluation procedure, tests and
+remaining research gates. Optional model dependencies are listed in
+`requirements-latent.txt`; the core runtime remains standard-library Python.
+
 ## Autonomous organism runtime
 
 `OrganismKernel` is the first coupled organism-state mechanism. The local
@@ -264,6 +277,95 @@ implemented. Run the API integration tests with:
 python -m unittest discover -s tests -p "test_http_server.py" -v
 ```
 
+
+
+### Activate the Latent Language 3.0 runtime
+
+The local HTTP application can load real pretrained encoders and validated learned
+checkpoints. Core mode remains lightweight and does not download model weights.
+Install the optional model dependencies and explicitly enable the cognition runtime:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements-latent.txt
+python -m chimera.http_server \
+  --enable-latent-language \
+  --host 127.0.0.1 --port 8765 \
+  --database chimera_world.sqlite3
+```
+
+The first enabled launch loads the configured BERT text encoder and CLIP image
+encoder from Hugging Face. Supply validated checkpoints to activate learned
+cross-modal alignment and latent dynamics:
+
+```bash
+python -m chimera.http_server \
+  --enable-latent-language \
+  --alignment-checkpoint checkpoints/multimodal_alignment.pt \
+  --dynamics-checkpoint checkpoints/morphogenetic_dynamics.pt \
+  --device cpu
+```
+
+No project-trained checkpoints or paired training corpus are bundled. The
+alignment checkpoint must contain held-out validation for every modality it
+enables; the dynamics checkpoint must contain validated trajectory weights.
+Audio inference is enabled only when the alignment checkpoint includes a
+validated audio projection. A sensor encoder can be enabled with
+`--sensor-calibration` pointing to a JSON object containing 64 named
+`[low, high]` calibration ranges.
+
+Queue a cognitive cycle:
+
+```http
+POST /api/cognition
+Content-Type: application/json
+
+{
+  "text": "Build a small platform next to a marker",
+  "scene_graph": {
+    "scene_id": "test-platform",
+    "objects": [
+      {
+        "object_id": "platform",
+        "kind": "cube",
+        "position": [20, 0.5, 20],
+        "size": [2, 1, 2],
+        "dynamic": false
+      },
+      {
+        "object_id": "marker",
+        "kind": "cube",
+        "position": [22.2, 0.5, 20],
+        "size": [0.2, 0.2, 0.2],
+        "dynamic": true
+      }
+    ],
+    "relations": [
+      {"relation": "next_to", "subject": "marker", "object": "platform", "gap": 0.1}
+    ]
+  }
+}
+```
+
+Advance the organism-owned clock with `POST /api/tick` and inspect
+`frames[].cognition_result.selected`. Execute only a selected proposal with:
+
+```http
+POST /api/cognition/execute
+Content-Type: application/json
+
+{"proposal_id": "the-selected-proposal-id"}
+```
+
+The gateway checks workspace selection, proposal integrity, evidence, confidence,
+current world revision, toolbox allowlisting and ISCE resource reserve. It debits
+the bounded estimated cost before attempting the world mutation. An invalid
+world placement still consumes the estimate; this is deliberately conservative.
+The estimate is not measured CPU/GPU energy. Image observations accept
+`image_base64`; audio observations accept normalized mono float32 samples or
+little-endian `audio_f32_base64` plus `sampling_rate`. The HTTP body limit is
+12 MiB. Nested `inside` relations remain symbolic because the current primitive
+AABB world has no compound-mesh interior collision model.
 
 ## Somatic Core — SDF creature morphogenesis
 
