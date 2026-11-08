@@ -38,6 +38,7 @@ This implementation follows the uploaded *Engine of Latent Language 3.0: Continu
 - `chimera/runtime.py`: queues cognition work onto the organism-owned tick, projects the current ISCE state, exposes the shared action gateway, and feeds prior-cycle novelty/prediction error into the next ISCE transition.
 - Specialist calls run concurrently with deterministic result consolidation; latent and workspace maps are immutable snapshots.
 - Specialist implementations: emotion lexical baseline, explicit-intent baseline, read-only memory retrieval, social interaction metadata, temporal encoding, spatial scene composition and structured creative artifact generation.
+- `chimera/ollama_specialist.py`: optional local Ollama co-agent. It uses JSON-schema-constrained `/api/chat`, strict output bounds, exact source-quote validation and source-grounded entity extraction. It emits only an advisory `cognitive_reasoning` proposal; it cannot produce `world_action` or call tools.
 
 The specialist baselines are deliberately named as baselines. They are not substitutes for trained emotion/social models or a general-purpose reasoning model. The spatial composer validates ground/support constraints and compiles supported on-top/next-to placements into RealityEngine structures. Nested containment remains a symbolic creative relation because the current primitive AABB collision model has no compound-mesh interior semantics; the specialist reports that constraint instead of submitting an invalid world action. It does not claim to produce photorealistic assets or run Blender/3D diffusion.
 
@@ -123,3 +124,34 @@ This PR supplies executable interfaces and first working baselines; the followin
 9. **Legacy baseline policy:** the existing deterministic autonomous agent remains in place for compatibility. Its legacy direct construction path is not yet migrated to the new proposal gateway; all new Latent Language world actions use the gateway.
 
 No component here establishes sentience or subjective experience. The evidence produced is software behavior, deterministic tests, model-training metrics and causal intervention results only.
+
+
+## Optional local reasoning co-agent
+
+The default ensemble uses deterministic emotion/intent baselines. To add a real
+local instruction model as a further specialist, install Ollama, pull a model, and
+start the runtime with `--ollama-model <model-tag>`. Example:
+
+```bash
+ollama pull qwen2.5:3b
+python -m chimera.http_server --enable-latent-language --ollama-model qwen2.5:3b
+```
+
+The default endpoint is `http://127.0.0.1:11434`; use `--ollama-url` only for a
+trusted endpoint. Each cognition cycle invokes the specialist against the current
+text context. It asks for a constrained JSON object containing intent, neutral
+summary, proposed next information-gathering step, entities and an exact evidence
+quote. The parser rejects unsupported intent labels, oversized fields, ungrounded
+entity phrases and evidence that is not an exact substring of the user text.
+The resulting proposal enters the same deterministic global-workspace competition
+as the other specialists.
+
+This co-agent has advisory authority only. It cannot create a world-action
+proposal, choose toolbox names, supply executable code or mutate ISCE/RealityEngine.
+It does not replace the deterministic specialist baselines. Its confidence,
+salience and urgency are conservative fixed values, not calibrated model
+probabilities. Ollama latency and hardware energy are not yet included in the
+organism's measured metabolic budget; proposal estimated_cost is therefore zero
+and must not be interpreted as free computation. The endpoint can be configured
+to a non-loopback host, so deployment operators must secure that endpoint and
+must not expose the unauthenticated local Chimera HTTP API publicly.
