@@ -101,6 +101,25 @@ class LatentLanguageTests(unittest.TestCase):
         )
         with self.assertRaises(LatentLanguageError):
             bad.to_blueprint()
+        cyclic = SceneGraph(
+            "cycle",
+            (
+                SceneObject("a", "cube", (0, 0.5, 0), (0.5, 0.5, 0.5)),
+                SceneObject("b", "cube", (1, 0.5, 0), (0.5, 0.5, 0.5)),
+            ),
+            (
+                SpatialRelation("on_top", "a", "b"),
+                SpatialRelation("on_top", "b", "a"),
+            ),
+        )
+        with self.assertRaises(LatentLanguageError):
+            cyclic.to_blueprint()
+        unsupported = SceneGraph(
+            "unsupported",
+            (SceneObject("floating", "cube", (0, 3, 0), (1, 1, 1), dynamic=False),),
+        )
+        with self.assertRaises(LatentLanguageError):
+            unsupported.to_blueprint()
 
     def test_global_workspace_competes_deterministically_with_capacity(self):
         from chimera.latent_language import SpecialistProposal
