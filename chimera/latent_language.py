@@ -907,8 +907,33 @@ class CognitiveActionGateway:
             raise LatentLanguageError(
                 f"Stale proposal revision {proposal.world_revision}; world is {current_revision}"
             )
+        reserve_before = available_reserve
+        # Debit the estimated action cost before the world mutation. If the action
+        # subsequently fails, the attempt still consumes its estimated compute cost;
+        # the system never commits an action and then loses its resource charge.
+        charge_result = None
+        action_revision = current_revision
+        if proposal.estimated_cost > 0.0:
+            charge_result = self.organism.tick(
+                dt=self.toolbox.world.config.fixed_dt,
+                action_energy_cost=proposal.estimated_cost,
+                mechanical_strain=0.0,
+                prediction_error=0.0,
+                novelty=0.0,
+                outcome=f"cognitive_action_attempt:{proposal.specialist}",
+                expected_revision=current_revision,
+            )
+            action_revision = charge_result.revision
         payload = proposal.payload
-        return self.toolbox.execute(
+        result = self.toolbox.execute(
             str(payload["tool"]), str(payload["action"]), dict(payload["arguments"]),
-            actor_id=actor_id, expected_revision=current_revision,
+            actor_id=actor_id, expected_revision=action_revision,
         )
+        result["resource_charge"] = {
+            "estimated_cost": proposal.estimated_cost,
+            "reserve_before": reserve_before,
+            "reserve_after": self.organism.state.resources.reserve,
+            "charge_revision": action_revision if charge_result is not None else None,
+            "charged_before_action": charge_result is not None,
+        }
+        return result
