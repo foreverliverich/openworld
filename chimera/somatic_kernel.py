@@ -51,13 +51,13 @@ def _validate_package(package: Any) -> dict[str, Any]:
         raise ValueError("sdfScript must define vec2 map_object(vec3 p)")
     if any(token in script for token in ("#version", "void main", "gl_FragColor", "layout(")):
         raise ValueError("sdfScript contains a forbidden shader entry point or directive")
-    if re.search(r"\\b(while|do|uniform|struct|discard|texture\\w*|sampler\\w*|imageStore|atomic\\w*)\\b", script):
+    if re.search(r"\b(while|do|uniform|struct|discard|texture\w*|sampler\w*|imageStore|atomic\w*)\b", script):
         raise ValueError("sdfScript contains a forbidden unbounded or host-resource operation")
-    loops = re.findall(r"for\\s*\\(([^;]+);([^;]+);([^)]*)\\)", script)
-    if re.search(r"\\bfor\\s*\\(", script) and not loops:
+    loops = re.findall(r"for\s*\(([^;]+);([^;]+);([^)]*)\)", script)
+    if re.search(r"\bfor\s*\(", script) and not loops:
         raise ValueError("sdfScript contains a malformed or unsupported loop")
     for condition in (loop[1] for loop in loops):
-        bound = re.search(r"<\\s*(\\d+)", condition)
+        bound = re.search(r"<\s*(\d+)", condition)
         if not bound or int(bound.group(1)) > 32:
             raise ValueError("sdfScript loops must have a compile-time bound no greater than 32")
     color = package["color"]
