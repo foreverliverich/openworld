@@ -276,6 +276,6 @@ export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
 python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_world.sqlite3
 ```
 
-Open [http://127.0.0.1:8765/web/somatic.html](http://127.0.0.1:8765/web/somatic.html). The key is not exposed to browser JavaScript. The canonical previous/current SDF scripts and morph metadata are stored by RealityEngine and restored after reload. The old Body Forge toolbox action remains a legacy world-entity prototype API; it is not the Somatic Core body path.
+Open [http://127.0.0.1:8765/web/somatic.html](http://127.0.0.1:8765/web/somatic.html). The key is not exposed to browser JavaScript. The canonical previous/current SDF scripts and morph metadata are stored by RealityEngine and restored after reload. The interface also provides screenshot-conditioned auto-refinement with a hard ten-iteration cap; each candidate is compiled before its revision-checked commit. The old Body Forge toolbox action remains a legacy world-entity prototype API; it is not the Somatic Core body path.
 
 Implementation detail, transaction contract and open acceptance gates: [docs/SOMATIC_CORE_IMPLEMENTATION.md](docs/SOMATIC_CORE_IMPLEMENTATION.md). P0 is still in progress until the real WebGL2 T1–T7 suite has been repeatedly run and verified.
