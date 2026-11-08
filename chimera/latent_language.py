@@ -790,9 +790,11 @@ class LatentLanguageCoordinator:
             prior = self.state.subspaces[subspace]
             prior_norm = math.sqrt(sum(value * value for value in prior))
             new_norm = math.sqrt(sum(value * value for value in encoded.embedding))
-            novelty = 0.0 if new_norm == 0.0 else (
-                1.0 if prior_norm == 0.0 else max(0.0, min(1.0,
-                    0.5 * (1.0 - _cosine(prior, encoded.embedding))))
+            novelty = encoded.confidence * (
+                0.0 if new_norm == 0.0 else (
+                    1.0 if prior_norm == 0.0 else max(0.0, min(1.0,
+                        0.5 * (1.0 - _cosine(prior, encoded.embedding))))
+                )
             )
             modality_novelty[encoded.modality] = max(
                 modality_novelty.get(encoded.modality, 0.0), novelty
