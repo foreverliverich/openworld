@@ -59,7 +59,7 @@ Use paired, semantically corresponding encoder outputs. Rows must align: row i i
 - audio: 768-D Wav2Vec2 mean-pooled hidden states
 - optional audio: row-aligned with text/image
 
-The training class provides symmetric InfoNCE losses and an audio reconstruction constraint. Run `evaluate()` on a held-out split before using or checkpointing the audio compressor; retain recall@1, paired cosine and audio reconstruction metrics. The audio slot projection remains unavailable until paired audio training and held-out validation have both run. The repository does not include a fabricated dataset or claim that these weights have already been trained.
+The training class provides symmetric InfoNCE losses and an audio reconstruction constraint. Run `evaluate()` on a held-out split before using or checkpointing the audio compressor; retain recall@1, paired cosine and audio reconstruction metrics. The audio slot projection remains unavailable until paired audio training and held-out validation have both run. The repository does not include a project training corpus or claim that project weights have already been trained. Small synthetic tensors in the optional CI tests verify code paths only; they are not scientific training or validation evidence.
 
 ## Train morphogenetic dynamics
 
