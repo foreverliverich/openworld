@@ -204,6 +204,8 @@ class OllamaCreativeSpecialist:
             raise OllamaCreativeError(f"Ollama returned HTTP {exc.code}: {detail}") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise OllamaCreativeError(f"Cannot reach local Ollama service: {exc}") from exc
+        except UnicodeDecodeError as exc:
+            raise OllamaCreativeError("Ollama returned a non-UTF-8 response") from exc
         except json.JSONDecodeError as exc:
             raise OllamaCreativeError("Ollama returned invalid HTTP JSON") from exc
         try:
