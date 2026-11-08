@@ -10,7 +10,7 @@ import math
 from typing import Optional
 
 from .isce import (
-    AttentionState, BodyState, ISCEKernel, InteroceptiveState,
+    AttentionState, BodyState, ISCEKernel, InteroceptiveState, KERNEL_VERSION,
     OrganismState as ISCEOrganismState, ResourceState, SelfModelState,
     SensorimotorState, TemporalState, TransitionInput,
 )
@@ -133,6 +133,7 @@ class OrganismKernel:
         expected_revision: Optional[int] = None,
         measured_work_units: float = 0.0,
         action_success: float = 0.5,
+        sensory_salience: float = 0.0,
     ) -> WorldResult:
         position = self.state.position
         local = self.world.field_at(position)
@@ -150,6 +151,7 @@ class OrganismKernel:
             outcome=outcome,
             measured_work_units=measured_work_units,
             action_success=action_success,
+            sensory_salience=sensory_salience,
         )
         transition = self.kernel.transition(self.state, transition_input)
         next_state = transition.state
@@ -204,7 +206,7 @@ class OrganismKernel:
             "organism": organism,
             "can_act": self.can_act,
             "world_revision": self.world.revision(),
-            "kernel_version": "isce/0.1.0",
+            "kernel_version": f"isce/{KERNEL_VERSION}",
             "migration_pending": self._migration_pending,
         }
 
