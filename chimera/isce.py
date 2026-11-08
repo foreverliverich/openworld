@@ -488,7 +488,7 @@ class ISCEKernel:
             organism_id=state.organism_id,
             position=mechanics.position,
             body=BodyState(energy, stress, integrity, fatigue,
-                           abs(0.75 - energy) + abs(0.12 - stress)),
+                           _clamp(abs(0.75 - energy) + abs(0.12 - stress))),
             interoception=InteroceptiveState(hunger, pain, arousal,
                                              smoothed_error, precision),
             sensorimotor=SensorimotorState(motor_readiness, proprioceptive_error,
