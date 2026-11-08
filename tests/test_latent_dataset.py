@@ -159,8 +159,6 @@ class LatentDatasetTests(unittest.TestCase):
                 source_refs=("caption-1", "image-1"), alignment_pair=True,
             ),
         )
-        sessions = load_alignment_sessions(self.path)
-        self.assertEqual(len(sessions["cycle-session"]["text"]), 1) if False else None
         # One cycle is insufficient for training, but the raw aligned pair is recorded.
         with open(self.path, "r", encoding="utf-8") as handle:
             record = json.loads(handle.readline())
