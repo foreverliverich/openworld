@@ -23,3 +23,21 @@ This is **not zero-copy**: `queue.writeBuffer` uploads host memory to GPU memory
 - No production benchmark on a real browser/GPU has been recorded yet.
 
 The browser control is deliberately opt-in and separate from the existing SDF renderer. This keeps the current canonical RealityEngine and WebGL2 morphology renderer intact while the GPU substrate is validated. The next physical milestone is a separate contact/bond pass with conservation and stability tests, not increasing the particle count.
+
+## Watchdog-aware rotating dispatch
+
+The compute step no longer dispatches every cell in one frame. It rotates
+through contiguous global cell ranges, with a five-frame target and a hard
+per-frame cap of 262,144 cells by default. The cap is configurable at creation.
+Each dispatch carries a base-cell offset, so pages can be traversed without
+copying or reading the full population back to the CPU. The final partial range
+does not wrap within one command submission, avoiding reuse of a page uniform
+for two different offsets in the same submission.
+
+This is a bounded-work scheduling safeguard, **not a proven TDR bypass**:
+actual safe budgets depend on adapter, browser, shader complexity and other
+GPU work. The current shader has no rendering pass, sorting, NCA or audio
+coupling. Rotating subsets also means an individual cell is updated less often
+than the display frame rate; this changes effective per-cell simulation
+frequency and must be accounted for before treating it as physically
+time-equivalent. No five-million-cell benchmark or watchdog test has been run.
