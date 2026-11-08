@@ -114,6 +114,18 @@ class SomaticKernelValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "unchanged SDF"):
                     refine_morph_package(state, 1)
 
+    def test_generation_rejects_unchanged_current_sdf(self):
+        body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return json.dumps(body).encode()
+        context = {"label": "Wolf", "sdfScript": package()["sdfScript"]}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            with patch("chimera.somatic_kernel.urllib.request.urlopen", return_value=Response()):
+                with self.assertRaisesRegex(RuntimeError, "unchanged SDF"):
+                    generate_morph_package("become a wolf", "Wolf", context)
+
     def test_generation_receives_current_sdf_context(self):
         body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
         class Response:
