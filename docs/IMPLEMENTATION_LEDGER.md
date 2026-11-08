@@ -296,3 +296,22 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
   conflict with the existing 48-byte GPU cell ABI and lack an ownership /
   synchronization protocol. Preserve the 48-byte ABI until a measured,
   tested migration is justified.
+
+
+## Watchdog-aware GPU dispatch update
+
+- `web/somatic-gpu.js` now rotates through bounded contiguous cell ranges
+  instead of dispatching every cell on every frame. Default scheduling target:
+  five rotating slices, hard-capped at 262,144 processed cells per frame.
+- WGSL uses a base-cell offset in the existing 64-byte parameter block; the
+  48-byte cell ABI is unchanged.
+- The final range does not wrap within one command submission, preventing
+  multiple writes to a reused page uniform before its dispatches execute.
+- Static contract coverage added in `tests/test_somatic_gpu_contract.py`.
+- This is a scheduling safeguard, not a verified TDR bypass. Per-cell update
+  frequency is lower than display refresh when the population exceeds the
+  per-frame budget; physical time equivalence is not yet solved.
+- Radix depth sorting / ping-pong splat buffers, AxiomScript/NCA, 16-float
+  latent gene decoding, spectral audio-to-body coupling and a Gaussian splat
+  renderer remain unimplemented in this branch. No recovered legacy source
+  for these exact named modules has yet been merged into this execution path.
