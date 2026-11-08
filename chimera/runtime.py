@@ -1,14 +1,13 @@
-"""Organism-owned autonomous runtime for the Chimera world.
+"""Organism-owned runtime with optional Latent Language cognition cycles.
 
-The runtime, not the renderer, owns simulation advancement. Each tick advances
-physics, runs one autonomous world decision, commits the organism's coupled
-physiology/cognitive state, and emits a grounded snapshot.
+The runtime owns the clock. ISCE owns intrinsic organism state; RealityEngine owns
+the external world. Latent Language is an ephemeral projection/workspace that
+produces proposals, and only its revision-checked gateway can commit those proposals.
 """
-
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Optional
 
 from .autonomous_agent import AutonomousWorldAgent
@@ -23,6 +22,7 @@ class RuntimeFrame:
     physics_result: dict[str, Any]
     agent_result: dict[str, Any]
     observation: dict[str, Any]
+    cognition_result: dict[str, Any] | None = None
 
 
 class AutonomousRuntime:
@@ -32,17 +32,44 @@ class AutonomousRuntime:
         agent: AutonomousWorldAgent,
         *,
         observer_radius: float = 24.0,
+        cognition: Any | None = None,
+        cognition_gateway: Any | None = None,
     ):
         if agent.world is not world:
             raise ValueError("Runtime and autonomous agent must share one world")
+        if cognition_gateway is not None and cognition is None:
+            raise ValueError("A cognition gateway requires a cognition coordinator")
+        if cognition_gateway is not None and cognition_gateway.workspace is not cognition.workspace:
+            raise ValueError("Cognition coordinator and action gateway must share one workspace")
         self.world = world
         self.agent = agent
         self.observer_radius = observer_radius
+        self.cognition = cognition
+        self.cognition_gateway = cognition_gateway
+        self._pending_cognition: list[tuple[list[dict[str, Any]], Any]] = []
         self._tick = 0
         self._running = False
 
+    def queue_cognition_cycle(
+        self, observations: list[dict[str, Any]], context: Any
+    ) -> None:
+        """Queue real encoded sensor inputs for the next organism-owned tick."""
+        if self.cognition is None:
+            raise RuntimeError("No Latent Language coordinator is configured")
+        if not isinstance(observations, list):
+            raise ValueError("observations must be a list of modality payload records")
+        self._pending_cognition.append((list(observations), context))
+
+    def execute_cognitive_proposal(
+        self, proposal: Any, *, actor_id: str = "chimera"
+    ) -> dict[str, Any]:
+        """Commit a workspace-selected proposal through the sole cognitive gateway."""
+        if self.cognition_gateway is None:
+            raise RuntimeError("No governed cognitive action gateway is configured")
+        return self.cognition_gateway.execute(proposal, actor_id=actor_id)
+
     def tick(self) -> RuntimeFrame:
-        """Advance one complete physics → goal → action → learning cycle."""
+        """Advance physics, baseline policy, perception and one queued cognition cycle."""
         physics = self.world.step(
             actor_id="reality-runtime",
             expected_revision=self.world.revision(),
@@ -53,6 +80,25 @@ class AutonomousRuntime:
         observation = self.world.observe(
             center=organism_position, radius=self.observer_radius
         )
+        cognition_result = None
+        if self._pending_cognition:
+            observations, context = self._pending_cognition.pop(0)
+            context = replace(context, world_revision=self.world.revision())
+            cycle = self.cognition.cycle(
+                observations, context, dt=self.world.config.fixed_dt,
+                organism_state=self.agent.organism.state,
+            )
+            cognition_result = {
+                "state_digest": cycle.state.digest,
+                "workspace_tick": cycle.broadcast.tick,
+                "selected": [
+                    {"proposal_id": p.proposal_id, "specialist": p.specialist,
+                     "kind": p.kind, "confidence": p.confidence,
+                     "world_revision": p.world_revision}
+                    for p in cycle.broadcast.selected
+                ],
+                "rejected_count": len(cycle.broadcast.rejected),
+            }
         return RuntimeFrame(
             tick=self._tick,
             world_revision=observation["revision"],
@@ -68,6 +114,7 @@ class AutonomousRuntime:
                 "result": agent_result.result,
             },
             observation=observation,
+            cognition_result=cognition_result,
         )
 
     async def run(
@@ -108,5 +155,8 @@ class AutonomousRuntime:
             "observation": self.world.observe(
                 center=self.agent.organism.state.position,
                 radius=self.observer_radius,
+            ),
+            "cognition_workspace_tick": (
+                self.cognition.workspace.tick if self.cognition is not None else None
             ),
         }
