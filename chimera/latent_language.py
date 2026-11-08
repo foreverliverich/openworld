@@ -773,6 +773,26 @@ class LatentLanguageCoordinator:
         ))
         self.dynamics = dynamics
         self.alignment_model = alignment_model
+        if alignment_model is not None:
+            manifest = getattr(alignment_model, "encoder_manifest", None)
+            validated = set(getattr(alignment_model, "validated_modalities", ()))
+            if manifest is not None:
+                for modality in validated:
+                    if modality not in {"text", "image", "audio"}:
+                        continue
+                    try:
+                        encoder = encoders.get(modality)
+                    except LatentLanguageError:
+                        continue
+                    actual_id = getattr(
+                        encoder, "base_encoder_id", getattr(encoder, "encoder_id", None)
+                    )
+                    expected_id = manifest.get(modality)
+                    if actual_id != expected_id:
+                        raise LatentLanguageError(
+                            f"{modality} encoder identity {actual_id!r} does not match "
+                            f"alignment checkpoint {expected_id!r}"
+                        )
         if max_specialist_workers < 1:
             raise LatentLanguageError("max_specialist_workers must be positive")
         self.max_specialist_workers = max_specialist_workers
