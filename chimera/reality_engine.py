@@ -839,6 +839,8 @@ class RealityEngine:
     def commit_organism_tick(
         self, state: dict[str, Any], field_values: dict[str, float], *,
         actor_id: str, expected_revision: Optional[int] = None,
+        causation_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> WorldResult:
         """Atomically commit the single versioned ISCE state and local fields."""
         required = {"organism_id", "schema_version", "position", "body",
@@ -888,6 +890,8 @@ class RealityEngine:
                     "organism_state_after": state,
                     "field_cell": cell,
                     "field_values": values,
+                    "causation_id": causation_id,
+                    "correlation_id": correlation_id,
                 }
                 self._append_event(action_id, revision, ActionType.ORGANISM_TICK,
                                    actor_id, str(state.get("organism_id", actor_id)), payload)
