@@ -63,6 +63,7 @@ class DigitalCellState:
 
 @dataclass(frozen=True)
 class CellStep:
+    source_tick: int
     state: DigitalCellState
     organism_state: OrganismState
     action: Action
@@ -101,6 +102,14 @@ class DigitalCell:
     @staticmethod
     def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
         return max(low, min(high, value))
+
+    def commit(self, result: CellStep) -> None:
+        """Publish a proposed step after its paired ISCE/world commit succeeds."""
+        if not isinstance(result, CellStep):
+            raise TypeError("commit requires a CellStep")
+        if result.source_tick != self.state.tick or result.state.tick != self.state.tick + 1:
+            raise ValueError("stale or invalid cell step")
+        self.state = result.state
 
     def step(
         self,
@@ -145,7 +154,9 @@ class DigitalCell:
         elif refractory > 0 and old.previous_action is not None:
             action_index = self.ACTIONS.index(old.previous_action)
         else:
-            action_index = max(range(3), key=lambda idx: (scores[idx], -idx))
+            # Membrane firing is required for the metabolically active seek action.
+            eligible = (0, 1, 2) if fired else (0, 2)
+            action_index = max(eligible, key=lambda idx: (scores[idx], -idx))
         action = self.ACTIONS[action_index]
 
         energy, stress = old.energy, old.stress
@@ -207,8 +218,8 @@ class DigitalCell:
                 mechanical_strain=0.0 if action != "seek" else 0.05,
             ),
         ).state
-        self.state = next_cell
         return CellStep(
+            source_tick=old.tick,
             state=next_cell,
             organism_state=organism_result,
             action=action,
