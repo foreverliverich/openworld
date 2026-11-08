@@ -856,7 +856,7 @@ class LatentLanguageCoordinator:
         generated = self._run_specialists(working_state, context)
         if self.alignment_model is not None:
             aligned_modalities = {
-                name: encoded_by_modality[name]
+                name: [encoded_by_modality[name]]
                 for name in ("text", "image", "audio") if name in encoded_by_modality
             }
             if len(aligned_modalities) >= 2:
