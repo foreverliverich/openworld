@@ -84,7 +84,7 @@ change ISCE schema v1, persist a second organism state, or replace the current
 aggregate reserve. Integration requires a versioned ISCE migration and
 single-owner acceptance tests.
 
-**Verification:** pull request CI is running; no passing result is claimed yet.
+**Verification (2026-11-08):** GitHub Actions for head `6e0849a6f14d264b40d5be45bf00f0332b6b2f55` completed successfully for all four checks: `unit-tests`, `webgl2-browser`, `threejs-body-browser`, and `latent-training`. This verifies the current branch checks; it does not establish scientific novelty or integrate P2 into ISCE.
 The prototype's reserve units are simulated units, not joules or hardware
 power measurements. It is a P2 engineering step, not evidence of novelty,
 biological equivalence or consciousness.
@@ -312,3 +312,10 @@ Added an opt-in experiment-data path so learned dynamics and multimodal alignmen
 - Tests cover continuity/digest tampering, session-level splits, aligned text/image/audio dimensions, runtime recording, raw audio feature preservation and integration-step consistency.
 
 No project data or trained weights are bundled. The recorder must be explicitly enabled, real trajectories and explicitly captioned image pairs must be collected, and resulting checkpoints still require inspection of their held-out metrics before deployment.
+
+
+## Energy-priced structural learning research gate — 2026-11-08
+
+Added `docs/ENERGY_PRICED_STRUCTURAL_LEARNING.md` to define a narrow falsifiable hypothesis and matched-control experiment. The research question is whether local resource gradients should allocate topology writes when both construction and ongoing maintenance have explicit costs, and whether that produces a better held-out performance/compute trade-off than fixed, DGCA-style, global-budget and local-energy controls. The document records relevant 2026 prior art, tasks, metrics, seed requirements, falsification criteria and the ISCE single-owner boundary.
+
+**Status:** protocol only. No benchmark has been implemented or run; no advantage or novelty is claimed. Next gate is a small deterministic CPU benchmark with matched budgets and tests before any 15,000-cell or GPU work.
