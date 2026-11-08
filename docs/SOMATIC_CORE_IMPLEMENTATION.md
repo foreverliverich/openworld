@@ -10,7 +10,7 @@
 - web/somatic-core.js implements a WebGL2 full-screen raymarcher with previous/target SDF functions, per-frame A/B distance/material blending, finite-difference normals, ambient occlusion, diffusion noise, latent domain warp, fur displacement, pores, subdermal flow, material-ID shading and wrapped-light SSS. A target shader is compiled and linked before it can replace the currently displayed program.
 - web/somatic.html provides the language-to-morphology interface and restores the canonical SDF pair from SQLite on load.
 - web/index.html no longer presents the rigid primitive Body Forge as creature embodiment; it links to the Somatic Core interface.
-- tests/test_somatic_kernel.py covers package validation, missing credentials and a mocked Gemini response. tests/test_somatic_reality.py covers durable A/B state, revision conflicts and event-chain integrity.
+- tests/test_somatic_kernel.py covers package validation, missing credentials and a mocked Gemini response. tests/test_somatic_reality.py covers durable A/B state, revision conflicts and event-chain integrity. tests/test_http_server.py covers candidate generation without mutation, commit validation and the HTTP integration.
 
 ## Run
 
@@ -26,9 +26,9 @@ Open http://127.0.0.1:8765/web/somatic.html. WebGL2 is required. Without a confi
 ## Transaction and safety behavior
 
 1. Browser submits a text description to the server.
-2. Server asks Gemini for a structured morphology package and validates its envelope. It does not persist the candidate yet.
+2. Server asks Gemini for a structured morphology package. The browser receives it as a candidate; no database mutation has occurred.
 3. Browser compiles and links the candidate with the existing BioPBR header and the previous SDF. If compilation fails, the old program and canonical database state remain untouched.
-4. Browser submits the validated package with the world revision it read. RealityEngine checks the revision, stores prevSdfScript and sdfScript, advances the revision, and appends the morphology event atomically.
+4. Browser submits the candidate package with the world revision it read. The server validates it again; RealityEngine checks the revision, stores prevSdfScript and sdfScript, advances the revision, and appends the morphology event atomically.
 5. Browser installs the already-compiled program and blends from A to B. Reload reads the same pair and derives the current progress from the persisted start timestamp.
 
 The server binds to loopback by default. Do not expose it publicly or to a LAN without authentication, origin/CSRF protections and a security review.
