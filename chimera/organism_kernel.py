@@ -132,7 +132,7 @@ class OrganismKernel:
         resting: bool = False,
         expected_revision: Optional[int] = None,
         measured_work_units: float = 0.0,
-        motor_commands: tuple[tuple[str, float], ...] = (),
+        motor_commands: tuple[tuple[str, object], ...] = (),
         root_acceleration: tuple[float, float, float] = (0.0, 0.0, 0.0),
     ) -> WorldResult:
         position = self.state.position
