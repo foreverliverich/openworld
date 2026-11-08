@@ -162,7 +162,7 @@ class OllamaReasoningSpecialist:
             # cycle when the local model is unavailable or returns invalid JSON.
             self.last_error = str(exc)[:500]
             return ()
-        digest = hashlib.sha256(context.text.encode("utf-8")).hexdigest()[:20
+        digest = hashlib.sha256(context.text.encode("utf-8")).hexdigest()[:20]
         identity = json.dumps(
             {"text": context.text, "model": self.model, "result": result},
             sort_keys=True, separators=(",", ":"),
