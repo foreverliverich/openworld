@@ -65,6 +65,17 @@ class SceneInterpreterValidationTests(unittest.TestCase):
                 ],
             }, "containment")
 
+    def test_scene_identifier_is_safe_for_world_metadata(self):
+        with self.assertRaises(SceneInterpretationError):
+            GeminiSceneInterpreter._parse_graph({
+                "scene_id": "../escape",
+                "objects": [{
+                    "object_id": "ground", "kind": "box",
+                    "position": [0, 0.5, 0], "size": [1, 1, 1],
+                    "material": "stone", "mass": 1, "dynamic": False,
+                }],
+            }, "fallback")
+
     def test_object_count_and_extent_are_bounded(self):
         with self.assertRaises(SceneInterpretationError):
             GeminiSceneInterpreter._parse_graph({
