@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import threading
 import uuid
 from pathlib import Path
@@ -184,6 +185,7 @@ class LatentTrajectoryRecorder:
                 with self.path.open("a", encoding="utf-8") as handle:
                     handle.write(line + "\n")
                     handle.flush()
+                    os.fsync(handle.fileno())
             except OSError as exc:
                 raise LatentDatasetError(f"Cannot append latent trajectory record: {exc}") from exc
             self._sequence_index += 1
