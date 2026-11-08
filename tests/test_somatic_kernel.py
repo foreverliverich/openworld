@@ -84,7 +84,9 @@ class SomaticKernelValidationTests(unittest.TestCase):
             refine_morph_package({"sdfScript": package()["sdfScript"]}, 1, "data:text/html;base64,PHNjcmlwdD4=")
 
     def test_refinement_sends_multimodal_snapshot_and_validates_result(self):
-        body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
+        refined = package()
+        refined["sdfScript"] = "vec2 map_object(vec3 p) { return vec2(length(p)-0.8, 1.0); }"
+        body = {"candidates": [{"content": {"parts": [{"text": json.dumps(refined)}]}}]}
         class Response:
             def __enter__(self): return self
             def __exit__(self, *args): return False
@@ -99,6 +101,18 @@ class SomaticKernelValidationTests(unittest.TestCase):
             with patch("chimera.somatic_kernel.urllib.request.urlopen", side_effect=fake_open):
                 result = refine_morph_package(state, 1, snapshot)
         self.assertEqual(result["label"], "Wolf")
+
+    def test_refinement_rejects_unchanged_sdf(self):
+        body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return json.dumps(body).encode()
+        state = {"sdfScript": package()["sdfScript"], "label": "Wolf"}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            with patch("chimera.somatic_kernel.urllib.request.urlopen", return_value=Response()):
+                with self.assertRaisesRegex(RuntimeError, "unchanged SDF"):
+                    refine_morph_package(state, 1)
 
     def test_generation_receives_current_sdf_context(self):
         body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
