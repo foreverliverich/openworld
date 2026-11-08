@@ -52,12 +52,13 @@ class MultimodalProjectionModel:
         self.audio_reconstructor = nn.Linear(audio_slot_dim, audio_dim).to(device)
         self.trained = False
         self.audio_trained = False
-        self.history: list[dict[str, float]] = []
+        self.validated = False
+        self.history: list[dict[str, float]] =
 
     def project_audio_slot(self, audio_hidden):
         """Callable adapter for HuggingFaceAudioEncoder's 768→128 projection."""
-        if not self.audio_trained:
-            raise AlignmentTrainingError("Audio bottleneck must be trained with paired audio data")
+        if not self.audio_trained or not self.validated:
+            raise AlignmentTrainingError("Audio bottleneck requires paired training and held-out validation")
         return self.audio_compressor(audio_hidden)
 
     def _batch(self, value: Any, width: int, name: str):
@@ -189,11 +190,12 @@ class MultimodalProjectionModel:
                 metrics["audio_reconstruction_mse"] = float(
                     functional.mse_loss(reconstructed, audio).cpu()
                 )
+        self.validated = True
         return metrics
 
     def save_checkpoint(self, path: str) -> None:
-        if not self.trained:
-            raise AlignmentTrainingError("Cannot save untrained projection heads")
+        if not self.trained or not self.validated:
+            raise AlignmentTrainingError("Cannot save untrained or unvalidated projection heads")
         self.torch.save({
             "schema_version": 1, "dimensions": [768, 512, 768, 512, 128],
             "text_projection": self.text_projection.state_dict(),
@@ -202,6 +204,7 @@ class MultimodalProjectionModel:
             "audio_compressor": self.audio_compressor.state_dict(),
             "audio_reconstructor": self.audio_reconstructor.state_dict(),
             "history": self.history, "audio_trained": self.audio_trained,
+            "validated": self.validated,
         }, path)
 
     def load_checkpoint(self, path: str) -> None:
@@ -217,4 +220,7 @@ class MultimodalProjectionModel:
             getattr(self, name).load_state_dict(checkpoint[name], strict=True)
         self.history = list(checkpoint.get("history", []))
         self.audio_trained = bool(checkpoint.get("audio_trained", False))
+        self.validated = bool(checkpoint.get("validated", False))
+        if not self.validated:
+            raise AlignmentTrainingError("Projection checkpoint has no validation evidence")
         self.trained = True
