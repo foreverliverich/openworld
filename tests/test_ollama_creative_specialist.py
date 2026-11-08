@@ -1,8 +1,16 @@
 import json
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
-from chimera.latent_language import GlobalWorkspace, LatentState, SceneGraph, SceneObject, SpecialistContext
+from chimera.latent_language import (
+    CognitiveActionGateway, GlobalWorkspace, LatentState, SceneGraph,
+    SceneObject, SpecialistContext, SpecialistProposal,
+)
+from chimera.autonomous_agent import ChimeraToolbox
+from chimera.organism_kernel import OrganismKernel
+from chimera.reality_engine import RealityEngine, WorldConfig
 from chimera.ollama_creative_specialist import (
     ARTIFACT_TYPES,
     OllamaCreativeError,
@@ -106,6 +114,26 @@ class OllamaCreativeSpecialistTests(unittest.TestCase):
         )
         self.assertEqual(proposals, ())
         self.assertIn("32 KiB limit", specialist.last_error)
+
+    def test_action_gateway_rejects_selected_creative_artifact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            world = RealityEngine(WorldConfig(database=os.path.join(directory, "creative.sqlite3")))
+            try:
+                organism = OrganismKernel(world, "creative-gateway-test")
+                toolbox = ChimeraToolbox(world)
+                workspace = GlobalWorkspace()
+                proposal = SpecialistProposal(
+                    "creative-artifact", "creative_generation", "creative_artifact",
+                    {"title": "Test", "concept": "A non-executable artifact.",
+                     "authority": "artifact_only"},
+                    0.9, 0.9, 0.1, 0.8, 0.0, world.revision(), ("request:test",),
+                )
+                workspace.compete(LatentState.empty(), [proposal])
+                gateway = CognitiveActionGateway(toolbox, workspace, organism)
+                with self.assertRaisesRegex(Exception, "Only world_action proposals"):
+                    gateway.execute(proposal)
+            finally:
+                world.close()
 
     def test_output_bounds_reject_unbounded_generated_content(self):
         invalid = dict(self.output)
