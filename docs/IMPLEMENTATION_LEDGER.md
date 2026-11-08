@@ -254,3 +254,21 @@ Added `web/somatic-gpu.js`, an opt-in WebGPU compute module, plus `tests/test_so
 Implemented in this slice: semi-implicit Euler integration, gravity, horizontal ground contact, restitution, tangential friction and bounded stress-dependent energy drain. The kernel validates dt and disposal, checks shader compilation, and has explicit teardown. It is intentionally not wired as a replacement for RealityEngine's authoritative world state.
 
 Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell learning, Rapier, deformable SDF contact, high-count performance claims or continuous background execution. The 5M-cell example is not adopted; 240 MB of cell data alone may exceed per-binding limits and would require paging plus device-specific performance measurement. `queue.writeBuffer` is a host-to-GPU upload, not zero-copy. See `docs/SOMATIC_GPU_HOT_PATH.md`.
+
+
+## Cognitive-goal → Somatic GPU steering seam
+
+- Adopted the useful transport/actuation idea from the submitted WebSocket and
+  TypeScript bridge, while retaining the current 48-byte SomaticCell ABI.
+- `web/somatic-gpu.js` now accepts a bounded attractor target through a
+  64-byte uniform block. Goal acceleration is capped and zero-distance safe;
+  no arbitrary harmonic/vortex forces were introduced.
+- `web/chimera-bridge.js` accepts only schema-v1 messages explicitly marked
+  accepted, with a monotonically increasing goal sequence and separate world
+  revision provenance. It does not commit GPU physiology to SQLite.
+- Added static contract tests and `docs/COGNITIVE_GOAL_GPU_BRIDGE.md`.
+- Not yet implemented: Python WebSocket publisher wired into the existing
+  application/action gateway, browser/GPU end-to-end validation, worker
+  ownership protocol, or calibrated GPU telemetry commits. The standalone
+  Python server in the proposal is not used because it could create a second
+  RealityEngine authority.
