@@ -176,3 +176,12 @@ The protected body requirement has moved from a backlog statement to a connected
 **Important transaction invariant:** model generation is not a world mutation. The candidate SDF is compiled with the current BioPBR library in the browser first. Only after successful compile/link does the browser submit the package and expected world revision for an atomic RealityEngine commit. Compile failure leaves both the displayed program and canonical state unchanged.
 
 **Verification status:** local Python syntax and package-validation smoke checks passed. New automated tests are committed but hosted CI has not yet been confirmed for this implementation. A real WebGL2 browser run and the whitepaper's repeated T1–T7 acceptance suite have not been observed; local headless Chromium could not initialize EGL/SwiftShader in this environment. P0 is therefore **in progress, not certified complete**. Image-conditioned ten-step refinement and pointer-orbit/wheel-zoom camera controls are now implemented; visual-quality verification against live Gemini output and the repeated browser acceptance run remain open. Long-running request cancellation/retry remains open. No articulation, locomotion, GPU particle-count or sentience claims are made.
+
+
+## Somatic Core real-browser verification gate
+
+- Added `tests/browser_acceptance.py`, which launches Chromium through Playwright with ANGLE/SwiftShader and requires an actual WebGL2 context.
+- The browser test compiles and links the genesis A/B shader, draws and reads back the framebuffer, rejects a deliberately invalid SDF without replacing the active program, compiles a valid target SDF, installs the A/B pair, and checks for WebGL errors after rendering.
+- Added a separate `webgl2-browser` GitHub Actions job. It installs Playwright/Chromium and runs the browser acceptance independently of the standard-library Python unit suite.
+- This test is intentionally a renderer integration gate, not a substitute for the full whitepaper T1–T7 visual-quality and real Gemini acceptance run. It does not certify creature anatomy, material realism, or generated morphology quality.
+- Status is pending hosted CI execution on this branch; do not mark WebGL2 as verified until the browser job reports success.
