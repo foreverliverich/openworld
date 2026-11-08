@@ -296,6 +296,7 @@ class SegmentPose:
     direction: tuple[float, float, float]
     radius: float
     orientation: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
+    local_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -431,7 +432,10 @@ class BiomechanicsEngine:
             center = _add(origin, _scale(_sub(end, origin), .5))
             direction = _scale(_sub(end, origin), 1.0/spec.length)
             transforms[spec.name] = (origin, world_q)
-            poses.append(SegmentPose(spec.name, origin, end, center, direction, spec.radius, world_q))
+            poses.append(SegmentPose(
+                spec.name, origin, end, center, direction, spec.radius,
+                world_q, spec.direction,
+            ))
         return transforms, tuple(poses)
 
     def forward_kinematics(self, position: Iterable[float],
