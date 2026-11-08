@@ -153,4 +153,6 @@ Example request body:
 
 The caller must obtain the current revision from `GET /api/body/pose` or `GET /api/state` and send it unchanged. This is an explicit motor-target interface, not yet a high-level gait planner or an authorization/governance layer for autonomous actions.
 
+`tests/browser_body_acceptance.py` starts the actual local HTTP application and drives the browser client in Chromium with ANGLE/SwiftShader. It verifies WebGL2 initialization, the live 16-segment projection, native validity of the 3D joint form, a hip abduction submission through the UI, and the committed XYZ joint state returned by `GET /api/body/pose`. The corresponding GitHub Actions run 42433374952 passed.
+
 The main browser world scene now calls the pose endpoint and projects the returned world-space segment quaternions and local segment axes as connected cylinder-and-joint geometry. The motor-control panel exposes hip flexion/abduction/axial rotation and shoulder flexion/abduction/axial rotation, plus scalar knee/elbow controls and optional horizontal root acceleration. The scene updates only from committed pose responses; it does not own a second physics state. This remains a rigid-segment projection, not a deforming skin mesh or the Somatic Core raymarched SDF renderer.
