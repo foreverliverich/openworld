@@ -37,7 +37,7 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{fon
 <section id="viewport">
  <div id="scene"></div>
  <div class="hud"><strong>WORLD STATE PROJECTION</strong><small>Every displayed entity is read from RealityEngine. The renderer does not own physics or mutate world state.</small><div style="margin-top:8px"><span class="pill" id="revision">REVISION —</span> <span class="pill" id="clock">0.00s</span></div></div>
- <div id="toolbar"><button class="primary" id="tick">Advance organism + world</button><button id="observe">Refresh observation</button><button id="events">Inspect event chain</button></div>
+ <div id="toolbar"><button class="primary" id="tick">Single step</button><button id="run">Run organism</button><button id="pause" disabled>Pause</button><button id="observe">Refresh observation</button><button id="events">Inspect event chain</button></div>
 </section>
 <aside>
  <section class="section"><h2>Organism physiology</h2><div class="metrics" id="metrics"></div><p class="note" id="goal">No active goal.</p></section>
@@ -106,6 +106,13 @@ function renderState(s){const o=s.organism.organism;$('#metrics').innerHTML=metr
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const data=await r.json();if(!r.ok)throw new Error(data.message||data.error||r.statusText);return data}
 function log(s){$('#log').textContent=typeof s==='string'?s:JSON.stringify(s,null,2)}
 async function refresh(){const s=await api('/api/state');renderState(s)}
+let runtimeWorker=null;
+let workerRunning=false;
+function runtimeStatus(message){$('#connection').textContent=message}
+function setWorkerRunning(value){workerRunning=value;$('#run').disabled=value;$('#pause').disabled=!value;$('#tick').disabled=value}
+$('#run').onclick=()=>{if(!runtimeWorker){runtimeWorker=new Worker('/web/runtime-worker.js');runtimeWorker.onmessage=event=>{const m=event.data||{};if(m.type==='started'){setWorkerRunning(true);runtimeStatus('RUNNING · BROWSER WORKER · '+m.ticksPerBatch+' TICKS/BATCH')}else if(m.type==='tick'){if(m.payload?.state)renderState(m.payload.state);const last=m.payload?.frames?.at(-1);if(last)log({worker_batch:m.batchSize,request_ms:Number(m.requestMs.toFixed(1)),last_frame:last});}else if(m.type==='paused'){setWorkerRunning(false);runtimeStatus('PAUSED · WORLD PERSISTED');}else if(m.type==='error'){setWorkerRunning(false);runtimeStatus('WORKER STOPPED · '+m.message);log(m.message)}};runtimeWorker.onerror=event=>{setWorkerRunning(false);runtimeStatus('WORKER ERROR');log(event.message)}};runtimeWorker.postMessage({type:'start',intervalMs:100,ticksPerBatch:3})};
+$('#pause').onclick=()=>{runtimeWorker?.postMessage({type:'stop'})};
+window.addEventListener('beforeunload',()=>{runtimeWorker?.postMessage({type:'stop'});runtimeWorker?.terminate();runtimeWorker=null});
 $('#tick').onclick=async()=>{try{$('#tick').disabled=true;const r=await api('/api/tick',{ticks:1});renderState(r.state);log(r.frames[0])}catch(e){log(e.message)}finally{$('#tick').disabled=false}};
 $('#observe').onclick=()=>refresh().catch(e=>log(e.message));
 $('#events').onclick=async()=>{try{const r=await api('/api/events?after_revision=0&limit=100');log({chain_valid:r.chain_valid,revision:r.revision,events:r.events})}catch(e){log(e.message)}};
