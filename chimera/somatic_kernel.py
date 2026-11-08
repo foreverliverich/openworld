@@ -26,7 +26,7 @@ It is compiled after the BioPBR library. Use the available functions:
 sdHumanoidBase(vec3)->vec2, sdSphere(vec3,float), sdCapsule(vec3,vec3,vec3,float),
 sdEllipsoid(vec3,vec3), smin(float,float,float), smax(float,float,float),
 opTaper(inout vec3,float), opBulge(inout vec3,float), opBend(inout vec3,float),
-opInflate(inout vec3,float), opAsymmetry(inout vec3,float), opLatentWarp(vec3,float),
+opInflate(inout vec3,float), opAsymmetry(inout vec3,float), opSymX(inout vec3),\nopRepLim(vec3,vec3,vec3), opLatentWarp(vec3,float),
 opFur(float,vec3,float,float), diffusion_noise(vec3), getSkinPores(vec3),
 getSubdermalFlow(vec3), preintegratedSSS(vec3,vec3,vec3,float).
 Material IDs: 1 skin, 2 mucosa, 3 tongue, 4 eye, 5 bone/teeth/chitin.
@@ -75,7 +75,7 @@ def generate_morph_package(description: str, current_label: str = "") -> dict[st
     if not api_key:
         raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY on the server.")
     body = {
-        "system_instruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
         "contents": [{"role": "user", "parts": [{"text":
             f"Transform the current creature ({current_label or 'genesis form'}) into: {description}. "
             "Return the complete target SDF package. Preserve biological coherence."}]}],
