@@ -318,9 +318,44 @@ class BiomechanicsEngine:
              dt: float, motor_commands: Sequence[tuple[str, float]] = (),
              root_acceleration: Iterable[float] = (0.0, 0.0, 0.0),
              motor_readiness: float = 1.0, body_energy: float = 1.0) -> BiomechanicsResult:
+        """Advance arbitrary ISCE time steps using stable <=20ms substeps."""
         dt = _finite("dt", dt)
-        if not 0.0 < dt <= 0.1:
-            raise BiomechanicsError("Biomechanics dt must be in (0, 0.1] seconds")
+        if not 0.0 < dt <= 10.0:
+            raise BiomechanicsError("Biomechanics dt must be in (0, 10] seconds")
+        count = max(1, math.ceil(dt / 0.02))
+        sub_dt = dt / count
+        current_state = state
+        current_position = _vec3("root position", position)
+        total_cost = 0.0
+        total_work = 0.0
+        result: Optional[BiomechanicsResult] = None
+        for _ in range(count):
+            result = self._step_once(
+                current_state, current_position, dt=sub_dt,
+                motor_commands=motor_commands,
+                root_acceleration=root_acceleration,
+                motor_readiness=motor_readiness, body_energy=body_energy,
+            )
+            current_state = result.state
+            current_position = result.position
+            total_cost += result.metabolic_cost
+            total_work += result.work_units
+        assert result is not None
+        return BiomechanicsResult(
+            state=result.state, position=result.position, poses=result.poses,
+            mechanical_strain=result.mechanical_strain,
+            proprioceptive_error=result.proprioceptive_error,
+            metabolic_cost=total_cost, work_units=total_work,
+            contacts=result.contacts,
+        )
+
+    def _step_once(self, state: ArticulatedBodyState, position: Iterable[float], *,
+             dt: float, motor_commands: Sequence[tuple[str, float]] = (),
+             root_acceleration: Iterable[float] = (0.0, 0.0, 0.0),
+             motor_readiness: float = 1.0, body_energy: float = 1.0) -> BiomechanicsResult:
+        dt = _finite("dt", dt)
+        if not 0.0 < dt <= 0.02 + 1e-9:
+            raise BiomechanicsError("Internal biomechanics substep exceeds 20ms")
         readiness = _clamp(_finite("motor_readiness", motor_readiness), 0.0, 1.0)
         energy = _clamp(_finite("body_energy", body_energy), 0.0, 1.0)
         root = list(_vec3("root position", position))
