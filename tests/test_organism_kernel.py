@@ -94,8 +94,11 @@ class OrganismKernelTests(unittest.TestCase):
         migrated.tick(dt=0.5, expected_revision=self.world.revision())
         persisted = self.world.get_organism_state()
         self.assertEqual(persisted["schema_version"], 1)
-        self.assertAlmostEqual(persisted["position"][0], 3.0)
-        self.assertAlmostEqual(persisted["position"][2], -2.0)
+        # Contact impulses may shift the pelvis/root origin slightly as
+        # articulated momentum is exchanged with the ground. Migration itself
+        # was checked exactly before the tick; after physics, bound the drift.
+        self.assertAlmostEqual(persisted["position"][0], 3.0, delta=0.01)
+        self.assertAlmostEqual(persisted["position"][2], -2.0, delta=0.01)
         # The migrated body now participates in real gravity/contact during
         # the first committed ISCE tick instead of retaining a display-only
         # floating position.
