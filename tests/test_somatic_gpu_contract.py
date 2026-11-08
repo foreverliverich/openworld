@@ -19,4 +19,13 @@ class SomaticGPUContractTests(unittest.TestCase):
   s=SOURCE.read_text();self.assertIn("not zero-copy",s);self.assertNotIn("432.0",s);self.assertNotIn("VORTEX_SEQ",s)
  def test_dt_and_disposal_are_guarded(self):
   s=SOURCE.read_text();self.assertIn("MAX_DT",s);self.assertIn("this.disposed",s);self.assertIn("Number.isFinite(deltaSeconds)",s)
+
+ def test_gpu_work_is_bounded_and_rotates(self):
+  s=SOURCE.read_text()
+  self.assertIn("rotationFrames=5",s)
+  self.assertIn("maxCellsPerFrame=262144",s)
+  self.assertIn("Math.min(targetChunk,this.maxCellsPerFrame,this.cellCount-this.cursor)",s)
+  self.assertIn("processedCells:budget",s)
+  self.assertIn("baseCell: u32",s)
+  self.assertIn("gid.x+params.baseCell",s)
 if __name__=="__main__":unittest.main()
