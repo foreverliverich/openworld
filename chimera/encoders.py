@@ -192,6 +192,8 @@ class HuggingFaceAudioEncoder:
         waveform = self.torch.as_tensor(audio, dtype=self.torch.float32)
         if waveform.ndim != 1 or not bool(self.torch.isfinite(waveform).all().item()):
             raise LatentLanguageError("Audio must be a finite mono waveform")
+        if float(waveform.abs().max().item()) > 1.0:
+            raise LatentLanguageError("Audio samples must be normalized to [-1, 1]")
         target_rate = int(self.processor.feature_extractor.sampling_rate)
         if sampling_rate != target_rate:
             target_length = max(1, round(waveform.numel() * target_rate / sampling_rate))
