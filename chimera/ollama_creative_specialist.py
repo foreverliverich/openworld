@@ -70,6 +70,14 @@ class OllamaCreativeSpecialist:
     def _validate_output(cls, value: Any) -> dict[str, Any]:
         if not isinstance(value, dict):
             raise OllamaCreativeError("Creative output must be a JSON object")
+        required_fields = {
+            "artifact_type", "title", "concept", "elements",
+            "variations", "style_tags", "preserved_constraints",
+        }
+        if set(value) != required_fields:
+            raise OllamaCreativeError(
+                "Creative output must contain exactly the declared artifact fields"
+            )
         artifact_type = value.get("artifact_type")
         if not isinstance(artifact_type, str) or artifact_type not in ARTIFACT_TYPES:
             raise OllamaCreativeError("Creative output has an unsupported artifact_type")
