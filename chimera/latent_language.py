@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
@@ -669,7 +670,7 @@ class CognitiveCycleResult:
 
 
 class LatentLanguageCoordinator:
-    """Coordinates encoders, latent fusion, specialists and workspace competition."""
+    """Coordinates concurrent specialists over an ephemeral ISCE projection."""
 
     def __init__(
         self, encoders: EncoderRegistry, *,
@@ -677,6 +678,7 @@ class LatentLanguageCoordinator:
         fusion: MultimodalFusion | None = None,
         workspace: GlobalWorkspace | None = None,
         dynamics: Any | None = None,
+        max_specialist_workers: int = 8,
     ):
         self.encoders = encoders
         self.fusion = fusion or MultimodalFusion()
@@ -687,7 +689,21 @@ class LatentLanguageCoordinator:
             CreativeSpecialist(),
         ))
         self.dynamics = dynamics
+        if max_specialist_workers < 1:
+            raise LatentLanguageError("max_specialist_workers must be positive")
+        self.max_specialist_workers = max_specialist_workers
         self.state = LatentState.empty()
+
+    def _run_specialists(self, state: LatentState, context: SpecialistContext):
+        if not self.specialists:
+            return ()
+        workers = min(self.max_specialist_workers, len(self.specialists))
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="chimera-specialist") as pool:
+            results = list(pool.map(
+                lambda specialist: specialist.propose(state, context),
+                self.specialists,
+            ))
+        return tuple(proposal for group in results for proposal in group)
 
     def cycle(
         self, observations: Sequence[Mapping[str, Any]], context: SpecialistContext,
@@ -705,18 +721,22 @@ class LatentLanguageCoordinator:
                 source_id=str(item["source_id"]),
             )
             self.state = self.fusion.update(self.state, encoded)
-        for specialist in self.specialists:
-            for proposal in specialist.propose(self.state, context):
-                if proposal.kind == "subspace_update":
-                    subspace = str(proposal.payload["subspace"])
-                    self.state = self.state.write_subspace(
-                        subspace, proposal.payload["vector"],
-                        timestamp=float(proposal.payload["timestamp"]),
-                    )
-                elif proposal.kind == "memory_retrieval":
-                    self.state = self.state.write_subspace(
-                        "memory", proposal.payload["vector"], timestamp=context.timestamp
-                    )
+        generated = self._run_specialists(self.state, context)
+        for proposal in generated:
+            if proposal.kind == "subspace_update":
+                subspace = str(proposal.payload["subspace"])
+                self.state = self.state.write_subspace(
+                    subspace, proposal.payload["vector"],
+                    timestamp=float(proposal.payload["timestamp"]),
+                )
+            elif proposal.kind == "intent":
+                self.state = self.state.write_subspace(
+                    "cognition", proposal.payload["vector"], timestamp=context.timestamp
+                )
+            elif proposal.kind == "memory_retrieval":
+                self.state = self.state.write_subspace(
+                    "memory", proposal.payload["vector"], timestamp=context.timestamp
+                )
         if self.dynamics is not None:
             evolved = self.dynamics.evolve(self.state.vector, dt=dt)
             self.state = LatentState(
@@ -729,10 +749,8 @@ class LatentLanguageCoordinator:
                 self.state.revision + 1,
             )
         proposals = tuple(
-            proposal
-            for specialist in self.specialists
-            for proposal in specialist.propose(self.state, context)
-            if proposal.kind != "subspace_update"
+            proposal for proposal in generated
+            if proposal.kind not in {"subspace_update", "intent", "memory_retrieval"}
         )
         broadcast = self.workspace.compete(self.state, proposals)
         return CognitiveCycleResult(self.state, broadcast, proposals)
