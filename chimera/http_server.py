@@ -116,7 +116,18 @@ class ChimeraApplication:
         expected = payload.get("expected_revision")
         if not isinstance(expected, int) or isinstance(expected, bool):
             raise ValueError("expected_revision is required and must be an integer")
-        motor_commands = tuple((str(name), float(target)) for name, target in commands.items())
+        parsed_commands = []
+        for name, target in commands.items():
+            if isinstance(target, (int, float)):
+                parsed = float(target)
+            elif isinstance(target, (list, tuple)) and len(target) == 3:
+                parsed = tuple(float(value) for value in target)
+            else:
+                raise ValueError(
+                    f"motor target {name} must be a number or a three-element radians vector"
+                )
+            parsed_commands.append((str(name), parsed))
+        motor_commands = tuple(parsed_commands)
         with self._mutation_lock:
             result = self.organism.tick(
                 dt=self.world.config.fixed_dt,
