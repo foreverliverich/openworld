@@ -11,6 +11,7 @@ from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
 from chimera.http_server import ChimeraApplication, ChimeraRequestHandler
+from chimera.latent_language import EncoderRegistry, LatentLanguageCoordinator
 
 
 class BrowserAPIIntegrationTests(unittest.TestCase):
@@ -39,6 +40,52 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
                 return response.status, json.loads(response.read())
         except HTTPError as exc:
             return exc.code, json.loads(exc.read())
+
+
+    def test_cognition_endpoint_is_explicitly_disabled_without_model_runtime(self):
+        status, result = self.request("/api/cognition", {"text": "hello"})
+        self.assertEqual(status, 503)
+        self.assertEqual(result["error"], "service_unavailable")
+
+    def test_chimera_application_queues_and_executes_workspace_selected_cognition(self):
+        class FixedEncoder:
+            encoder_id = "http-test-text"
+            def encode(self, payload):
+                return (0.2,) * 768
+
+        registry = EncoderRegistry()
+        registry.register("text", FixedEncoder())
+        coordinator = LatentLanguageCoordinator(registry)
+        app = ChimeraApplication(
+            os.path.join(self.tmp.name, "cognition-world.sqlite3"),
+            cognition=coordinator,
+        )
+        try:
+            queued = app.queue_cognition({
+                "text": "Build a platform scene",
+                "scene_graph": {
+                    "scene_id": "http-scene",
+                    "objects": [{
+                        "object_id": "platform", "kind": "cube",
+                        "position": [20, 0.5, 20], "size": [1, 1, 1],
+                        "dynamic": False,
+                    }],
+                },
+            })
+            self.assertTrue(queued["queued"])
+            frame = app.tick()["frames"][0]
+            self.assertIsNotNone(frame["cognition_result"])
+            spatial = next(
+                proposal for proposal in coordinator.workspace.latest.selected
+                if proposal.specialist == "spatial" and proposal.kind == "world_action"
+            )
+            result = app.execute_cognitive_action({"proposal_id": spatial.proposal_id})
+            self.assertTrue(result["result"]["accepted"])
+            self.assertTrue(result["result"]["resource_charge"]["charged_before_action"])
+            self.assertTrue(app.world.verify_event_chain())
+            self.assertGreater(app.state()["cognition"]["workspace_tick"], 0)
+        finally:
+            app.close()
 
     def test_health_and_static_client_are_served(self):
         status, health = self.request("/api/health")
