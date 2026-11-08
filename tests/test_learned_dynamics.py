@@ -5,7 +5,9 @@ import tempfile
 import unittest
 
 from chimera.learned_dynamics import DynamicsTrainingError, TorchMorphogeneticDynamics
-from chimera.latent_language import LATENT_DIMENSIONS
+from chimera.latent_language import (
+    LATENT_DIMENSIONS, EncoderRegistry, LatentLanguageCoordinator, SpecialistContext,
+)
 
 
 @unittest.skipUnless(importlib.util.find_spec("torch"), "optional PyTorch extra not installed")
@@ -41,6 +43,11 @@ class LearnedDynamicsTests(unittest.TestCase):
                 len(restored.evolve(trajectories[0][0], dt=0.02)),
                 LATENT_DIMENSIONS,
             )
+        coordinator = LatentLanguageCoordinator(EncoderRegistry(), dynamics=restored)
+        first = coordinator.cycle([], SpecialistContext(1.0, 0))
+        second = coordinator.cycle([], SpecialistContext(1.05, 0), dt=0.05)
+        self.assertIsNone(first.feedback.prediction_error)
+        self.assertIsNotNone(second.feedback.prediction_error)
 
 
 if __name__ == "__main__":
