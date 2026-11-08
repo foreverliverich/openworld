@@ -184,13 +184,35 @@ class JointCoordinate:
     angle: float = 0.0
     velocity: float = 0.0
     activation: float = 0.0
+    rotation_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    angular_velocity_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    tendon_extension_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    tendon_velocity_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     def __post_init__(self) -> None:
         if not self.name:
             raise BiomechanicsError("Joint coordinate name cannot be empty")
-        for key in ("angle", "velocity", "activation"):
-            _finite(key, getattr(self, key))
-        if not 0.0 <= self.activation <= 1.0:
+        angle, velocity = _finite("angle", self.angle), _finite("velocity", self.velocity)
+        rotation = _vec3("rotation_xyz", self.rotation_xyz)
+        angular_velocity = _vec3("angular_velocity_xyz", self.angular_velocity_xyz)
+        tendon_extension = _vec3("tendon_extension_xyz", self.tendon_extension_xyz)
+        tendon_velocity = _vec3("tendon_velocity_xyz", self.tendon_velocity_xyz)
+        if rotation == (0.0, 0.0, 0.0) and angle != 0.0:
+            rotation = (angle, 0.0, 0.0)
+        elif abs(rotation[0] - angle) > 1e-7:
+            angle = rotation[0]
+        if angular_velocity == (0.0, 0.0, 0.0) and velocity != 0.0:
+            angular_velocity = (velocity, 0.0, 0.0)
+        elif abs(angular_velocity[0] - velocity) > 1e-7:
+            velocity = angular_velocity[0]
+        object.__setattr__(self, "angle", angle)
+        object.__setattr__(self, "velocity", velocity)
+        object.__setattr__(self, "rotation_xyz", rotation)
+        object.__setattr__(self, "angular_velocity_xyz", angular_velocity)
+        object.__setattr__(self, "tendon_extension_xyz", tendon_extension)
+        object.__setattr__(self, "tendon_velocity_xyz", tendon_velocity)
+        activation = _finite("activation", self.activation)
+        if not 0.0 <= activation <= 1.0:
             raise BiomechanicsError("Muscle activation must be in [0, 1]")
 
 
@@ -234,12 +256,17 @@ class ArticulatedBodyState:
     def from_dict(cls, payload: Mapping[str, object]) -> "ArticulatedBodyState":
         if not payload:
             return cls.neutral()
-        joints = tuple(
-            JointCoordinate(**dict(item)) for item in payload.get("joints", ())  # type: ignore[arg-type]
-        )
+        source_version = str(payload.get("skeleton_version", "human-sagittal-1"))
+        joints = []
+        for raw in payload.get("joints", ()):  # type: ignore[assignment]
+            item = dict(raw)  # type: ignore[arg-type]
+            if "rotation_xyz" not in item:
+                item["rotation_xyz"] = (float(item.get("angle", 0.0)), 0.0, 0.0)
+                item["angular_velocity_xyz"] = (float(item.get("velocity", 0.0)), 0.0, 0.0)
+            joints.append(JointCoordinate(**item))
         return cls(
-            skeleton_version=str(payload.get("skeleton_version", SKELETON_VERSION)),
-            joints=joints,
+            skeleton_version=SKELETON_VERSION if source_version == "human-sagittal-1" else source_version,
+            joints=tuple(joints),
             root_velocity=tuple(payload.get("root_velocity", (0.0,0.0,0.0))),  # type: ignore[arg-type]
             contacts=tuple(payload.get("contacts", ())),  # type: ignore[arg-type]
             mechanical_strain=float(payload.get("mechanical_strain", 0.0)),
@@ -260,6 +287,7 @@ class SegmentPose:
     center: tuple[float, float, float]
     direction: tuple[float, float, float]
     radius: float
+    orientation: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
