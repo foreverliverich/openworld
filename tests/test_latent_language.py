@@ -170,7 +170,7 @@ class LatentLanguageTests(unittest.TestCase):
             )
             graph = SceneGraph(
                 "runtime-scene",
-                (SceneObject("object", "cube", (0, 0.5, 0), (0.5, 1, 0.5),
+                (SceneObject("object", "cube", (20, 0.5, 20), (0.5, 1, 0.5),
                              dynamic=False),),
             )
             runtime.queue_cognition_cycle(
