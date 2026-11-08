@@ -102,6 +102,15 @@ class OllamaReasoningSpecialistTests(unittest.TestCase):
         self.assertEqual(proposals, ())
         urlopen.assert_not_called()
 
+    @patch("chimera.ollama_specialist.urllib.request.urlopen", side_effect=OSError("service offline"))
+    def test_offline_optional_coagent_fails_open_without_aborting_tick(self, urlopen):
+        specialist = OllamaReasoningSpecialist("qwen2.5:3b")
+        proposals = specialist.propose(
+            LatentState.empty(), SpecialistContext(1.0, 0, text=self.text),
+        )
+        self.assertEqual(proposals, ())
+        self.assertIn("Cannot reach local Ollama", specialist.last_error)
+
     def test_constructor_rejects_unsafe_configuration(self):
         with self.assertRaises(ValueError):
             OllamaReasoningSpecialist("")
