@@ -130,8 +130,8 @@ class GeminiSceneInterpreter:
                 f"Scene image must be between 1 byte and {MAX_IMAGE_BYTES} bytes"
             )
         signatures = {
-            "png": raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"),
-            "jpeg": raw.startswith(b"\\xff\\xd8\\xff"),
+            "png": raw.startswith(b"\x89PNG\r\n\x1a\n"),
+            "jpeg": raw.startswith(b"\xff\xd8\xff"),
             "webp": len(raw) >= 12 and raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
         }
         if not signatures[mime]:
