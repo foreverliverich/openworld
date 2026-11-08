@@ -32,6 +32,7 @@ This implementation follows the uploaded *Engine of Latent Language 3.0: Continu
 
 - `chimera/latent_language.py`: 2,464-D schema, timestamped observation contracts, fusion, aligned-space similarity guard, ISCE projection, scene graph, specialist proposal contract, deterministic global workspace, and revision-checked cognitive action gateway.
 - `chimera/encoders.py`: lazy-loaded BERT text, CLIP image and CLIP text shared-space adapters; Wav2Vec2 audio adapter; calibrated 64-channel sensor encoder. Heavy dependencies are optional.
+- `chimera/scene_interpreter.py`: opt-in Gemini semantic-to-spatial parser with structured JSON output, bounded object/relationship counts, strict field validation and a full SceneGraph geometry compile before workspace admission.
 - `chimera/latent_training.py`: trainable text/image/audio projection heads, symmetric InfoNCE alignment objective, audio 128-D bottleneck with reconstruction loss, confidence-weighted 512-D fusion, evaluation metrics and per-modality checkpoint validation. When a validated alignment model is supplied to LatentLanguageCoordinator, the fused embedding enters the global workspace as a memory-subspace proposal and competes before it can update state.
 - `chimera/learned_dynamics.py`: trainable latent vector field, bounded RK4 integration, trajectory training, validation metrics, gradient clipping and schema-checked checkpoints. Untrained dynamics are prohibited from evolving the live latent state.
 - `chimera/runtime.py`: queues cognition work onto the organism-owned tick, projects the current ISCE state, exposes the shared action gateway, and feeds prior-cycle novelty/prediction error into the next ISCE transition.
@@ -90,7 +91,11 @@ and `--dynamics-checkpoint`. Checkpoints are bound to the exact configured
 pretrained encoder IDs and are rejected on mismatch.
 
 The local API accepts `POST /api/cognition` to queue text, image, audio and
-calibrated sensor observations plus an optional typed scene graph. The next
+calibrated sensor observations plus an optional typed scene graph. With
+`--enable-scene-interpreter`, a request can set `interpret_scene: true` and
+provide a spatial text prompt instead; the Gemini adapter parses and geometrically
+validates the graph before it enters the specialist workspace. This is opt-in and
+uses the server-side `GEMINI_API_KEY`; it does not execute model-generated code. The next
 `POST /api/tick` runs the cycle on the organism-owned clock and returns the
 global-workspace selected proposal IDs. `POST /api/cognition/execute` accepts
 only a proposal ID from the latest broadcast; it cannot execute rejected,
@@ -110,7 +115,7 @@ This PR supplies executable interfaces and first working baselines; the followin
 1. **Model training evidence:** no paired multimodal corpus or trained projection/dynamics checkpoints are included. Downloaded pretrained encoders are available after installing dependencies, but project-specific alignment and morphogenetic dynamics must be trained and evaluated on real Chimera trajectories.
 2. **Specialist depth:** emotion and intent specialists are transparent deterministic baselines; social specialist encodes explicit interaction metadata only. Trained classifiers/LLM reasoning adapters and calibrated confidence are still required.
 3. **Persistent episodic memory:** retrieval accepts records from the caller and does not create a competing memory database. A rebuildable index over the authoritative event journal must be wired with provenance and retention policy.
-4. **Semantic scene parsing:** the spatial module consumes typed scene graphs; a language/vision parser that constructs those graphs and validates uncertainty is still required.
+4. **Semantic scene parsing:** an opt-in Gemini text-to-scene-graph parser is now executable and validates its output against current geometric constraints. It is not a general visual scene understanding system, does not infer hidden geometry from camera pixels, and does not expose calibrated uncertainty.
 5. **Visual/audio sensor lifecycle:** browser capture, timestamp synchronization, worker ownership, permissions and durable sensor replay are not yet connected end-to-end.
 6. **Creative asset backends:** structured scene/concept artifacts are implemented; image diffusion, mesh generation, Blender execution/export and behavioral animation backends remain separate adapters.
 7. **Causal physiology experiments:** global-workspace and latent dynamics need CCPL intervention, sham, double-intervention and mediation batteries before any causal or consciousness-related interpretation.
