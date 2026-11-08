@@ -8,7 +8,7 @@ from chimera.latent_language import (
     CognitiveActionGateway, GlobalWorkspace, LatentLanguageError, LatentState, SceneGraph,
     SceneObject, SpecialistContext, SpecialistProposal,
 )
-from chimera.autonomous_agent import ChimeraToolbox
+from chimera import ChimeraToolbox
 from chimera.organism_kernel import OrganismKernel
 from chimera.reality_engine import RealityEngine, WorldConfig
 from chimera.ollama_creative_specialist import (
