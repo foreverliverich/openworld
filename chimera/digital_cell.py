@@ -129,6 +129,10 @@ class DigitalCell:
         """
         if not math.isfinite(harvest_amount) or not 0.0 < harvest_amount <= 0.25:
             raise ValueError("harvest_amount must be finite and in (0, 0.25]")
+        if getattr(gateway, "organism", None) is not organism:
+            raise ValueError("Cell and action gateway must share the same organism")
+        if getattr(gateway, "world", None) is not organism.world:
+            raise ValueError("Cell, organism and gateway must share one RealityEngine")
         proposal = self.step(observation, organism.state, organism.kernel, dt=dt)
         receipt = None
         if proposal.action == "seek":
