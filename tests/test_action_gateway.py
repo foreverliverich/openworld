@@ -59,6 +59,10 @@ class ActionGatewayTests(unittest.TestCase):
         self.assertEqual(self.organism.state.sensorimotor.last_action_success, 1.0)
         self.assertAlmostEqual(receipt.prediction_error, 0.2)
         self.assertEqual(len(self.world.entities()), 1)
+        events = self.world.event_history()
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[1]["payload"]["causation_id"], receipt.action_id)
+        self.assertEqual(events[1]["payload"]["correlation_id"], receipt.action_id)
         self.assertTrue(self.world.verify_event_chain())
 
     def test_stale_proposal_is_rejected_without_mutation(self):
