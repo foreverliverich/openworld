@@ -159,3 +159,20 @@ The new API integration test file is `tests/test_http_server.py`. The full suite
 - Added `web/index.html`: live Three.js projection of authoritative entities, physiology telemetry, object creation, body prototype creation and event-chain inspection.
 - Added `tests/test_http_server.py`: HTTP-level integration tests for health/static serving, state consistency, toolbox commit visibility, stale revision rejection, runtime tick and invalid tick limits.
 - GitHub Actions full standard-library suite passed on commit `35e19f74b855049a572f09b7641e2abcf6bd6c23` (run `42422927651`) and the six-domain browser assertions passed on commit `157b5043e803b6061cd8ed36e83182475a40d813` (run [42423064491](https://github.com/foreverliverich/openworld/actions/runs/42423064491)).
+
+
+## Somatic Core P0 embodiment implementation — 2026-11-07
+
+The protected body requirement has moved from a backlog statement to a connected SDF morphogenesis implementation. The detailed record and run instructions are in [SOMATIC_CORE_IMPLEMENTATION.md](SOMATIC_CORE_IMPLEMENTATION.md).
+
+- chimera/somatic_kernel.py: server-side Gemini morphology generation; API key is never exposed to browser code; structured package and GLSL entry-point validation.
+- chimera/reality_engine.py: canonical SQLite somatic_morphology state containing the previous and current SDF, package metadata, iteration and morph start timestamp. Morph commits advance the world revision and append a hash-chained event.
+- chimera/http_server.py: state read, candidate generation and separate commit routes. The browser must compile/link the generated SDF before the durable commit is allowed.
+- web/somatic-core.js: WebGL2 raymarcher, A/B SDF blending, BioPBR noise/domain operators, diffusion/fur displacement, pores, subdermal variation, material IDs, soft-light SSS and AO.
+- web/somatic.html: dedicated natural-language morphology interface; restores the canonical SDF pair from RealityEngine.
+- web/index.html: the rigid primitive Body Forge form is removed from the main UI and replaced with a link to Somatic Core.
+- tests/test_somatic_kernel.py and tests/test_somatic_reality.py: added package, credential, persistence, revision-conflict and event-chain tests.
+
+**Important transaction invariant:** model generation is not a world mutation. The candidate SDF is compiled with the current BioPBR library in the browser first. Only after successful compile/link does the browser submit the package and expected world revision for an atomic RealityEngine commit. Compile failure leaves both the displayed program and canonical state unchanged.
+
+**Verification status:** local Python syntax and package-validation smoke checks passed. New automated tests are committed but hosted CI has not yet been confirmed for this implementation. A real WebGL2 browser run and the whitepaper's repeated T1–T7 acceptance suite have not been observed; P0 is therefore **in progress, not certified complete**. Auto-visual-refinement, image-conditioned refinement, camera interaction and the repeated browser acceptance run remain open. No articulation, locomotion, GPU particle-count or sentience claims are made.
