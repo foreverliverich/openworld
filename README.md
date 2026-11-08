@@ -415,3 +415,24 @@ The resulting spatial proposal must still win the global workspace and be
 executed through `/api/cognition/execute`. The parser does not run generated
 code, create arbitrary meshes, or bypass RealityEngine's collision and revision
 checks. Nested containment remains unsupported by the primitive AABB world.
+
+
+### Optional local Ollama reasoning co-agent
+
+Install and run Ollama separately, pull a local model (for example `ollama pull qwen2.5:3b`), then start Chimera with the co-agent enabled:
+
+```bash
+python -m chimera.http_server \
+  --enable-latent-language \
+  --ollama-model qwen2.5:3b \
+  --host 127.0.0.1 --port 8765
+```
+
+The Ollama service defaults to `http://127.0.0.1:11434`; override with
+`--ollama-url` when deliberately using another trusted endpoint. Each text
+cognition cycle now invokes the local model as an additional specialist. Its
+structured output is bounded and checked against the source prompt; its proposal
+competes with the other specialists in the existing global workspace. It can
+summarize, classify intent and suggest a next information-gathering step, but
+cannot issue world actions or bypass the action gateway. The service is optional;
+without `--ollama-model`, the deterministic baseline specialists remain active.
