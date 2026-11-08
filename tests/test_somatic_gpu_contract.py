@@ -28,4 +28,16 @@ class SomaticGPUContractTests(unittest.TestCase):
   self.assertIn("processedCells:budget",s)
   self.assertIn("baseCell: u32",s)
   self.assertIn("gid.x+params.baseCell",s)
+ def test_audio_uniform_is_explicit_and_bounded(self):
+  s=SOURCE.read_text()
+  self.assertIn("audioBands: vec4<f32>",s)
+  self.assertIn("audioStrength: f32",s)
+  self.assertIn("new ArrayBuffer(112)",s)
+  self.assertIn("setAudioDrive(bass,mid,treble",s)
+  self.assertIn("strength>20",s)
+  self.assertIn("clearAudioDrive()",s)
+ def test_spectral_bridge_uses_fft_bands_without_recording(self):
+  s=(ROOT/"web"/"somatic-audio.js").read_text()
+  for term in ("createAnalyser()","getFloatFrequencyData","bandLevel(20,250)","bandLevel(250,2000)","bandLevel(2000,12000)","setAudioDrive","dispose("):
+   self.assertIn(term,s)
 if __name__=="__main__":unittest.main()

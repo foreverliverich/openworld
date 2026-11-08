@@ -315,3 +315,10 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
   latent gene decoding, spectral audio-to-body coupling and a Gaussian splat
   renderer remain unimplemented in this branch. No recovered legacy source
   for these exact named modules has yet been merged into this execution path.
+
+
+## 2026-11-08 — local spectral audio bridge
+- Added `web/somatic-audio.js`: WebAudio FFT band extraction (bass/mids/treble), smoothing, explicit lifecycle, local-only processing and bounded GPU coupling.
+- Extended the WebGPU uniform block from 64 to 112 bytes while preserving the 48-byte cell ABI. Shader maps bass to vertical, mids to radial and treble to tangential bounded forces.
+- Added static contract tests and usage/limitations documentation.
+- Status: source changes committed in this branch; browser audio permission, WebAudio playback, WGSL compilation, physical response and GPU timing remain unverified. This is not the historical AxiomScript/NCA, Gaussian sorter, or TDR bypass.

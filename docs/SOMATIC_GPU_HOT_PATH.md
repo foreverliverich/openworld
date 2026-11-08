@@ -41,3 +41,22 @@ coupling. Rotating subsets also means an individual cell is updated less often
 than the display frame rate; this changes effective per-cell simulation
 frequency and must be accounted for before treating it as physically
 time-equivalent. No five-million-cell benchmark or watchdog test has been run.
+
+
+## Spectral audio coupling (first executable bridge)
+
+`web/somatic-audio.js` reads local WebAudio FFT magnitudes and separates
+bass (20–250 Hz), mids (250–2,000 Hz), and treble (2,000–12,000 Hz). The
+bands are smoothed and passed to the GPU as bounded controls. The shader maps
+bass to vertical force, mids to radial force, and treble to tangential force;
+a configurable spatial wave produces a visible physical ripple response.
+The existing 48-byte cell ABI is unchanged; the uniform block is now 112 bytes.
+
+Usage: create a bridge from a MediaStream or audio element, call `resume()`
+from a user gesture, and call `update()` once per animation frame. Call
+`dispose()` to disconnect. MediaStream audio is not routed to speakers by
+default. The bridge does not record or transmit audio.
+
+This is a controllable spectral force coupling, not a validated acoustic or
+cymatic tissue model. It has not yet been browser/GPU tested; no sound-pressure
+calibration, material resonance model, or hardware benchmark is claimed.

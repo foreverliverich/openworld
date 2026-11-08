@@ -16,6 +16,8 @@ struct SimParams {
   friction: f32, energyDrain: f32, cellCount: u32, baseCell: u32,
   attractionCenter: vec4<f32>,
   attractionStrength: f32, maxAttractionAcceleration: f32, _pad2: vec2<f32>,
+  audioBands: vec4<f32>, audioCenter: vec4<f32>,
+  audioStrength: f32, audioSpatialScale: f32, audioPhase: f32, _pad3: f32,
 };
 @group(0) @binding(0) var<storage, read_write> cells: array<SomaticCell>;
 @group(0) @binding(1) var<uniform> params: SimParams;
@@ -34,6 +36,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let acceleration=min(params.attractionStrength*goalDistance,
                          max(params.maxAttractionAcceleration,0.0));
     v=v+(toGoal/goalDistance)*acceleration*dt;
+  }
+  // Spectral bands drive bounded, distinct body forces: bass vertically,
+  // mids radially, highs tangentially. This is a controllable ripple force,
+  // not a claim that the body reproduces acoustic pressure or resonance.
+  let audioOffset=c.position.xyz-params.audioCenter.xyz;
+  let audioRadius=length(audioOffset);
+  if(params.audioStrength>0.0 && audioRadius>1e-5){
+    let radial=audioOffset/audioRadius;
+    let tangent=vec3<f32>(-radial.z,0.0,radial.x);
+    let wave=sin(audioRadius*params.audioSpatialScale-params.audioPhase);
+    let bands=clamp(params.audioBands.xyz,vec3<f32>(0.0),vec3<f32>(1.0));
+    let audioForce=vec3<f32>(
+      radial.x*bands.y+tangent.x*bands.z,
+      bands.x,
+      radial.z*bands.y+tangent.z*bands.z
+    )*wave*clamp(params.audioStrength,0.0,20.0);
+    v=v+audioForce*dt;
   }
   v.y=v.y-params.gravity*dt;
   var p=c.position.xyz+v*dt;
@@ -89,7 +108,7 @@ export class SomaticGPU {
       const bytes=count*CELL_BYTES;
       const buffer=device.createBuffer({label:"Somatic cells "+offset,size:align(bytes,4),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
       device.queue.writeBuffer(buffer,0,floats);
-      const uniform=device.createBuffer({label:"Somatic parameters",size:64,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+      const uniform=device.createBuffer({label:"Somatic parameters",size:112,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
       const bindGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
         {binding:0,resource:{buffer,size:bytes}},{binding:1,resource:{buffer:uniform}}
       ]});
@@ -97,7 +116,8 @@ export class SomaticGPU {
     }
     return new SomaticGPU({device,pipeline,pages,cellCount,gravity,groundY,restitution,friction,energyDrain,
       rotationFrames,maxCellsPerFrame,cursor:0,
-      attractionCenter:[0,0,0],attractionStrength:0,maxAttractionAcceleration:8});
+      attractionCenter:[0,0,0],attractionStrength:0,maxAttractionAcceleration:8,
+      audioBands:[0,0,0],audioCenter:[0,0,0],audioStrength:0,audioSpatialScale:2,audioPhase:0});
   }
   constructor(options){Object.assign(this,options);this.disposed=false;this.steps=0;this.simulationTime=0;}
   setAttractor(x,y,z,{strength=1,maxAcceleration=8}={}){
@@ -109,6 +129,17 @@ export class SomaticGPU {
     this.maxAttractionAcceleration=maxAcceleration;
   }
   clearAttractor(){this.setAttractor(0,0,0,{strength:0,maxAcceleration:this.maxAttractionAcceleration});}
+  setAudioDrive(bass,mid,treble,{strength=0,spatialScale=2,phase=0,center=[0,0,0]}={}){
+    if(this.disposed)throw new Error("SomaticGPU disposed");
+    if(![bass,mid,treble,strength,spatialScale,phase,...center].every(Number.isFinite))
+      throw new TypeError("Audio drive values must be finite");
+    if(center.length!==3 || strength<0 || strength>20 || spatialScale<=0 || spatialScale>100)
+      throw new RangeError("Audio drive is outside its bounded range");
+    this.audioBands=[Math.min(1,Math.max(0,bass)),Math.min(1,Math.max(0,mid)),Math.min(1,Math.max(0,treble))];
+    this.audioStrength=strength;this.audioSpatialScale=spatialScale;this.audioPhase=phase;
+    this.audioCenter=[center[0],center[1],center[2]];
+  }
+  clearAudioDrive(){this.setAudioDrive(0,0,0,{strength:0,spatialScale:this.audioSpatialScale,phase:0,center:this.audioCenter});}
   step(deltaSeconds){
     if(this.disposed)throw new Error("SomaticGPU disposed");
     if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw new RangeError("deltaSeconds must be finite and non-negative");
@@ -125,11 +156,14 @@ export class SomaticGPU {
       if(!page)throw new Error("Somatic page map is incomplete");
       const localStart=globalStart-page.offset;
       const segment=Math.min(remaining,page.count-localStart);
-      const data=new ArrayBuffer(64),f=new Float32Array(data),u=new Uint32Array(data);
+      const data=new ArrayBuffer(112),f=new Float32Array(data),u=new Uint32Array(data);
       f[0]=dt;f[1]=this.gravity;f[2]=this.groundY;f[3]=this.restitution;f[4]=this.friction;f[5]=this.energyDrain;
       u[6]=segment;u[7]=localStart;
       f[8]=this.attractionCenter[0];f[9]=this.attractionCenter[1];f[10]=this.attractionCenter[2];f[11]=0;
       f[12]=this.attractionStrength;f[13]=this.maxAttractionAcceleration;f[14]=0;f[15]=0;
+      f[16]=this.audioBands[0];f[17]=this.audioBands[1];f[18]=this.audioBands[2];f[19]=0;
+      f[20]=this.audioCenter[0];f[21]=this.audioCenter[1];f[22]=this.audioCenter[2];f[23]=0;
+      f[24]=this.audioStrength;f[25]=this.audioSpatialScale;f[26]=this.audioPhase;f[27]=0;
       this.device.queue.writeBuffer(page.uniform,0,data);
       pass.setBindGroup(0,page.bindGroup);
       pass.dispatchWorkgroups(Math.ceil(segment/WORKGROUP_SIZE));
