@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from chimera.latent_language import (
-    CognitiveActionGateway, GlobalWorkspace, LatentState, SceneGraph,
+    CognitiveActionGateway, GlobalWorkspace, LatentLanguageError, LatentState, SceneGraph,
     SceneObject, SpecialistContext, SpecialistProposal,
 )
 from chimera.autonomous_agent import ChimeraToolbox
@@ -130,7 +130,7 @@ class OllamaCreativeSpecialistTests(unittest.TestCase):
                 )
                 workspace.compete(LatentState.empty(), [proposal])
                 gateway = CognitiveActionGateway(toolbox, workspace, organism)
-                with self.assertRaisesRegex(Exception, "Only world_action proposals"):
+                with self.assertRaisesRegex(LatentLanguageError, "Only world_action proposals"):
                     gateway.execute(proposal)
             finally:
                 world.close()
