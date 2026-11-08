@@ -86,7 +86,7 @@ class ArticulatedBodyTests(unittest.TestCase):
     def test_quaternion_forward_kinematics_uses_three_axis_joint_orientation(self):
         from dataclasses import replace
         joints = tuple(
-            replace(joint, rotation_xyz=(0.0, 0.45, 0.0))
+            replace(joint, rotation_xyz=(0.0, 0.0, 0.45))
             if joint.name == "thigh_l" else joint
             for joint in self.state.joints
         )
