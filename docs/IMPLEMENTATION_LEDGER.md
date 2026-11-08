@@ -358,3 +358,11 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
   system, tissue model or proof of learning. Environment observations are
   supplied by the caller; no RealityEngine sensor or GPU coupling is claimed.
 - Verification is pending until the branch CI runs the new tests.
+
+
+### Digital-cell integrity hardening — 2026-11-08
+
+- Membrane spikes now causally gate the metabolically active seek action; the refractory period suppresses seeking.
+- Cell stepping now returns a proposal without mutating local state. The caller explicitly commits the cell result only after the paired ISCE/RealityEngine transaction succeeds; stale proposals are rejected.
+- Added tests for membrane gating, refractory suppression, pure proposal semantics, commit behavior and stale-result rejection.
+- This improves causal and transactional integrity but remains an experimental single-cell controller. CI and adaptive-versus-frozen/sham performance comparisons remain pending.
