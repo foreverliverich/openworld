@@ -627,7 +627,7 @@ class RealityEngine:
             if row is None:
                 return None
             state = json.loads(row["payload"])
-            started = float(state.pop("morph_started_at", 0.0))
+            started = float(state.get("morph_started_at", 0.0))
             state["evolutionProgress"] = min(1.0, max(0.0, (time.time() - started) * 1.5))
             state["world_revision"] = self.revision()
             return state
