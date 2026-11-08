@@ -288,6 +288,17 @@ class SceneGraph:
         # Relations are applied in declared order. Conflicting repeated placements
         # are rejected rather than silently resolved by order-dependent mutation.
         assigned: set[str] = set()
+        parent_of: dict[str, str] = {}
+        for rel in self.relations:
+            parent_of[rel.subject] = rel.object
+        for start in parent_of:
+            visited: set[str] = set()
+            node = start
+            while node in parent_of:
+                if node in visited:
+                    raise LatentLanguageError("Spatial relation graph contains a placement cycle")
+                visited.add(node)
+                node = parent_of[node]
         for rel in self.relations:
             child, parent = objects[rel.subject], objects[rel.object]
             if rel.subject in assigned:
@@ -304,6 +315,18 @@ class SceneGraph:
                     raise LatentLanguageError("Contained object exceeds container dimensions")
                 cp[:] = pp[:]
             assigned.add(rel.subject)
+        supported_by_relation = {
+            rel.subject for rel in self.relations if rel.relation in {"on_top", "inside"}
+        }
+        for item in self.objects:
+            if not item.dynamic:
+                bottom = resolved[item.object_id][1] - item.size[1] / 2.0
+                on_ground = abs(bottom) <= 1e-6
+                supported = item.object_id in supported_by_relation
+                if not on_ground and not supported:
+                    raise LatentLanguageError(
+                        f"Static object {item.object_id} must rest on ground or a declared support"
+                    )
         parts = []
         for item in self.objects:
             parts.append({
