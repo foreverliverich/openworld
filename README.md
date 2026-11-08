@@ -415,3 +415,30 @@ The resulting spatial proposal must still win the global workspace and be
 executed through `/api/cognition/execute`. The parser does not run generated
 code, create arbitrary meshes, or bypass RealityEngine's collision and revision
 checks. Nested containment remains unsupported by the primitive AABB world.
+
+
+### Image-grounded scene construction
+
+With both Latent Language and the scene interpreter enabled, submit one image
+observation plus an optional text instruction:
+
+```http
+POST /api/cognition
+Content-Type: application/json
+
+{
+  "text": "Build only the visible table and chair",
+  "interpret_scene": true,
+  "observations": [{
+    "modality": "image",
+    "source_id": "camera-frame-001",
+    "image_base64": "data:image/png;base64,..."
+  }]
+}
+```
+
+The image is sent to Gemini as image content alongside the text instruction.
+Only bounded, visible, box-like object estimates are compiled into the current
+scene graph. Coordinates and dimensions are approximate, not calibrated from a
+known camera or depth sensor. The graph still must pass geometry checks, win
+workspace competition and pass the normal action gateway before construction.
