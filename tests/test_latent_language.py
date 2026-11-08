@@ -147,6 +147,18 @@ class LatentLanguageTests(unittest.TestCase):
         self.assertEqual(len(result.rejected), 3)
         self.assertEqual(result.selected[0].proposal_id, "p0")
 
+
+    def test_global_workspace_drops_candidates_below_activation_threshold(self):
+        from chimera.latent_language import SpecialistProposal
+        low = SpecialistProposal(
+            "low-signal", "emotion", "subspace_update",
+            {"subspace": "emotion", "vector": [0.0] * 128, "timestamp": 1.0},
+            0.1, 0.1, 0.0, 0.0, 1.0, 0, ("weak-source",),
+        )
+        result = GlobalWorkspace(min_score=0.15).compete(LatentState.empty(), [low])
+        self.assertEqual(result.selected, ())
+        self.assertEqual(result.rejected, (low,))
+
     def test_full_pipeline_and_revision_checked_world_action_gateway(self):
         tmp = tempfile.TemporaryDirectory()
         try:
