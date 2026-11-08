@@ -263,3 +263,19 @@ implemented. Run the API integration tests with:
 ```bash
 python -m unittest discover -s tests -p "test_http_server.py" -v
 ```
+
+
+## Somatic Core — SDF creature morphogenesis
+
+The browser now has a dedicated SDF embodiment path. The former rigid Body Forge panel is no longer presented as the creature renderer. Somatic Core uses WebGL2 raymarching and a BioPBR shader library; Gemini produces a target GLSL SDF on the Python server, and the browser compiles it before RealityEngine commits the new A/B morphology pair to SQLite.
+
+Configure the Gemini credential on the server process and start the integrated app:
+
+```bash
+export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_world.sqlite3
+```
+
+Open [http://127.0.0.1:8765/web/somatic.html](http://127.0.0.1:8765/web/somatic.html). The key is not exposed to browser JavaScript. The canonical previous/current SDF scripts and morph metadata are stored by RealityEngine and restored after reload. The old Body Forge toolbox action remains a legacy world-entity prototype API; it is not the Somatic Core body path.
+
+Implementation detail, transaction contract and open acceptance gates: [docs/SOMATIC_CORE_IMPLEMENTATION.md](docs/SOMATIC_CORE_IMPLEMENTATION.md). P0 is still in progress until the real WebGL2 T1–T7 suite has been repeatedly run and verified.
