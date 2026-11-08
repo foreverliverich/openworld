@@ -6,6 +6,8 @@ weights; they never substitute random or hash vectors when a model is unavailabl
 from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
+import io
+import math
 
 from .latent_language import LatentLanguageError
 
@@ -81,7 +83,7 @@ class HuggingFaceCLIPImageEncoder:
         # Accept a PIL image or a path readable by PIL; raw bytes are not silently decoded.
         try:
             from PIL import Image
-            image = Image.open(payload) if isinstance(payload, (str, bytes)) else payload
+            image = Image.open(io.BytesIO(payload)) if isinstance(payload, bytes) else (Image.open(payload) if isinstance(payload, str) else payload)
             if not isinstance(image, Image.Image):
                 raise TypeError("payload is not a PIL image or image path")
             image = image.convert("RGB")
