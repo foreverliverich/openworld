@@ -463,3 +463,24 @@ competes with the other specialists in the existing global workspace. It can
 summarize, classify intent and suggest a next information-gathering step, but
 cannot issue world actions or bypass the action gateway. The service is optional;
 without `--ollama-model`, the deterministic baseline specialists remain active.
+
+
+### Capture real Latent Language training data
+
+Enable the append-only derived trajectory log when starting the model runtime:
+
+    python -m chimera.http_server --enable-latent-language --latent-trajectory-log ./private-data/chimera-trajectories.jsonl --trajectory-organism-id chimera-main
+
+The log records the post-cycle 2,464-D latent vector, its digest/continuity chain, world revision, fixed integration step, encoder provenance and paired modality features. It does not store raw prompts, image files or audio waveforms. Treat embeddings as sensitive data and keep the log out of source control.
+
+To mark a text caption and image as a true aligned pair, send both in the same POST /api/cognition request and explicitly set alignment_pair: true. This must be a caption describing the image, not merely a question about it. Unmarked cycles are excluded from contrastive alignment training.
+
+Train learned dynamics from complete sessions. The script reads the recorded integration step and splits by whole trajectory, never by adjacent rows:
+
+    python scripts/train_latent_dynamics.py --dataset ./private-data/chimera-trajectories.jsonl --checkpoint ./private-data/morphogenetic-dynamics.pt
+
+Train text/image alignment from explicitly paired cycles:
+
+    python scripts/train_multimodal_alignment.py --dataset ./private-data/chimera-trajectories.jsonl --checkpoint ./private-data/multimodal-alignment.pt
+
+Add --include-audio only when every selected pair includes audio. The loader uses the raw 768-D Wav2Vec2 hidden vector for training while retaining the validated 128-D projected audio slot for runtime. Held-out metrics are printed before a checkpoint can be saved.
