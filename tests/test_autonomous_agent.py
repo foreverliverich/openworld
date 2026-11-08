@@ -39,6 +39,9 @@ class AutonomousAgentTests(unittest.TestCase):
         self.assertEqual(third.goal, "inspect_world_and_consolidate_memory")
         self.assertEqual(third.action, "observe_and_consolidate")
         self.assertGreater(self.organism.state.self_model.memory_strength, 0.0)
+        self.assertIn("sensory", third.result)
+        self.assertGreaterEqual(third.result["sensory"]["salience"], 0.0)
+        self.assertTrue(self.organism.state.self_model.last_outcome.startswith("sense1:"))
         self.assertTrue(self.world.verify_event_chain())
 
     def test_agent_recovers_when_energy_is_low(self):
