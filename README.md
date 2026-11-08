@@ -484,3 +484,27 @@ Train text/image alignment from explicitly paired cycles:
     python scripts/train_multimodal_alignment.py --dataset ./private-data/chimera-trajectories.jsonl --checkpoint ./private-data/multimodal-alignment.pt
 
 Add --include-audio only when every selected pair includes audio. The loader uses the raw 768-D Wav2Vec2 hidden vector for training while retaining the validated 128-D projected audio slot for runtime. Held-out metrics are printed before a checkpoint can be saved.
+
+
+### Optional local creative-generation co-agent
+
+The deterministic creative specialist remains the no-network baseline. To add
+actual local language-model generation of structured creative briefs, install
+Ollama, pull a capable model, and start Chimera with:
+
+```bash
+ollama pull qwen2.5:7b
+python -m chimera.http_server \
+  --enable-latent-language \
+  --ollama-creative-model qwen2.5:7b \
+  --host 127.0.0.1 --port 8765
+```
+
+The model returns a bounded JSON artifact: type, title, concept, named design
+elements, variations, style tags and preserved constraints. Selected artifacts
+are included in the cognition result and `/api/state` snapshot. They are
+workspace proposals with `authority=artifact_only`; they cannot execute tools,
+write geometry, mutate ISCE or bypass the action gateway. The optional specialist
+fails closed (no proposal) if Ollama is unavailable or its response fails schema
+and size validation. Model latency and hardware energy are not yet metered by
+the organism's allostatic resource model.
