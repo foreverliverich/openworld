@@ -124,7 +124,10 @@ def generate_morph_package(description: str, current_label: str = "", current_co
         package = json.loads(text)
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Gemini did not return a valid structured morphology package") from exc
-    return _validate_package(package)
+    validated = _validate_package(package)
+    if current_context and validated["sdfScript"].strip() == str(current_context.get("sdfScript", "")).strip():
+        raise RuntimeError("Gemini returned an unchanged SDF; no morphology transition was produced")
+    return validated
 
 
 def validate_morph_package(package: Any) -> dict[str, Any]:
@@ -207,4 +210,7 @@ def refine_morph_package(
         package = json.loads(text)
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Gemini did not return a valid refinement package") from exc
-    return _validate_package(package)
+    refined = _validate_package(package)
+    if refined["sdfScript"].strip() == current_state["sdfScript"].strip():
+        raise RuntimeError("Gemini returned an unchanged SDF; visual refinement made no geometry change")
+    return refined
