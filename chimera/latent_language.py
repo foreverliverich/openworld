@@ -834,7 +834,10 @@ class LatentLanguageCoordinator:
         )
 
         generated = self._run_specialists(working_state, context)
-        for proposal in generated:
+        # Every specialist competes for the bounded global workspace. Only
+        # selected proposals are broadcast and allowed to update latent subspaces.
+        broadcast = self.workspace.compete(working_state, generated)
+        for proposal in broadcast.selected:
             if proposal.kind == "subspace_update":
                 subspace = str(proposal.payload["subspace"])
                 working_state = working_state.write_subspace(
@@ -860,15 +863,10 @@ class LatentLanguageCoordinator:
                  "cognition": context.timestamp},
                 working_state.revision + 1,
             )
-        proposals = tuple(
-            proposal for proposal in generated
-            if proposal.kind not in {"subspace_update", "intent", "memory_retrieval"}
-        )
-        broadcast = self.workspace.compete(working_state, proposals)
         self.state = working_state
         self._previous_cycle_vector = tuple(working_state.vector)
         feedback = ISCEFeedback(novelty_value, prediction_error, modality_novelty)
-        return CognitiveCycleResult(working_state, broadcast, proposals, feedback)
+        return CognitiveCycleResult(working_state, broadcast, generated, feedback)
 
 
 def _offsets():
