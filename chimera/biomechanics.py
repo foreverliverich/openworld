@@ -686,75 +686,59 @@ class BiomechanicsEngine:
                 target = _vec3(f"motor target {name}", raw_target)  # type: ignore[arg-type]
             commands[name] = target
 
-        current_transforms, _ = self._world_transforms(root, state)
-        updated: dict[str, JointCoordinate] = {}
-        total_work = 0.0
+        layout = self._dof_layout()
+        dof_index = {key: index for index, key in enumerate(layout)}
+        actuator_torque = [0.0 for _ in layout]
+        tendon_torque_by_dof = [0.0 for _ in layout]
+        pending: dict[str, dict[str, object]] = {}
         total_effort = 0.0
-        limit_strain = 0.0
         proprioceptive_sum = 0.0
         proprioceptive_axes = 0
 
+        # First compute muscle excitation and series-elastic tendon force for
+        # every generalized coordinate. The mass matrix then couples those
+        # torques across the entire articulated tree.
         for spec in self.skeleton.segments:
             if spec.parent is None:
                 continue
             joint = coordinates[spec.name]
             target = commands.get(spec.name, (0.0, 0.0, 0.0))
             rotation = list(joint.rotation_xyz)
-            angular_velocity = list(joint.angular_velocity_xyz)
             tendon_extension = list(joint.tendon_extension_xyz)
             tendon_velocity = list(joint.tendon_velocity_xyz)
-
-            # Gravity torque is computed as r x F in world coordinates and
-            # transformed into the parent joint frame. This gives the ball
-            # joints real out-of-plane loading instead of a sagittal-only term.
-            parent_q = current_transforms[spec.parent][1]
-            world_q = current_transforms[spec.name][1]
-            subtree_mass = self._subtree_mass[spec.name]
-            lever_local = _scale(spec.direction, max(.04, spec.length * .52))
-            lever_world = _q_rotate(world_q, lever_local)
-            gravity_world = _cross(lever_world, (0.0, -subtree_mass * GRAVITY, 0.0))
-            gravity_local = _q_rotate(_q_conjugate(parent_q), gravity_world)
-
-            enabled_axes = sum(1 for enabled in spec.dof_mask if enabled)
             axis_activations = []
             for axis_index, enabled in enumerate(spec.dof_mask):
                 if not enabled:
                     rotation[axis_index] = 0.0
-                    angular_velocity[axis_index] = 0.0
                     tendon_extension[axis_index] = 0.0
                     tendon_velocity[axis_index] = 0.0
                     continue
-
                 low = spec.min_rotation_xyz[axis_index]
                 high = spec.max_rotation_xyz[axis_index]
                 target_angle = _clamp(target[axis_index], low, high)
                 error = target_angle - rotation[axis_index]
-                requested_torque = (
-                    spec.kp * readiness * error
-                    - spec.kd * angular_velocity[axis_index]
-                )
                 requested_torque = _clamp(
-                    requested_torque, -spec.torque_limit, spec.torque_limit
+                    spec.kp * readiness * error
+                    - spec.kd * joint.angular_velocity_xyz[axis_index],
+                    -spec.torque_limit, spec.torque_limit,
                 )
                 activation_target = abs(requested_torque) / spec.torque_limit
                 activation_alpha = 1.0 - math.exp(-dt / spec.activation_tau)
-                activation_axis = joint.activation + (
-                    activation_target - joint.activation
-                ) * activation_alpha
-                activation_axis = _clamp(activation_axis, 0.0, 1.0)
-
-                # Hill-inspired active force scaling: force falls away from
-                # the joint's neutral/optimal angle and with shortening speed.
+                activation_axis = _clamp(
+                    joint.activation + (activation_target - joint.activation) * activation_alpha,
+                    0.0, 1.0,
+                )
                 width = max(.18, (high - low) * .42)
                 force_length = math.exp(-0.5 * (rotation[axis_index] / width) ** 2)
                 force_velocity = _clamp(
-                    1.0 - .08 * abs(angular_velocity[axis_index]), .35, 1.0
+                    1.0 - .08 * abs(joint.angular_velocity_xyz[axis_index]), .35, 1.0
                 )
-                capacity = spec.torque_limit * activation_axis * force_length * force_velocity * math.sqrt(max(.05, energy))
+                capacity = (
+                    spec.torque_limit * activation_axis * force_length
+                    * force_velocity * math.sqrt(max(.05, energy))
+                )
                 muscle_torque = _clamp(requested_torque, -capacity, capacity)
 
-                # Series-elastic tendon: a stable first-order compliant element
-                # transmits muscle torque rather than applying it directly.
                 tendon_target = muscle_torque / spec.tendon_stiffness
                 tendon_target -= (
                     spec.tendon_damping * tendon_velocity[axis_index]
@@ -768,48 +752,70 @@ class BiomechanicsEngine:
                 tendon_velocity[axis_index] = (
                     tendon_extension[axis_index] - old_extension
                 ) / dt
-                tendon_torque = _clamp(
+                transmitted_torque = _clamp(
                     spec.tendon_stiffness * tendon_extension[axis_index]
                     + spec.tendon_damping * tendon_velocity[axis_index],
                     -capacity, capacity,
                 )
+                index = dof_index[(spec.name, axis_index)]
+                actuator_torque[index] = transmitted_torque
+                tendon_torque_by_dof[index] = transmitted_torque
+                axis_activations.append(activation_axis)
+                total_effort += activation_axis * activation_axis * dt
+                proprioceptive_sum += abs(target_angle - rotation[axis_index])
+                proprioceptive_axes += 1
 
-                inertia_scale = (1.0, .78, .78)[axis_index]
-                inertia = max(
-                    .025, subtree_mass * spec.length * spec.length
-                    * .36 * inertia_scale
-                )
-                joint_acceleration = (
-                    tendon_torque + gravity_local[axis_index]
-                ) / inertia
+            pending[spec.name] = {
+                "activation": sum(axis_activations) / max(1, len(axis_activations)),
+                "tendon_extension": tuple(tendon_extension),
+                "tendon_velocity": tuple(tendon_velocity),
+            }
+
+        mass_matrix, gravity_vector = self._mass_matrix_and_gravity(root, state, layout)
+        coriolis = self._coriolis_vector(root, state, layout, mass_matrix)
+        generalized_force = [
+            actuator_torque[i] + gravity_vector[i] - coriolis[i]
+            for i in range(len(layout))
+        ]
+        generalized_acceleration = _solve_dense(mass_matrix, generalized_force)
+        updated: dict[str, JointCoordinate] = {}
+        total_work = 0.0
+        limit_strain = 0.0
+
+        for spec in self.skeleton.segments:
+            if spec.parent is None:
+                continue
+            joint = coordinates[spec.name]
+            rotation = list(joint.rotation_xyz)
+            angular_velocity = list(joint.angular_velocity_xyz)
+            for axis_index, enabled in enumerate(spec.dof_mask):
+                if not enabled:
+                    rotation[axis_index] = 0.0
+                    angular_velocity[axis_index] = 0.0
+                    continue
+                index = dof_index[(spec.name, axis_index)]
                 angular_velocity[axis_index] = (
-                    angular_velocity[axis_index] + joint_acceleration * dt
+                    angular_velocity[axis_index] + generalized_acceleration[index] * dt
                 ) * math.exp(-.08 * dt)
-                unconstrained = (
-                    rotation[axis_index] + angular_velocity[axis_index] * dt
-                )
+                unconstrained = rotation[axis_index] + angular_velocity[axis_index] * dt
+                low = spec.min_rotation_xyz[axis_index]
+                high = spec.max_rotation_xyz[axis_index]
                 rotation[axis_index] = _clamp(unconstrained, low, high)
                 impact = abs(unconstrained - rotation[axis_index])
                 if impact > 0.0:
                     angular_velocity[axis_index] = 0.0
                     limit_strain += min(1.0, impact * 3.0)
-                axis_activations.append(activation_axis)
-                work = abs(tendon_torque * angular_velocity[axis_index]) * dt
-                total_work += work
-                total_effort += activation_axis * activation_axis * dt
-                proprioceptive_sum += abs(target_angle - rotation[axis_index])
-                proprioceptive_axes += 1
-
-            activation = sum(axis_activations) / max(1, enabled_axes)
+                total_work += abs(
+                    tendon_torque_by_dof[index] * angular_velocity[axis_index]
+                ) * dt
+            actuator = pending[spec.name]
             updated[spec.name] = JointCoordinate(
-                name=spec.name,
-                angle=rotation[0],
-                velocity=angular_velocity[0],
-                activation=_clamp(activation, 0.0, 1.0),
+                name=spec.name, angle=rotation[0], velocity=angular_velocity[0],
+                activation=float(actuator["activation"]),
                 rotation_xyz=tuple(rotation),
                 angular_velocity_xyz=tuple(angular_velocity),
-                tendon_extension_xyz=tuple(tendon_extension),
-                tendon_velocity_xyz=tuple(tendon_velocity),
+                tendon_extension_xyz=actuator["tendon_extension"],  # type: ignore[arg-type]
+                tendon_velocity_xyz=actuator["tendon_velocity"],  # type: ignore[arg-type]
             )
 
         next_state = ArticulatedBodyState(
