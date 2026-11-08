@@ -48,6 +48,7 @@ class HuggingFaceTextEncoder:
         self.model = AutoModel.from_pretrained(model_id).to(device).eval()
         self.device = device
         self.encoder_id = f"hf:{model_id}"
+        self.base_encoder_id = self.encoder_id
         hidden = int(self.model.config.hidden_size)
         if hidden != 768:
             raise EncoderDependencyError(
@@ -91,6 +92,7 @@ class HuggingFaceCLIPImageEncoder:
         self.model = CLIPModel.from_pretrained(model_id).to(device).eval()
         self.device = device
         self.encoder_id = f"hf:{model_id}"
+        self.base_encoder_id = self.encoder_id
         self.shared_space = f"hf-clip:{model_id}"
 
     def encode_aligned(self, payload: Any) -> SharedSpaceEmbedding:
@@ -193,6 +195,7 @@ class HuggingFaceAudioEncoder:
         self.projection = projection
         self.device = device
         self.encoder_id = f"hf:{model_id}+trained-audio-projection"
+        self.base_encoder_id = f"hf:{model_id}"
 
     def encode(self, payload: Any) -> Sequence[float]:
         # payload = {"audio": mono_float_samples, "sampling_rate": int}
