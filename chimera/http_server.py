@@ -64,6 +64,7 @@ class ChimeraApplication:
         scene_interpreter: Any | None = None,
         enable_scene_interpreter: bool = False,
         ollama_model: str | None = None,
+        ollama_creative_model: str | None = None,
         ollama_base_url: str = "http://127.0.0.1:11434",
         ollama_timeout: float = 30.0,
         trajectory_log: str | None = None,
@@ -72,7 +73,8 @@ class ChimeraApplication:
         if cognition is not None and enable_latent_language:
             raise ValueError("Pass a coordinator or enable model loading, not both")
         if not enable_latent_language and (
-            alignment_checkpoint or dynamics_checkpoint or ollama_model or trajectory_log
+            alignment_checkpoint or dynamics_checkpoint or ollama_model
+            or ollama_creative_model or trajectory_log
         ):
             raise ValueError("Model checkpoints, Ollama and trajectory logging require --enable-latent-language")
         self.world = RealityEngine(WorldConfig(database=database))
@@ -97,6 +99,7 @@ class ChimeraApplication:
                 sensor_calibration=sensor_calibration,
                 device=device,
                 ollama_model=ollama_model,
+                ollama_creative_model=ollama_creative_model,
                 ollama_base_url=ollama_base_url,
                 ollama_timeout=ollama_timeout,
                 trajectory_log=trajectory_log,
@@ -577,7 +580,9 @@ def main() -> None:
     parser.add_argument("--enable-scene-interpreter", action="store_true",
                         help="Enable Gemini natural-language-to-validated-3D-scene parsing")
     parser.add_argument("--ollama-model", default=None,
-                        help="Optional local Ollama model tag to add as an advisory reasoning co-agent")
+                        help="Optional local Ollama model tag for an advisory reasoning co-agent")
+    parser.add_argument("--ollama-creative-model", default=None,
+                        help="Optional local Ollama model tag for bounded creative artifact generation")
     parser.add_argument("--ollama-url", default="http://127.0.0.1:11434",
                         help="Local Ollama HTTP base URL")
     parser.add_argument("--ollama-timeout", type=float, default=30.0,
@@ -617,6 +622,7 @@ def main() -> None:
         device=args.device,
         enable_scene_interpreter=args.enable_scene_interpreter,
         ollama_model=args.ollama_model,
+        ollama_creative_model=args.ollama_creative_model,
         ollama_base_url=args.ollama_url,
         ollama_timeout=args.ollama_timeout,
         trajectory_log=args.latent_trajectory_log,
