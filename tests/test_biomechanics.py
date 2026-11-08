@@ -96,16 +96,16 @@ class ArticulatedBodyTests(unittest.TestCase):
             SegmentSpec(
                 "arm_a", "root", (-0.15, 0, 0), (1, 0, 0), 0.3, 1.0, 0.08,
                 -1.0, 1.0, 10.0, 20.0, 2.0,
-                dof_mask=(False, False, True),
-                min_rotation_xyz=(0.0, 0.0, -1.0),
-                max_rotation_xyz=(0.0, 0.0, 1.0),
+                dof_mask=(False, True, False),
+                min_rotation_xyz=(0.0, -1.0, 0.0),
+                max_rotation_xyz=(0.0, 1.0, 0.0),
             ),
             SegmentSpec(
                 "arm_b", "root", (0, -0.15, 0), (0, 1, 0), 0.3, 1.0, 0.08,
                 -1.0, 1.0, 10.0, 20.0, 2.0,
-                dof_mask=(False, False, True),
-                min_rotation_xyz=(0.0, 0.0, -1.0),
-                max_rotation_xyz=(0.0, 0.0, 1.0),
+                dof_mask=(True, False, False),
+                min_rotation_xyz=(-1.0, 0.0, 0.0),
+                max_rotation_xyz=(1.0, 0.0, 0.0),
             ),
         ))
         engine = BiomechanicsEngine(skeleton)
@@ -133,7 +133,7 @@ class ArticulatedBodyTests(unittest.TestCase):
         )
         self.assertGreater(final_gap, initial_gap)
         joints = {joint.name: joint for joint in result.state.joints}
-        self.assertGreater(abs(joints["arm_b"].angular_velocity_xyz[2]), 0.0)
+        self.assertGreater(abs(joints["arm_b"].angular_velocity_xyz[0]), 0.0)
 
     def test_root_translation_is_part_of_the_coupled_mass_matrix(self):
         layout = self.engine._dof_layout()
