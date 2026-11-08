@@ -121,6 +121,7 @@ class LatentLanguageTests(unittest.TestCase):
         try:
             world = RealityEngine(WorldConfig(database=os.path.join(tmp.name, "latent.sqlite3")))
             toolbox = ChimeraToolbox(world, actor_id="latent-test")
+            organism = OrganismKernel(world, "latent-test")
             encoders = EncoderRegistry()
             encoders.register("text", FixedEncoder(768, value=0.15))
             coordinator = LatentLanguageCoordinator(encoders)
@@ -147,7 +148,7 @@ class LatentLanguageTests(unittest.TestCase):
             self.assertEqual(len(result.state.vector), LATENT_DIMENSIONS)
             self.assertGreater(result.state.subspaces["language"][0], 0)
             spatial = next(p for p in result.broadcast.selected if p.specialist == "spatial")
-            gateway = CognitiveActionGateway(toolbox, coordinator.workspace)
+            gateway = CognitiveActionGateway(toolbox, coordinator.workspace, organism)
             committed = gateway.execute(spatial, actor_id="latent-test")
             self.assertTrue(committed["accepted"])
             self.assertEqual(world.revision(), committed["revision"])
@@ -178,7 +179,7 @@ class LatentLanguageTests(unittest.TestCase):
             encoders.register("text", FixedEncoder(768, value=0.2))
             coordinator = LatentLanguageCoordinator(encoders)
             toolbox = ChimeraToolbox(world, actor_id="latent-runtime")
-            gateway = CognitiveActionGateway(toolbox, coordinator.workspace)
+            gateway = CognitiveActionGateway(toolbox, coordinator.workspace, organism)
             runtime = AutonomousRuntime(
                 world, agent, cognition=coordinator, cognition_gateway=gateway
             )
@@ -219,6 +220,7 @@ class LatentLanguageTests(unittest.TestCase):
         try:
             world = RealityEngine(WorldConfig(database=os.path.join(tmp.name, "mutate.sqlite3")))
             toolbox = ChimeraToolbox(world)
+            organism = OrganismKernel(world, "mutation-test")
             encoders = EncoderRegistry()
             encoders.register("text", FixedEncoder(768, value=0.1))
             coordinator = LatentLanguageCoordinator(encoders)
@@ -236,7 +238,7 @@ class LatentLanguageTests(unittest.TestCase):
             )
             proposal = next(p for p in cycle.broadcast.selected if p.specialist == "spatial")
             proposal.payload["arguments"]["blueprint"]["name"] = "tampered"
-            gateway = CognitiveActionGateway(toolbox, coordinator.workspace)
+            gateway = CognitiveActionGateway(toolbox, coordinator.workspace, organism)
             with self.assertRaises(LatentLanguageError):
                 gateway.execute(proposal)
             world.close()
@@ -249,6 +251,7 @@ class LatentLanguageTests(unittest.TestCase):
         try:
             world = RealityEngine(WorldConfig(database=os.path.join(tmp.name, "gateway.sqlite3")))
             toolbox = ChimeraToolbox(world)
+            organism = OrganismKernel(world, "gateway-test")
             workspace = GlobalWorkspace()
             proposal = SpecialistProposal(
                 "unselected", "spatial", "world_action",
@@ -256,7 +259,7 @@ class LatentLanguageTests(unittest.TestCase):
                  "arguments": {"blueprint": {"name": "x", "parts": []}}},
                 0.9, 0.9, 0.9, 0.9, 0.0, world.revision(), ("source",),
             )
-            gateway = CognitiveActionGateway(toolbox, workspace)
+            gateway = CognitiveActionGateway(toolbox, workspace, organism)
             with self.assertRaises(LatentLanguageError):
                 gateway.execute(proposal)
             world.close()
