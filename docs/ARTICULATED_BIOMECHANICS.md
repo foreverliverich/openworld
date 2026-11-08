@@ -86,7 +86,9 @@ Root translation is represented by three generalized coordinates and participate
 
 Unilateral normal and tangential contact impulses are solved using projected Gauss-Seidel iterations. Each contact uses an effective mass derived from \(J M^{-1}J^T\); normal impulses are non-negative and the two tangential impulses are projected onto a circular Coulomb friction cone bounded by \(\mu\lambda_n\). The current coefficient is 0.75. The contact solve is non-restitutive (zero target normal velocity); residual penetration is corrected separately with split positional stabilization. The same impulse changes root and joint velocities, after which joint coordinates are reintegrated from the constrained velocities.
 
-This closes root translational mass coupling and ground-plane normal/friction impulse response. It is still a single-organism rigid-segment contact model: root orientation and angular momentum are not yet generalized coordinates; self-collision, multi-body contact manifolds, grasping, uneven terrain, rolling resistance and calibrated material friction remain open.
+This closes root translational mass coupling, ground-plane normal/friction impulse response, and non-adjacent self-collision between articulated capsules. Self-collision uses closest points between finite segment centerlines, relative point Jacobians (body B minus body A), and the same unilateral/friction impulse solver. Parent/child and grandparent/descendant capsule pairs are excluded because their overlap represents a shared anatomical joint. Penetrating self-contacts receive a bounded separation-velocity target and are resolved through joint/root impulses rather than renderer-side pose edits.
+
+It is still a single-organism rigid-segment contact model: root orientation and angular momentum are not yet generalized coordinates; uneven terrain, grasping/manipulation contacts, multi-body contact manifolds, soft-tissue collision, rolling resistance and calibrated material friction remain open.
 
 ## 5. ISCE coupling
 
@@ -114,7 +116,7 @@ A failed RealityEngine optimistic commit still cannot publish the speculative ne
 
 ## 7. Required regression coverage
 
-`tests/test_biomechanics.py` covers tree validity, connected quaternion forward kinematics, 3-axis motor response, tendon compliance, per-axis limits and angular-speed saturation, mass-matrix symmetry and inter-joint/root-translation coupling, finite-difference Coriolis bias, non-penetrating capsule/ground contact, unilateral normal impulses, Coulomb friction impulses, no-friction separation, root acceleration, state round-trip, invalid commands/state rejection, sagittal-to-3D migration, and coupling of mechanical work/proprioception into ISCE physiology.
+`tests/test_biomechanics.py` covers tree validity, connected quaternion forward kinematics, 3-axis motor response, tendon compliance, per-axis limits and angular-speed saturation, mass-matrix symmetry and inter-joint/root-translation coupling, finite-difference Coriolis bias, non-penetrating capsule/ground contact, unilateral normal impulses, Coulomb friction impulses, no-friction separation, non-adjacent capsule self-collision, root acceleration, state round-trip, invalid commands/state rejection, sagittal-to-3D migration, and coupling of mechanical work/proprioception into ISCE physiology.
 
 The existing organism-kernel persistence/restart tests also exercise the expanded ISCE payload through the same SQLite state row and event-chain contract.
 
@@ -123,7 +125,8 @@ The existing organism-kernel persistence/restart tests also exercise the expande
 This closes the first executable articulated-body gate, not all embodiment. Remaining engineering work includes:
 
 - root orientation and angular momentum as generalized coordinates; compare the current Lagrangian/Jacobian solver against recursive Newton–Euler reference implementations
-- self-collision, uneven terrain, grasp/contact mechanics, multi-body contact manifolds and calibrated friction parameters
+- root orientation/angular momentum as generalized coordinates; compare the current Lagrangian/Jacobian solver against recursive Newton–Euler reference implementations
+- uneven terrain, grasping/manipulation contacts, multi-body contact manifolds, soft-tissue collision and calibrated friction parameters
 - antagonistic agonist/antagonist muscle pairs, pennation and physiological cross-sectional area, tendon slack/strain calibration, muscle-level fatigue and recovery
 - sensor observations from actual segment/contact geometry and camera/audio/touch modalities
 - a single governed action gateway that translates planner intent into validated motor targets
