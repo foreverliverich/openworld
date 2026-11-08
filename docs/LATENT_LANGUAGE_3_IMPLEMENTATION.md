@@ -23,9 +23,10 @@ This implementation follows the uploaded *Engine of Latent Language 3.0: Continu
 2. A registered encoder produces a correctly sized vector. Missing encoders fail closed; there is no random-vector fallback.
 3. Confidence-aware fusion updates only that modality's subspace. Stale observations are rejected.
 4. The current ISCE state is projected into the ephemeral latent workspace. Latent state is not persisted as a second organism state and does not supersede ISCE.
-5. Specialist processes produce typed proposals and/or bounded subspace updates.
+5. Specialist processes execute concurrently against the same immutable snapshot and produce typed proposals and/or bounded subspace updates. Results are consolidated in stable specialist order.
 6. The global workspace scores proposals by salience, confidence, urgency, novelty and estimated cost; it applies capacity and conflict limits and broadcasts the selected set.
 7. A world mutation can occur only when a proposal is selected, evidence-bearing, confidence-qualified, unchanged since arbitration, and still matches the current RealityEngine revision. The gateway delegates to the existing ChimeraToolbox/RealityEngine transaction boundary.
+8. Bounded novelty from new encoded observations—and prediction error only when a trained dynamics model is present—is returned as an ISCE feedback contract. The runtime consumes that feedback on the next authoritative organism tick through OrganismKernel, so sensory surprise affects actual ISCE memory/physiology transitions rather than only a display value.
 
 ## Implemented components
 
@@ -33,7 +34,8 @@ This implementation follows the uploaded *Engine of Latent Language 3.0: Continu
 - `chimera/encoders.py`: lazy-loaded BERT text, CLIP image and CLIP text shared-space adapters; Wav2Vec2 audio adapter; calibrated 64-channel sensor encoder. Heavy dependencies are optional.
 - `chimera/latent_training.py`: trainable text/image/audio projection heads, symmetric InfoNCE alignment objective, audio 128-D bottleneck with reconstruction loss, evaluation metrics and checkpoint validation.
 - `chimera/learned_dynamics.py`: trainable latent vector field, bounded RK4 integration, trajectory training, validation metrics, gradient clipping and schema-checked checkpoints. Untrained dynamics are prohibited from evolving the live latent state.
-- `chimera/runtime.py`: queues cognition work onto the organism-owned tick, projects the current ISCE state, and exposes the shared action gateway.
+- `chimera/runtime.py`: queues cognition work onto the organism-owned tick, projects the current ISCE state, exposes the shared action gateway, and feeds prior-cycle novelty/prediction error into the next ISCE transition.
+- Specialist calls run concurrently with deterministic result consolidation; latent and workspace maps are immutable snapshots.
 - Specialist implementations: emotion lexical baseline, explicit-intent baseline, read-only memory retrieval, social interaction metadata, temporal encoding, spatial scene composition and structured creative artifact generation.
 
 The specialist baselines are deliberately named as baselines. They are not substitutes for trained emotion/social models or a general-purpose reasoning model. The spatial composer creates validated symbolic scene blueprints and submits them through RealityEngine; it does not claim to produce photorealistic assets or run Blender/3D diffusion.
