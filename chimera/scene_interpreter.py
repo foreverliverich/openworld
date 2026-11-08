@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import math
 import os
 import re
 import urllib.error
@@ -35,6 +36,15 @@ class SceneInterpretationError(RuntimeError):
 
 class GeminiSceneInterpreter:
     """Convert a spatial prompt to a constrained, typed scene graph."""
+
+    @staticmethod
+    def _number(value: Any, field: str) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise SceneInterpretationError(f"{field} must be a finite JSON number")
+        number = float(value)
+        if not math.isfinite(number):
+            raise SceneInterpretationError(f"{field} must be finite")
+        return number
 
     def __init__(self, *, model: str = MODEL, api_key: str | None = None, timeout: float = 60.0):
         self.model = model
@@ -73,33 +83,39 @@ class GeminiSceneInterpreter:
                 raise SceneInterpretationError(f"objects[{index}].position must be a 3-vector")
             if not isinstance(size, list) or len(size) != 3:
                 raise SceneInterpretationError(f"objects[{index}].size must be a 3-vector")
-            if any(abs(float(v)) > MAX_SCENE_EXTENT for v in position):
+            position_values = tuple(
+                self._number(v, f"objects[{index}].position") for v in position
+            )
+            size_values = tuple(
+                self._number(v, f"objects[{index}].size") for v in size
+            )
+            if any(abs(v) > MAX_SCENE_EXTENT for v in position_values):
                 raise SceneInterpretationError(f"objects[{index}] lies outside the scene extent")
-            if any(not MIN_OBJECT_SIZE <= float(v) <= MAX_OBJECT_SIZE for v in size):
+            if any(not MIN_OBJECT_SIZE <= v <= MAX_OBJECT_SIZE for v in size_values):
                 raise SceneInterpretationError(f"objects[{index}] has dimensions outside supported bounds")
             material = item.get("material", "default")
             if not isinstance(material, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", material):
                 raise SceneInterpretationError(f"objects[{index}].material is invalid")
-            mass = float(item.get("mass", 1.0))
+            mass = self._number(item.get("mass", 1.0), f"objects[{index}].mass")
             if not 0.01 <= mass <= 10000.0:
                 raise SceneInterpretationError(f"objects[{index}].mass is outside supported bounds")
             dynamic = item.get("dynamic", True)
             if not isinstance(dynamic, bool):
                 raise SceneInterpretationError(f"objects[{index}].dynamic must be boolean")
             objects.append(SceneObject(
-                object_id, kind, tuple(float(v) for v in position),
-                tuple(float(v) for v in size), material, mass, dynamic,
+                object_id, kind, position_values, size_values, material, mass, dynamic,
             ))
         relations = []
         for index, item in enumerate(raw_relations):
             if not isinstance(item, dict):
                 raise SceneInterpretationError(f"relations[{index}] must be an object")
-            relations.append(SpatialRelation(
-                str(item.get("relation", "")),
-                str(item.get("subject", "")),
-                str(item.get("object", "")),
-                float(item.get("gap", 0.05)),
-            ))
+            relation = item.get("relation")
+            subject = item.get("subject")
+            target = item.get("object")
+            if not all(isinstance(value, str) and value for value in (relation, subject, target)):
+                raise SceneInterpretationError(f"relations[{index}] identity fields must be non-empty strings")
+            gap = self._number(item.get("gap", 0.05), f"relations[{index}].gap")
+            relations.append(SpatialRelation(relation, subject, target, gap))
         try:
             graph = SceneGraph(resolved_scene_id, tuple(objects), tuple(relations))
             # Compile now: catches overlap, cycles, unsupported containment, and
