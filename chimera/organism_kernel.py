@@ -132,6 +132,7 @@ class OrganismKernel:
         resting: bool = False,
         expected_revision: Optional[int] = None,
         measured_work_units: float = 0.0,
+        action_success: float = 0.5,
     ) -> WorldResult:
         position = self.state.position
         local = self.world.field_at(position)
@@ -148,6 +149,7 @@ class OrganismKernel:
             resting=resting,
             outcome=outcome,
             measured_work_units=measured_work_units,
+            action_success=action_success,
         )
         transition = self.kernel.transition(self.state, transition_input)
         next_state = transition.state
