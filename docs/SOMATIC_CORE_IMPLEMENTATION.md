@@ -36,7 +36,7 @@ The server binds to loopback by default. Do not expose it publicly or to a LAN w
 
 ## Verification boundary
 
-Python syntax and a local package-validation smoke check passed during implementation. Automated tests were added to the repository, but their hosted CI result has not yet been confirmed in this implementation session. A real browser/WebGL2 run has also not yet been observed here.
+Python syntax and a local package-validation smoke check passed during implementation. Automated tests were added to the repository, but their hosted CI result has not yet been confirmed in this implementation session. A real browser/WebGL2 run has also not yet been observed here. A local headless Chromium attempt could not initialize EGL/SwiftShader in this execution environment, so it did not provide a valid WebGL2 shader compile result.
 
 Therefore the whitepaper's T1–T7 acceptance suite is **not claimed as passed**. In particular, the following remain open before calling Somatic Core P0 complete:
 
