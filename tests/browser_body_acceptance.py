@@ -79,9 +79,19 @@ class ArticulatedBodyBrowserAcceptance(unittest.TestCase):
                     # Submit a hip abduction target through the visible form.
                     # The resulting pose must come back from the authoritative API.
                     page.locator('input[name="thigh_l_y"]').fill("0.45")
-                    page.locator('#bodyForm button[type="submit"]').click()
+                    with page.expect_response(
+                        lambda response: response.url.endswith("/api/body/actuate"),
+                        timeout=30000,
+                    ) as response_info:
+                        page.locator('#bodyForm button[type="submit"]').click()
+                    body_response = response_info.value
+                    response_payload = body_response.json()
+                    self.assertEqual(
+                        body_response.status, 200,
+                        f"body actuation returned {body_response.status}: {response_payload}",
+                    )
                     page.wait_for_function(
-                        """() => (document.querySelector('#log')?.textContent || '').trim().length > 0""",
+                        """() => document.querySelector('#log')?.textContent.includes('"actuation"')""",
                         timeout=30000,
                     )
                     action_log = page.locator('#log').inner_text()
