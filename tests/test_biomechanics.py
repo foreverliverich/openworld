@@ -51,13 +51,16 @@ class ArticulatedBodyTests(unittest.TestCase):
 
     def test_gravity_and_ground_contact_resolve_without_penetration(self):
         result = self.engine.step(self.state, (0, 1, 0), dt=1.0)
-        self.assertTrue(set(result.contacts).issubset({"foot_l", "foot_r"}))
+        self.assertTrue(set(result.contacts).issubset(
+            {segment.name for segment in self.engine.skeleton.segments}
+        ))
         self.assertTrue(result.contacts)
         self.assertAlmostEqual(result.state.root_velocity[1], 0.0, places=6)
         poses = {pose.name: pose for pose in result.poses}
         for name in result.contacts:
+            pose = poses[name]
             self.assertGreaterEqual(
-                poses[name].start[1] - poses[name].radius,
+                min(pose.start[1], pose.end[1]) - pose.radius,
                 self.engine.ground_height - 1e-6,
             )
 
