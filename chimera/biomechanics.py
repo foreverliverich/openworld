@@ -1020,10 +1020,8 @@ class BiomechanicsEngine:
                     ),
                 })
 
-        constrained_velocity, normal_impulse, friction_impulse = (
-            self._apply_contact_impulses(
-                mass_matrix, generalized_velocity, contact_constraints, dt=dt
-            )
+        constrained_velocity, _, _ = self._apply_contact_impulses(
+            mass_matrix, generalized_velocity, contact_constraints, dt=dt
         )
 
         # Constraint impulses alter both root and joint velocities. Reintegrate
@@ -1112,7 +1110,7 @@ class BiomechanicsEngine:
             metabolic_work=provisional_state.metabolic_work,
         )
         metabolic_cost = total_work * 0.000015 + total_effort * 0.00008
-        work_units = total_work + total_effort + normal_impulse * 0.000001 + friction_impulse * 0.000001
+        work_units = total_work + total_effort
         return BiomechanicsResult(
             corrected_state, corrected_position, final_poses,
             corrected_state.mechanical_strain,
