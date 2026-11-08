@@ -776,8 +776,20 @@ class LatentLanguageCoordinator:
     ) -> CognitiveCycleResult:
         if dt <= 0 or not math.isfinite(dt):
             raise LatentLanguageError("dt must be finite and positive")
-        if organism_state is not None:
-            self.state = project_isce_state(organism_state, timestamp=context.timestamp)
+        if self.dynamics is not None and (
+            not getattr(self.dynamics, "trained", False)
+            or not getattr(self.dynamics, "validated", False)
+        ):
+            raise LatentLanguageError(
+                "Configured morphogenetic dynamics must be trained and held-out validated"
+            )
+
+        # Work against a local immutable-state candidate. Failed encoders,
+        # specialists, dynamics or arbitration cannot partially publish a cycle.
+        working_state = (
+            project_isce_state(organism_state, timestamp=context.timestamp)
+            if organism_state is not None else self.state
+        )
         modality_novelty: dict[str, float] = {}
         for item in observations:
             encoded = self.encoders.encode(
@@ -787,7 +799,7 @@ class LatentLanguageCoordinator:
                 source_id=str(item["source_id"]),
             )
             subspace = MODALITY_TO_SUBSPACE[encoded.modality]
-            prior = self.state.subspaces[subspace]
+            prior = working_state.subspaces[subspace]
             prior_norm = math.sqrt(sum(value * value for value in prior))
             new_norm = math.sqrt(sum(value * value for value in encoded.embedding))
             novelty = encoded.confidence * (
@@ -799,58 +811,58 @@ class LatentLanguageCoordinator:
             modality_novelty[encoded.modality] = max(
                 modality_novelty.get(encoded.modality, 0.0), novelty
             )
-            self.state = self.fusion.update(self.state, encoded)
+            working_state = self.fusion.update(working_state, encoded)
+
         prediction_error = None
-        if self.dynamics is not None:
-            if not getattr(self.dynamics, "trained", False) or not getattr(self.dynamics, "validated", False):
-                raise LatentLanguageError("Configured morphogenetic dynamics must be trained and held-out validated")
-            if self._previous_cycle_vector is not None and organism_state is not None:
-                predicted = self.dynamics.evolve(self._previous_cycle_vector, dt=dt)
-                residual = [
-                    actual - expected
-                    for actual, expected in zip(self.state.vector, predicted)
-                ]
-                rms = math.sqrt(sum(value * value for value in residual) / len(residual))
-                prediction_error = max(0.0, min(1.0, rms / 2.0))
+        if self.dynamics is not None and self._previous_cycle_vector is not None and organism_state is not None:
+            predicted = self.dynamics.evolve(self._previous_cycle_vector, dt=dt)
+            residual = [
+                actual - expected
+                for actual, expected in zip(working_state.vector, predicted)
+            ]
+            rms = math.sqrt(sum(value * value for value in residual) / len(residual))
+            prediction_error = max(0.0, min(1.0, rms / 2.0))
         novelty_value = (
             sum(modality_novelty.values()) / len(modality_novelty)
             if modality_novelty else 0.0
         )
-        generated = self._run_specialists(self.state, context)
+
+        generated = self._run_specialists(working_state, context)
         for proposal in generated:
             if proposal.kind == "subspace_update":
                 subspace = str(proposal.payload["subspace"])
-                self.state = self.state.write_subspace(
+                working_state = working_state.write_subspace(
                     subspace, proposal.payload["vector"],
                     timestamp=float(proposal.payload["timestamp"]),
                 )
             elif proposal.kind == "intent":
-                self.state = self.state.write_subspace(
+                working_state = working_state.write_subspace(
                     "cognition", proposal.payload["vector"], timestamp=context.timestamp
                 )
             elif proposal.kind == "memory_retrieval":
-                self.state = self.state.write_subspace(
+                working_state = working_state.write_subspace(
                     "memory", proposal.payload["vector"], timestamp=context.timestamp
                 )
         if self.dynamics is not None:
-            evolved = self.dynamics.evolve(self.state.vector, dt=dt)
-            self.state = LatentState(
+            evolved = self.dynamics.evolve(working_state.vector, dt=dt)
+            working_state = LatentState(
                 {
                     name: tuple(evolved[offset:offset + size])
                     for offset, (name, size) in _offsets()
                 },
-                {**self.state.updated_at, "language": context.timestamp,
+                {**working_state.updated_at, "language": context.timestamp,
                  "cognition": context.timestamp},
-                self.state.revision + 1,
+                working_state.revision + 1,
             )
         proposals = tuple(
             proposal for proposal in generated
             if proposal.kind not in {"subspace_update", "intent", "memory_retrieval"}
         )
-        broadcast = self.workspace.compete(self.state, proposals)
-        self._previous_cycle_vector = tuple(self.state.vector)
+        broadcast = self.workspace.compete(working_state, proposals)
+        self.state = working_state
+        self._previous_cycle_vector = tuple(working_state.vector)
         feedback = ISCEFeedback(novelty_value, prediction_error, modality_novelty)
-        return CognitiveCycleResult(self.state, broadcast, proposals, feedback)
+        return CognitiveCycleResult(working_state, broadcast, proposals, feedback)
 
 
 def _offsets():
