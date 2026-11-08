@@ -200,7 +200,7 @@ class OllamaCreativeSpecialist:
                     raise OllamaCreativeError("Ollama creative response exceeds the 32 KiB limit")
                 result = json.loads(raw_response.decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", "replace")[:800]
+            detail = exc.read(801).decode("utf-8", "replace")[:800]
             raise OllamaCreativeError(f"Ollama returned HTTP {exc.code}: {detail}") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise OllamaCreativeError(f"Cannot reach local Ollama service: {exc}") from exc
