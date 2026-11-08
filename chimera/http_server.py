@@ -213,6 +213,12 @@ class ChimeraApplication:
             })
         if not normalized_observations:
             raise ValueError("At least one text or modality observation is required")
+        missing_encoders = sorted({
+            item["modality"] for item in normalized_observations
+            if not self.cognition.encoders.supports(item["modality"])
+        })
+        if missing_encoders:
+            raise ValueError(f"No configured encoders for modalities: {', '.join(missing_encoders)}")
 
         scene_graph = None
         scene_data = payload.get("scene_graph")
