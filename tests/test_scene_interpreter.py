@@ -80,7 +80,7 @@ class SceneInterpreterValidationTests(unittest.TestCase):
             }, "fallback")
 
     def test_image_part_accepts_png_and_rejects_mime_spoofing(self):
-        png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\nvalid-image-bytes").decode()
+        png = base64.b64encode(b"\x89PNG\r\n\x1a\nvalid-image-bytes").decode()
         part = GeminiSceneInterpreter._image_part("data:image/png;base64," + png)
         self.assertEqual(part["inlineData"]["mimeType"], "image/png")
         self.assertEqual(part["inlineData"]["data"], png)
@@ -91,7 +91,7 @@ class SceneInterpreterValidationTests(unittest.TestCase):
 
     @patch("chimera.scene_interpreter.urllib.request.urlopen")
     def test_image_and_text_are_sent_together_to_gemini(self, urlopen):
-        png_bytes = b"\\x89PNG\\r\\n\\x1a\\nvalid-image-bytes"
+        png_bytes = b"\x89PNG\r\n\x1a\nvalid-image-bytes"
         png = base64.b64encode(png_bytes).decode()
         graph_payload = {
             "scene_id": "visual-test",
@@ -128,7 +128,7 @@ class SceneInterpreterValidationTests(unittest.TestCase):
         self.assertEqual(parts[1]["text"], "Describe the visible furniture")
 
     def test_image_only_interpretation_requires_no_text_prompt(self):
-        png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\nvalid-image-bytes").decode()
+        png = base64.b64encode(b"\x89PNG\r\n\x1a\nvalid-image-bytes").decode()
         with patch("chimera.scene_interpreter.urllib.request.urlopen") as urlopen:
             payload = {
                 "scene_id": "image-only",
