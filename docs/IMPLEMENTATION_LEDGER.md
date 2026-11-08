@@ -208,3 +208,15 @@ Added chimera/action_gateway.py and tests/test_action_gateway.py. AutonomousWorl
 **Verification:** GitHub Actions run 42511093047 passed the complete Python 3.11 standard-library suite: 90 tests in 6.507 seconds, including all six action-gateway tests, nine CCPL tests and the existing autonomous-agent/runtime regressions. CCPL tests confirm deterministic replay, sham=baseline, intervention effects, same-boundary double intervention, mediator attenuation and invariant graph fingerprint. This verifies the software contracts exercised by the tests; it does not establish full ICCR, biological metabolism or consciousness.
 
 Details: ACTION_GATEWAY.md and CCPL_INTERVENTION_BATTERY.md.
+
+
+## Grounded sensory feedback — 2026-11-08
+
+Added chimera/sensory.py and tests/test_sensory.py. The autonomous agent's observe/consolidate step now converts authoritative RealityEngine observations into visible-entity count, nearest distance, proximity, local density, stable geometry signature, bounded observation surprise, novelty and sensory salience. The compact versioned observation token is stored in the existing ISCE self-model last_outcome field; no second memory store is added.
+
+- ISCE TransitionInput gains sensory_salience at the end of the dataclass to preserve positional compatibility. It is validated in [0,1] and contributes to the existing urgency/focus transition.
+- OrganismKernel passes the sensory input through; ISCE kernel version is bumped to 0.2.0 while persisted state schema remains version 1.
+- AutonomousWorldAgent exposes the measured sensory values in its step result and records the token through the existing ISCE state commit.
+- This is world-state visual sensing over the current AABB entity scene, not camera vision, touch, hearing, proprioception or anatomical sensing. The count/signature surprise measure is an initial grounded proxy, not a complete predictive perception system.
+
+Details: SENSORY_GROUNDING.md. Verification for the latest combined commit is pending hosted CI.
