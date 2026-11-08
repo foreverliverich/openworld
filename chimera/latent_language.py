@@ -331,6 +331,17 @@ class SceneGraph:
                     raise LatentLanguageError(
                         f"Static object {item.object_id} must rest on ground or a declared support"
                     )
+        for index, left in enumerate(self.objects):
+            for right in self.objects[index + 1:]:
+                overlap = all(
+                    abs(resolved[left.object_id][axis] - resolved[right.object_id][axis])
+                    < (left.size[axis] + right.size[axis]) / 2.0 - 1e-6
+                    for axis in range(3)
+                )
+                if overlap:
+                    raise LatentLanguageError(
+                        f"Scene objects {left.object_id} and {right.object_id} overlap"
+                    )
         parts = []
         for item in self.objects:
             parts.append({
