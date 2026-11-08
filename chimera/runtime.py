@@ -41,6 +41,8 @@ class AutonomousRuntime:
             raise ValueError("A cognition gateway requires a cognition coordinator")
         if cognition_gateway is not None and cognition_gateway.workspace is not cognition.workspace:
             raise ValueError("Cognition coordinator and action gateway must share one workspace")
+        if cognition_gateway is not None and cognition_gateway.organism is not agent.organism:
+            raise ValueError("Cognition gateway must use the runtime's authoritative ISCE organism")
         self.world = world
         self.agent = agent
         self.observer_radius = observer_radius
@@ -67,7 +69,14 @@ class AutonomousRuntime:
         """Commit a workspace-selected proposal through the sole cognitive gateway."""
         if self.cognition_gateway is None:
             raise RuntimeError("No governed cognitive action gateway is configured")
-        return self.cognition_gateway.execute(proposal, actor_id=actor_id)
+        pending_cost = self._pending_feedback.get("action_energy_cost", 0.0)
+        reserve = self.agent.organism.state.resources.reserve
+        if proposal.estimated_cost > reserve - pending_cost:
+            raise RuntimeError("Queued cognitive action costs exceed the remaining ISCE reserve")
+        result = self.cognition_gateway.execute(proposal, actor_id=actor_id)
+        if result.get("accepted"):
+            self._pending_feedback["action_energy_cost"] = pending_cost + proposal.estimated_cost
+        return result
 
     def tick(self) -> RuntimeFrame:
         """Advance physics, baseline policy, perception and one queued cognition cycle."""
