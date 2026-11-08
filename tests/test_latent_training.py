@@ -32,6 +32,12 @@ class MultimodalAlignmentTests(unittest.TestCase):
         self.assertIn("text_to_image_recall_at_1", metrics)
         self.assertIn("text_to_audio_recall_at_1", metrics)
         self.assertIn("audio_reconstruction_mse", metrics)
+        fused = model.fuse_shared(
+            {"text": validation["text"], "image": validation["image"],
+             "audio": validation["audio"]},
+            confidence={"text": 0.9, "image": 0.8, "audio": 0.7},
+        )
+        self.assertEqual(tuple(fused.shape), (8, 512))
         projected = model.project_audio_slot(validation["audio"])
         self.assertEqual(tuple(projected.shape), (8, 128))
         with tempfile.TemporaryDirectory() as tmp:
