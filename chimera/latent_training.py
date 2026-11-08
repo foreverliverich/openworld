@@ -57,30 +57,32 @@ class MultimodalProjectionModel:
 
     def project_audio_slot(self, audio_hidden):
         """Callable adapter for HuggingFaceAudioEncoder's 768→128 projection."""
-        if not self.audio_trained or not self.validated:
+        if not self.audio_trained or "audio" not in self.validated_modalities:
             raise AlignmentTrainingError("Audio bottleneck requires paired training and held-out validation")
         return self.audio_compressor(audio_hidden)
 
-    def _require_validated(self) -> None:
-        if not self.trained or not self.validated:
-            raise AlignmentTrainingError("Shared-space fusion requires trained and validated projections")
+    def _require_validated(self, modality: str) -> None:
+        if not self.trained or modality not in self.validated_modalities:
+            raise AlignmentTrainingError(
+                f"{modality} projection requires training and held-out validation"
+            )
 
     def project_text_shared(self, text_hidden):
-        self._require_validated()
+        self._require_validated("text")
         torch, _, functional = _torch_modules()
         values = self._batch(text_hidden, 768, "text")
         with torch.inference_mode():
             return functional.normalize(self.text_projection(values), dim=-1)
 
     def project_image_shared(self, image_features):
-        self._require_validated()
+        self._require_validated("image")
         torch, _, functional = _torch_modules()
         values = self._batch(image_features, 512, "image")
         with torch.inference_mode():
             return functional.normalize(self.image_projection(values), dim=-1)
 
     def project_audio_shared(self, audio_hidden):
-        self._require_validated()
+        self._require_validated("audio")
         torch, _, functional = _torch_modules()
         values = self._batch(audio_hidden, 768, "audio")
         with torch.inference_mode():
@@ -88,7 +90,8 @@ class MultimodalProjectionModel:
 
     def fuse_shared(self, modalities: Mapping[str, Any], confidence: Mapping[str, float] | None = None):
         """Confidence-weight aligned modalities into one normalized shared-space vector."""
-        self._require_validated()
+        if not self.trained:
+            raise AlignmentTrainingError("Shared-space fusion requires trained projection heads")
         confidence = dict(confidence or {})
         projections = []
         weights = []
@@ -248,11 +251,15 @@ class MultimodalProjectionModel:
                 metrics["audio_reconstruction_mse"] = float(
                     functional.mse_loss(reconstructed, audio).cpu()
                 )
-        self.validated = True
+        self.validated_modalities.update({"text", "image"})
+        if "audio" in pairs:
+            self.validated_modalities.add("audio")
+        self.validated = {"text", "image"}.issubset(self.validated_modalities)
         return metrics
 
     def save_checkpoint(self, path: str) -> None:
-        if not self.trained or not self.validated:
+        if (not self.trained or not {"text", "image"}.issubset(self.validated_modalities)
+                or (self.audio_trained and "audio" not in self.validated_modalities)):
             raise AlignmentTrainingError("Cannot save untrained or unvalidated projection heads")
         self.torch.save({
             "schema_version": 1, "dimensions": [768, 512, 768, 512, 128],
@@ -263,6 +270,7 @@ class MultimodalProjectionModel:
             "audio_reconstructor": self.audio_reconstructor.state_dict(),
             "history": self.history, "audio_trained": self.audio_trained,
             "validated": self.validated,
+            "validated_modalities": sorted(self.validated_modalities),
         }, path)
 
     def load_checkpoint(self, path: str) -> None:
@@ -279,6 +287,9 @@ class MultimodalProjectionModel:
         self.history = list(checkpoint.get("history", []))
         self.audio_trained = bool(checkpoint.get("audio_trained", False))
         self.validated = bool(checkpoint.get("validated", False))
-        if not self.validated:
-            raise AlignmentTrainingError("Projection checkpoint has no validation evidence")
+        self.validated_modalities = set(checkpoint.get("validated_modalities", []))
+        if not {"text", "image"}.issubset(self.validated_modalities):
+            raise AlignmentTrainingError("Projection checkpoint lacks text/image validation")
+        if self.audio_trained and "audio" not in self.validated_modalities:
+            raise AlignmentTrainingError("Audio checkpoint lacks held-out validation")
         self.trained = True
