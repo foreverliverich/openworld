@@ -209,8 +209,11 @@ class TorchMorphogeneticDynamics:
         if checkpoint.get("hidden_dim") != self.hidden_dim:
             raise DynamicsTrainingError("Checkpoint hidden dimension mismatch")
         self.training_dt = float(checkpoint.get("training_dt", 0.05))
+        self.max_derivative = float(checkpoint.get("max_derivative", 2.0))
         if not math.isfinite(self.training_dt) or not 0 < self.training_dt <= 0.25:
             raise DynamicsTrainingError("Checkpoint has invalid training time step")
+        if not math.isfinite(self.max_derivative) or self.max_derivative <= 0:
+            raise DynamicsTrainingError("Checkpoint has invalid derivative bound")
         self.model.load_state_dict(checkpoint["model"], strict=True)
         self.training_history = list(checkpoint.get("training_history", []))
         self.trained = True
