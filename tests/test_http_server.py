@@ -161,6 +161,74 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         finally:
             app.close()
 
+
+    def test_image_grounded_scene_interpretation_flows_through_workspace_gateway(self):
+        import base64
+
+        class FixedEncoder:
+            encoder_id = "http-test-image"
+            def encode(self, payload):
+                self.payload = payload
+                return (0.1,) * 512
+
+        class FixedTextEncoder:
+            encoder_id = "http-test-text"
+            def encode(self, payload):
+                return (0.2,) * 768
+
+        class FixedSceneInterpreter:
+            def __init__(self):
+                self.calls = []
+            def interpret(self, prompt, *, scene_id, image_base64=None):
+                self.calls.append((prompt, scene_id, image_base64))
+                return SceneGraph(
+                    scene_id,
+                    (SceneObject(
+                        "visible-table", "box", (20, 0.5, 20), (1.2, 1, 0.8),
+                        "wood", 8.0, False,
+                    ),),
+                )
+
+        png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\nvalid-image-bytes").decode()
+        image_uri = "data:image/png;base64," + png
+        registry = EncoderRegistry()
+        registry.register("text", FixedTextEncoder())
+        registry.register("image", FixedEncoder())
+        coordinator = LatentLanguageCoordinator(registry)
+        interpreter = FixedSceneInterpreter()
+        app = ChimeraApplication(
+            os.path.join(self.tmp.name, "visual-scene.sqlite3"),
+            cognition=coordinator,
+            scene_interpreter=interpreter,
+        )
+        try:
+            queued = app.queue_cognition({
+                "request_id": "visual-scene-1",
+                "text": "Build the visible table in the scene",
+                "observations": [{
+                    "modality": "image",
+                    "image_base64": image_uri,
+                    "source_id": "camera-frame-1",
+                }],
+                "interpret_scene": True,
+            })
+            self.assertTrue(queued["queued"])
+            self.assertEqual(interpreter.calls[0][0], "Build the visible table in the scene")
+            self.assertEqual(interpreter.calls[0][2], image_uri)
+            app.tick()
+            spatial = next(
+                proposal for proposal in coordinator.workspace.latest.selected
+                if proposal.specialist == "spatial" and proposal.kind == "world_action"
+            )
+            result = app.execute_cognitive_action({"proposal_id": spatial.proposal_id})
+            self.assertTrue(result["result"]["accepted"])
+            self.assertTrue(any(
+                entity["kind"] == "box" for entity in result["state"]["entities"]
+            ))
+            self.assertTrue(app.world.verify_event_chain())
+        finally:
+            app.close()
+
     def test_health_and_static_client_are_served(self):
         status, health = self.request("/api/health")
         self.assertEqual(status, 200)
