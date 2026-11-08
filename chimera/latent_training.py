@@ -154,8 +154,6 @@ class MultimodalProjectionModel:
             raise AlignmentTrainingError("Text/image pairs must align and contain at least 2 rows")
         audio = None
         if "audio" in pairs:
-            if not self.audio_trained:
-                raise AlignmentTrainingError("Audio projection was not trained")
             audio = self._batch(pairs["audio"], 768, "audio")
             if audio.shape[0] != text.shape[0]:
                 raise AlignmentTrainingError("Audio pairs must align row-for-row with text")
@@ -229,6 +227,8 @@ class MultimodalProjectionModel:
             raise AlignmentTrainingError("Evaluation pairs must align and contain at least 2 rows")
         if "audio" in pairs and len(pairs["audio"]) != text.shape[0]:
             raise AlignmentTrainingError("Audio evaluation pairs must align row-for-row")
+        if "audio" in pairs and not self.audio_trained:
+            raise AlignmentTrainingError("Audio projection was not trained")
         self.text_projection.eval()
         self.image_projection.eval()
         with torch.inference_mode():
