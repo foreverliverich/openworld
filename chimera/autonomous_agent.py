@@ -24,6 +24,7 @@ class AgentStep:
     action: str
     world_revision: int
     result: dict[str, Any]
+    action_id: str | None = None
 
 
 class AutonomousWorldAgent:
@@ -113,7 +114,7 @@ class AutonomousWorldAgent:
             ))
             return AgentStep(
                 goal, "construct_structure", receipt.organism_revision,
-                receipt.result["details"],
+                receipt.result["details"], receipt.action_id,
             )
 
         if goal == "create_workbench":
