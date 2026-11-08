@@ -547,6 +547,7 @@ class MemorySpecialist:
             min(0.95, max(score for score, _ in selected)), 0.45, 0.1, 0.25,
             0.01, context.world_revision,
             tuple(r.record_id for _, r in selected),
+            conflict_key="memory:working-set",
         ),)
 
 
@@ -759,6 +760,7 @@ class LatentLanguageCoordinator:
         fusion: MultimodalFusion | None = None,
         workspace: GlobalWorkspace | None = None,
         dynamics: Any | None = None,
+        alignment_model: Any | None = None,
         max_specialist_workers: int = 8,
     ):
         self.encoders = encoders
@@ -770,6 +772,7 @@ class LatentLanguageCoordinator:
             CreativeSpecialist(),
         ))
         self.dynamics = dynamics
+        self.alignment_model = alignment_model
         if max_specialist_workers < 1:
             raise LatentLanguageError("max_specialist_workers must be positive")
         self.max_specialist_workers = max_specialist_workers
@@ -808,6 +811,9 @@ class LatentLanguageCoordinator:
             if organism_state is not None else self.state
         )
         modality_novelty: dict[str, float] = {}
+        encoded_by_modality: dict[str, tuple[float, ...]] = {}
+        confidence_by_modality: dict[str, float] = {}
+        source_by_modality: dict[str, str] = {}
         for item in observations:
             encoded = self.encoders.encode(
                 str(item["modality"]), item["payload"],
@@ -828,6 +834,9 @@ class LatentLanguageCoordinator:
             modality_novelty[encoded.modality] = max(
                 modality_novelty.get(encoded.modality, 0.0), novelty
             )
+            encoded_by_modality[encoded.modality] = encoded.embedding
+            confidence_by_modality[encoded.modality] = encoded.confidence
+            source_by_modality[encoded.modality] = encoded.source_id
             working_state = self.fusion.update(working_state, encoded)
 
         prediction_error = None
@@ -845,6 +854,30 @@ class LatentLanguageCoordinator:
         )
 
         generated = self._run_specialists(working_state, context)
+        if self.alignment_model is not None:
+            aligned_modalities = {
+                name: encoded_by_modality[name]
+                for name in ("text", "image", "audio") if name in encoded_by_modality
+            }
+            if len(aligned_modalities) >= 2:
+                aligned = self.alignment_model.fuse_encoded_shared(
+                    aligned_modalities,
+                    {name: confidence_by_modality[name] for name in aligned_modalities},
+                )
+                aligned_vector = tuple(
+                    float(value) for value in aligned[0].detach().cpu().tolist()
+                )
+                evidence = tuple(source_by_modality[name] for name in aligned_modalities)
+                fusion_proposal = SpecialistProposal(
+                    _stable_id("multimodal-fusion", "|".join(evidence) + context.timestamp.__str__()),
+                    "multimodal_fusion", "subspace_update",
+                    {"subspace": "memory", "vector": aligned_vector,
+                     "timestamp": context.timestamp, "modalities": tuple(aligned_modalities)},
+                    sum(confidence_by_modality[name] for name in aligned_modalities) / len(aligned_modalities),
+                    0.7, 0.1, novelty_value, 0.01, context.world_revision,
+                    evidence, conflict_key="memory:working-set",
+                )
+                generated = generated + (fusion_proposal,)
         # Every specialist competes for the bounded global workspace. Only
         # selected proposals are broadcast and allowed to update latent subspaces.
         broadcast = self.workspace.compete(working_state, generated)
