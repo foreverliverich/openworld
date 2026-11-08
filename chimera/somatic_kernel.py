@@ -105,3 +105,8 @@ def generate_morph_package(description: str, current_label: str = "") -> dict[st
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Gemini did not return a valid structured morphology package") from exc
     return _validate_package(package)
+
+
+def validate_morph_package(package: Any) -> dict[str, Any]:
+    """Public validation boundary for packages returned to the browser for shader compilation."""
+    return _validate_package(package)
