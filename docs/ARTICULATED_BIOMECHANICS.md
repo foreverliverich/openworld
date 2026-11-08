@@ -8,7 +8,7 @@
 
 ## 1. What is now executable
 
-This implementation provides a deterministic, versioned human segment tree; scalar hinge and multi-axis joint coordinates; quaternion-composed 3D forward kinematics; bounded PD muscle excitation; activation dynamics; a compliant series-elastic tendon stage; force-length/force-velocity capacity scaling; gravity torque from world-space lever arms; semi-implicit joint integration; per-axis limits; root translation in the generalized mass matrix; unilateral capsule/ground normal impulses; Coulomb friction impulses; effort/work accounting; and proprioceptive error.
+This implementation provides a deterministic, versioned human segment tree; scalar hinge and multi-axis joint coordinates; quaternion-composed 3D forward kinematics; bounded PD muscle excitation; activation dynamics; a compliant series-elastic tendon stage; force-length/force-velocity capacity scaling; gravity torque from world-space lever arms; semi-implicit joint integration; per-axis limits; root translation and world-frame root angular velocity in the generalized mass matrix; quaternion root orientation; unilateral capsule/ground and self-collision normal impulses; Coulomb friction impulses; effort/work accounting; and proprioceptive error.
 
 The canonical tree contains 16 rigid segments and 15 actuated joints. Spine, neck, shoulders and hips are three-axis; wrists and ankles are two-axis; knees and elbows are single-axis hinges. Local XYZ Euler components are composed into normalized quaternions for forward kinematics:
 
@@ -28,7 +28,7 @@ Articulation is a nested immutable value inside the existing ISCE organism state
 
 - local XYZ rotation and angular velocity per joint, with legacy X-axis angle/velocity aliases
 - muscle activation plus per-axis tendon extension and tendon velocity
-- root linear velocity
+- root linear velocity, normalized root orientation quaternion, and root angular velocity
 - active ground-contact segment capsules
 - current mechanical strain and proprioceptive error
 - accumulated mechanical work
@@ -53,7 +53,7 @@ Activation follows a first-order response with the segment's activation time con
 
 The compliant tendon stage uses a stable first-order series-elastic response: tendon extension relaxes toward the muscle-torque/stiffness target with a 25 ms time constant, and transmitted torque is the spring term plus tendon damping. Joint-specific torque/gain envelopes and an 18 rad/s angular-speed ceiling prevent small distal segments from receiving physically implausible accelerations from a high torque-to-inertia ratio; speed saturation contributes to mechanical strain. The model then integrates each enabled rotational component with semi-implicit Euler at internal steps no larger than 20 ms.
 
-The root's three world-translation coordinates and every enabled joint rotation are solved in one dense generalized coordinate system. For every rigid segment, the solver computes root-translation and ancestor-joint linear/angular Jacobian columns at the segment centre of mass. Segment contributions are assembled as:
+The root's three world-translation coordinates, three world-frame angular-velocity coordinates, and every enabled joint rotation are solved in one dense generalized velocity system. Root orientation is stored as a normalized quaternion and integrated with a world-frame exponential-map update. For every rigid segment, the solver computes root-translation and ancestor-joint linear/angular Jacobian columns at the segment centre of mass. Segment contributions are assembled as:
 
 \[
 M(q)=\sum_s\left(m_s J_{v,s}^{T}J_{v,s}
@@ -86,9 +86,9 @@ Root translation is represented by three generalized coordinates and participate
 
 Unilateral normal and tangential contact impulses are solved using projected Gauss-Seidel iterations. Each contact uses an effective mass derived from \(J M^{-1}J^T\); normal impulses are non-negative and the two tangential impulses are projected onto a circular Coulomb friction cone bounded by \(\mu\lambda_n\). The current coefficient is 0.75. The contact solve is non-restitutive (zero target normal velocity); residual penetration is corrected separately with split positional stabilization. The same impulse changes root and joint velocities, after which joint coordinates are reintegrated from the constrained velocities.
 
-This closes root translational mass coupling, ground-plane normal/friction impulse response, and non-adjacent self-collision between articulated capsules. Self-collision uses closest points between finite segment centerlines, relative point Jacobians (body B minus body A), and the same unilateral/friction impulse solver. Parent/child and grandparent/descendant capsule pairs are excluded because their overlap represents a shared anatomical joint. Penetrating self-contacts receive a bounded separation-velocity target and are resolved through joint/root impulses rather than renderer-side pose edits.
+This closes root translational and rotational mass coupling, quaternion root orientation integration, ground-plane normal/friction impulse response, and non-adjacent self-collision between articulated capsules. Root angular velocity is world-frame; root angular acceleration emerges from the coupled generalized solve and contact impulses. Self-collision uses closest points between finite segment centerlines, relative point Jacobians (body B minus body A), and the same unilateral/friction impulse solver. Parent/child and grandparent/descendant capsule pairs are excluded because their overlap represents a shared anatomical joint. Penetrating self-contacts receive a bounded separation-velocity target and are resolved through joint/root impulses rather than renderer-side pose edits.
 
-It is still a single-organism rigid-segment contact model: root orientation and angular momentum are not yet generalized coordinates; uneven terrain, grasping/manipulation contacts, multi-body contact manifolds, soft-tissue collision, rolling resistance and calibrated material friction remain open.
+It is still a single-organism rigid-segment contact model: uneven terrain, grasping/manipulation contacts, multi-body contact manifolds, soft-tissue collision, rolling resistance and calibrated material friction remain open. Root attitude is quaternion-integrated, while the generalized angular velocity is expressed in world coordinates; this is not a full Lie-group variational integrator.
 
 ## 5. ISCE coupling
 
@@ -124,7 +124,7 @@ The existing organism-kernel persistence/restart tests also exercise the expande
 
 This closes the first executable articulated-body gate, not all embodiment. Remaining engineering work includes:
 
-- root orientation and angular momentum as generalized coordinates; compare the current Lagrangian/Jacobian solver against recursive Newton–Euler reference implementations
+- compare the expanded root/joint Lagrangian-Jacobian solver against recursive Newton–Euler reference implementations and a validated external rigid-body engine
 - uneven terrain, grasping/manipulation contacts, multi-body contact manifolds, soft-tissue collision and calibrated friction parameters
 - antagonistic agonist/antagonist muscle pairs, pennation and physiological cross-sectional area, tendon slack/strain calibration, muscle-level fatigue and recovery
 - sensor observations from actual segment/contact geometry and camera/audio/touch modalities
