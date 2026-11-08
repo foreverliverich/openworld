@@ -313,13 +313,14 @@ class SceneGraph:
             else:
                 if any(child.size[i] + 2.0 * rel.gap > parent.size[i] for i in range(3)):
                     raise LatentLanguageError("Contained object plus clearance exceeds container dimensions")
-                cp[0] = pp[0]
-                cp[1] = pp[1] - parent.size[1] / 2.0 + child.size[1] / 2.0 + rel.gap
-                cp[2] = pp[2]
+                raise LatentLanguageError(
+                    "RealityEngine's primitive collision model cannot commit nested containment; "
+                    "retain this relation in the creative artifact or use a compound-mesh backend"
+                )
             assigned.add(rel.subject)
         supported_by_relation = {
             rel.subject for rel in self.relations
-            if rel.relation in {"on_top", "inside"} and not objects[rel.object].dynamic
+            if rel.relation == "on_top" and not objects[rel.object].dynamic
         }
         for item in self.objects:
             if not item.dynamic:
@@ -581,7 +582,17 @@ class SpatialSpecialist:
         graph = context.scene_graph
         if graph is None:
             return ()
-        blueprint = graph.to_blueprint()
+        try:
+            blueprint = graph.to_blueprint()
+        except LatentLanguageError as exc:
+            return (SpecialistProposal(
+                _stable_id(self.name + "-constraint", graph.scene_id + str(exc)),
+                self.name, "spatial_constraint_error",
+                {"scene_id": graph.scene_id, "reason": str(exc)},
+                0.95, 0.55, 0.1, 0.2, 0.0, context.world_revision,
+                context.source_refs + (f"scene:{graph.scene_id}",),
+                conflict_key=f"scene:{graph.scene_id}",
+            ),)
         return (SpecialistProposal(
             _stable_id(self.name, graph.scene_id), self.name, "world_action",
             {"tool": "world_builder", "action": "create_structure",
