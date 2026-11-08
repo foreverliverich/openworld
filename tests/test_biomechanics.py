@@ -104,15 +104,34 @@ class ArticulatedBodyTests(unittest.TestCase):
         root_z = layout.index(("__root__", 2))
         self.assertGreater(abs(mass[root_z][spine_x]), 1e-6)
 
-    def test_ground_contacts_apply_normal_and_friction_impulses(self):
-        moving = ArticulatedBodyState(
-            joints=self.state.joints,
-            root_velocity=(2.0, -2.0, 0.0),
+    def test_ground_contact_solver_enforces_normal_and_coulomb_impulses(self):
+        # Isolate the production contact solver with a known diagonal mass
+        # matrix so the unilateral and friction-cone invariants are exact.
+        mass = [
+            [2.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 0.0, 2.0],
+        ]
+        velocity = [2.0, -2.0, 0.0]
+        contact = {
+            "name": "test_contact",
+            "gap": -0.01,
+            "jacobian": (
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ),
+        }
+        constrained, normal_impulse, friction_impulse = (
+            self.engine._apply_contact_impulses(
+                mass, velocity, [contact], dt=0.02
+            )
         )
-        result = self.engine.step(moving, (0, 1, 0), dt=0.02)
-        self.assertTrue(result.contacts)
-        self.assertGreaterEqual(result.state.root_velocity[1], -1e-5)
-        self.assertLess(abs(result.state.root_velocity[0]), 2.0)
+        self.assertGreater(normal_impulse, 0.0)
+        self.assertGreater(friction_impulse, 0.0)
+        self.assertAlmostEqual(constrained[1], 0.0, places=6)
+        self.assertLess(abs(constrained[0]), 2.0)
+        self.assertLessEqual(friction_impulse, 0.75 * normal_impulse + 1e-9)
 
     def test_separated_body_does_not_receive_ground_friction_impulse(self):
         moving = ArticulatedBodyState(
