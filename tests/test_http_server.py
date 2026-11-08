@@ -8,6 +8,7 @@ import unittest
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from http.server import ThreadingHTTPServer
+from unittest.mock import patch
 
 from chimera.http_server import ChimeraApplication, ChimeraRequestHandler
 
@@ -48,7 +49,7 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertIn("PROJECT", html)
         self.assertIn("CHIMERA", html)
         self.assertIn("/api/state", html)
-        for tool_name in ("World Builder", "Body Forge", "Tool Fabricator", "Life Generator", "Movement Lab", "Research Lab"):
+        for tool_name in ("World Builder", "Somatic Core", "Tool Fabricator", "Life Generator", "Movement Lab", "Research Lab"):
             self.assertIn(tool_name, html)
 
     def test_state_is_read_from_one_runtime_and_world(self):
@@ -100,6 +101,53 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         status, result = self.request("/api/tick", {"ticks": 121})
         self.assertEqual(status, 400)
         self.assertEqual(result["error"], "action_rejected")
+
+
+    def test_somatic_candidate_generation_does_not_mutate_world(self):
+        package = {
+            "label": "Wolf", "persona": "Alert", "dialogue": "I am changing.",
+            "critique": "Quadruped morphology.", "sdfScript":
+                "vec2 map_object(vec3 p) { return vec2(length(p)-1.0, 1.0); }",
+            "color": [0.4, 0.3, 0.2],
+            "material": {"roughness": 0.7, "metallic": 0.0, "sssIntensity": 0.8},
+        }
+        revision = self.app.world.revision()
+        with patch("chimera.http_server.generate_morph_package", return_value=package):
+            status, result = self.request("/api/somatic/morph", {
+                "description": "become a wolf", "current_label": "Genesis"
+            })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["package"]["label"], "Wolf")
+        self.assertIsNone(self.app.world.somatic_morphology())
+        self.assertEqual(self.app.world.revision(), revision)
+
+    def test_somatic_commit_persists_only_validated_package(self):
+        package = {
+            "label": "Wolf", "persona": "Alert", "dialogue": "I am changing.",
+            "critique": "Quadruped morphology.", "sdfScript":
+                "vec2 map_object(vec3 p) { return vec2(length(p)-1.0, 1.0); }",
+            "color": [0.4, 0.3, 0.2],
+            "material": {"roughness": 0.7, "metallic": 0.0, "sssIntensity": 0.8},
+        }
+        revision = self.app.world.revision()
+        status, result = self.request("/api/somatic/commit", {
+            "package": package, "expected_revision": revision
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["state"]["label"], "Wolf")
+        self.assertEqual(result["state"]["prevSdfScript"].startswith("vec2 map_object"), True)
+        self.assertEqual(result["state"]["sdfScript"], package["sdfScript"])
+        self.assertEqual(result["state"]["world_revision"], revision + 1)
+        self.assertTrue(self.app.world.verify_event_chain())
+
+    def test_invalid_somatic_package_is_not_committed(self):
+        revision = self.app.world.revision()
+        status, result = self.request("/api/somatic/commit", {
+            "package": {"label": "broken"}, "expected_revision": revision
+        })
+        self.assertEqual(status, 400)
+        self.assertIsNone(self.app.world.somatic_morphology())
+        self.assertEqual(self.app.world.revision(), revision)
 
 
 if __name__ == "__main__":
