@@ -105,6 +105,17 @@ class LatentTrajectoryRecorder:
                 if not math.isfinite(number):
                     raise LatentDatasetError(f"{modality} training embedding must be finite")
                 training_values.append(number)
+            runtime_embedding = item.get("embedding", training_values)
+            if not isinstance(runtime_embedding, (list, tuple)) or not runtime_embedding:
+                raise LatentDatasetError(f"{modality} runtime embedding is missing")
+            runtime_values = []
+            for value in runtime_embedding:
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    raise LatentDatasetError(f"{modality} runtime embedding must be numeric")
+                number = float(value)
+                if not math.isfinite(number):
+                    raise LatentDatasetError(f"{modality} runtime embedding must be finite")
+                runtime_values.append(number)
             confidence = item.get("confidence", 1.0)
             if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
                 raise LatentDatasetError(f"{modality} confidence must be numeric")
@@ -119,13 +130,17 @@ class LatentTrajectoryRecorder:
                 raise LatentDatasetError(f"{modality} encoder_id is required")
             modalities[modality] = {
                 "training_embedding": training_values,
-                "runtime_embedding": list(item.get("embedding", training_values)),
+                "runtime_embedding": runtime_values,
                 "confidence": confidence,
                 "source_id": source_id,
                 "encoder_id": encoder_id,
                 "shared_space": item.get("shared_space"),
             }
 
+        if isinstance(selected_proposal_ids, (str, bytes)) or any(
+            not isinstance(value, str) or not value for value in selected_proposal_ids
+        ):
+            raise LatentDatasetError("selected_proposal_ids must be a sequence of non-empty strings")
         if alignment_pair:
             if "text" not in modalities or "image" not in modalities:
                 raise LatentDatasetError(
@@ -293,7 +308,9 @@ def load_alignment_sessions(
         records.sort(key=lambda item: item["sequence_index"])
         rows = {"text": [], "image": [], "audio": []}
         for record in records:
-            modalities = record.get("modalities", {})
+            modalities = record.get("modalities")
+            if not isinstance(modalities, dict):
+                raise LatentDatasetError(f"Alignment pair in {trajectory_id} has no modality map")
             if not {"text", "image"}.issubset(modalities):
                 raise LatentDatasetError(f"Alignment pair in {trajectory_id} is missing text or image")
             rows["text"].append(_finite_vector(
