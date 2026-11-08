@@ -255,7 +255,7 @@ class TransitionInput:
     resting: bool = False
     outcome: Optional[str] = None
     measured_work_units: float = 0.0
-    motor_commands: Tuple[Tuple[str, float], ...] = ()
+    motor_commands: Tuple[Tuple[str, Any], ...] = ()
     root_acceleration: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     def validate(self) -> None:
@@ -274,7 +274,13 @@ class TransitionInput:
         for name, target in self.motor_commands:
             if not name:
                 raise ISCEError("motor command joint name cannot be empty")
-            _finite("motor command target", target)
+            if isinstance(target, (int, float)):
+                _finite("motor command target", target)
+            else:
+                if not isinstance(target, (tuple, list)) or len(target) != 3:
+                    raise ISCEError("3D motor targets must contain three finite radians")
+                for value in target:
+                    _finite("3D motor command component", value)
         for name in (
             "mechanical_strain", "prediction_error", "novelty", "action_success",
             "environmental_energy", "environmental_stress",
