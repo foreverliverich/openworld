@@ -208,8 +208,10 @@ class LatentLanguageTests(unittest.TestCase):
             committed = runtime.execute_cognitive_proposal(spatial)
             self.assertTrue(committed["accepted"])
             prior_memory = organism.state.self_model.memory_strength
+            prior_reserve = organism.state.resources.reserve
             runtime.tick()
             self.assertGreater(organism.state.self_model.memory_strength, prior_memory)
+            self.assertLess(organism.state.resources.reserve, prior_reserve)
         finally:
             if world is not None:
                 world.close()
