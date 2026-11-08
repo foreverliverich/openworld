@@ -156,7 +156,11 @@ class SceneInterpreterValidationTests(unittest.TestCase):
             )
             self.assertEqual(graph.objects[0].object_id, "chair")
             body = json.loads(urlopen.call_args.args[0].data)
-            self.assertIn("visible physical objects", body["contents"][0]["parts"][0]["text"])
+            text_parts = [
+                part["text"] for part in body["contents"][0]["parts"] if "text" in part
+            ]
+            self.assertEqual(len(text_parts), 1)
+            self.assertIn("visible physical objects", text_parts[0])
 
     def test_nonfinite_and_boolean_geometry_is_rejected(self):
         valid = {
