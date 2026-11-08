@@ -136,6 +136,28 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertLess(organism["body"]["energy"], before_organism["body"]["energy"])
         self.assertTrue(self.app.world.verify_event_chain())
 
+    def test_body_actuation_accepts_three_axis_joint_targets(self):
+        _, before = self.request("/api/body/pose")
+        status, result = self.request("/api/body/actuate", {
+            "expected_revision": before["world_revision"],
+            "motor_commands": {"thigh_l": [0.35, 0.4, -0.25]},
+        })
+        self.assertEqual(status, 200)
+        hip = {joint["name"]: joint for joint in result["body"]["joints"]}["thigh_l"]
+        self.assertGreater(abs(hip["rotation_xyz"][1]), 0.0)
+        self.assertGreater(abs(hip["rotation_xyz"][2]), 0.0)
+        self.assertGreater(abs(hip["tendon_extension_xyz"][1]), 0.0)
+        self.assertEqual(len(result["body"]["segments"][0]["orientation"]), 4)
+
+    def test_malformed_three_axis_motor_target_is_rejected(self):
+        revision = self.app.world.revision()
+        status, result = self.request("/api/body/actuate", {
+            "expected_revision": revision,
+            "motor_commands": {"thigh_l": [0.2, 0.3]},
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(self.app.world.revision(), revision)
+
     def test_invalid_body_command_is_rejected_without_state_mutation(self):
         revision = self.app.world.revision()
         status, result = self.request("/api/body/actuate", {
