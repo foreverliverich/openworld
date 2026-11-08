@@ -11,8 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .action_gateway import ActionProposal, OrganismActionGateway
 from .organism_kernel import OrganismKernel
 from .reality_engine import RealityEngine, WorldResult
+from .toolbox import ChimeraToolbox
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,10 @@ class AutonomousWorldAgent:
         self.organism = organism
         if organism.world is not world:
             raise ValueError("Agent and organism kernel must share one RealityEngine")
+        self.toolbox = ChimeraToolbox(world, actor_id=organism.organism_id)
+        self.action_gateway = OrganismActionGateway(
+            world, organism, self.toolbox
+        )
 
     @staticmethod
     def _shelter_blueprint() -> dict[str, Any]:
@@ -98,34 +104,28 @@ class AutonomousWorldAgent:
         self.organism.set_goal(goal)
 
         if goal == "create_shelter":
-            result = self.world.create_structure(
-                self._shelter_blueprint(),
-                actor_id=self.organism.organism_id,
+            receipt = self.action_gateway.execute(ActionProposal(
+                tool="world_builder", action="create_structure",
+                arguments={"blueprint": self._shelter_blueprint()},
                 expected_revision=self.world.revision(),
+                expected_success=0.75, novelty=0.9,
+            ))
+            return AgentStep(
+                goal, "construct_structure", receipt.organism_revision,
+                receipt.result["details"],
             )
-            self.organism.tick(
-                dt=dt, action_energy_cost=0.12, mechanical_strain=0.35,
-                prediction_error=0.25, novelty=0.9,
-                outcome="shelter_committed",
-                expected_revision=result.revision,
-            )
-            return AgentStep(goal, "construct_structure",
-                             self.world.revision(), result.details)
 
         if goal == "create_workbench":
-            result = self.world.create_structure(
-                self._workbench_blueprint(),
-                actor_id=self.organism.organism_id,
+            receipt = self.action_gateway.execute(ActionProposal(
+                tool="world_builder", action="create_structure",
+                arguments={"blueprint": self._workbench_blueprint()},
                 expected_revision=self.world.revision(),
+                expected_success=0.8, novelty=0.65,
+            ))
+            return AgentStep(
+                goal, "construct_structure", receipt.organism_revision,
+                receipt.result["details"],
             )
-            self.organism.tick(
-                dt=dt, action_energy_cost=0.07, mechanical_strain=0.2,
-                prediction_error=0.2, novelty=0.65,
-                outcome="workbench_committed",
-                expected_revision=result.revision,
-            )
-            return AgentStep(goal, "construct_structure",
-                             self.world.revision(), result.details)
 
         if goal == "recover_and_regulate":
             result = self.organism.tick(
