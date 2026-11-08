@@ -141,3 +141,34 @@ camera pose, depth, occluded geometry, temporal tracking, multi-view fusion or
 mesh reconstruction. The normal scene compiler, global workspace and revision-
 checked ISCE action gateway remain mandatory. CI uses a deterministic injected
 interpreter and does not call Gemini or send user images externally.
+
+
+## Optional local reasoning co-agent
+
+The default ensemble uses deterministic emotion/intent baselines. To add a real
+local instruction model as a further specialist, install Ollama, pull a model, and
+start the runtime with `--ollama-model <model-tag>`. Example:
+
+```bash
+ollama pull qwen2.5:3b
+python -m chimera.http_server --enable-latent-language --ollama-model qwen2.5:3b
+```
+
+The default endpoint is `http://127.0.0.1:11434`; use `--ollama-url` only for a
+trusted endpoint. Each cognition cycle invokes the specialist against the current
+text context. It asks for a constrained JSON object containing intent, neutral
+summary, proposed next information-gathering step, entities and an exact evidence
+quote. The parser rejects unsupported intent labels, oversized fields, ungrounded
+entity phrases and evidence that is not an exact substring of the user text.
+The resulting proposal enters the same deterministic global-workspace competition
+as the other specialists.
+
+This co-agent has advisory authority only. It cannot create a world-action
+proposal, choose toolbox names, supply executable code or mutate ISCE/RealityEngine.
+It does not replace the deterministic specialist baselines. Its confidence,
+salience and urgency are conservative fixed values, not calibrated model
+probabilities. Ollama latency and hardware energy are not yet included in the
+organism's measured metabolic budget; proposal estimated_cost is therefore zero
+and must not be interpreted as free computation. The endpoint can be configured
+to a non-loopback host, so deployment operators must secure that endpoint and
+must not expose the unauthenticated local Chimera HTTP API publicly.
