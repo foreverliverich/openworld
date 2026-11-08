@@ -15,6 +15,10 @@ import math
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Mapping, Optional, Tuple
 
+from .biomechanics import (
+    ArticulatedBodyState, BiomechanicsEngine, initial_articulated_body_state,
+)
+
 SCHEMA_VERSION = 1
 KERNEL_VERSION = "0.1.0"
 
@@ -166,6 +170,7 @@ class OrganismState:
     attention: AttentionState = field(default_factory=AttentionState)
     resources: ResourceState = field(default_factory=ResourceState)
     schema_version: int = SCHEMA_VERSION
+    articulation: ArticulatedBodyState = field(default_factory=initial_articulated_body_state)
 
     def __post_init__(self) -> None:
         if not self.organism_id:
@@ -227,6 +232,7 @@ class OrganismState:
             attention=AttentionState(**data["attention"]),
             resources=ResourceState(**data["resources"]),
             schema_version=int(data["schema_version"]),
+            articulation=ArticulatedBodyState.from_dict(data.get("articulation", {})),
         )
 
     def digest(self) -> str:
@@ -249,6 +255,8 @@ class TransitionInput:
     resting: bool = False
     outcome: Optional[str] = None
     measured_work_units: float = 0.0
+    motor_commands: Tuple[Tuple[str, Any], ...] = ()
+    root_acceleration: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     def validate(self) -> None:
         dt = _finite("dt", self.dt)
@@ -258,6 +266,21 @@ class TransitionInput:
             raise ISCEError("action_energy_cost cannot be negative")
         if _finite("measured_work_units", self.measured_work_units) < 0:
             raise ISCEError("measured_work_units cannot be negative")
+        if len(self.root_acceleration) != 3 or not all(math.isfinite(float(v)) for v in self.root_acceleration):
+            raise ISCEError("root_acceleration must contain three finite values")
+        command_names = [name for name, _ in self.motor_commands]
+        if len(command_names) != len(set(command_names)):
+            raise ISCEError("motor_commands cannot target the same joint twice")
+        for name, target in self.motor_commands:
+            if not name:
+                raise ISCEError("motor command joint name cannot be empty")
+            if isinstance(target, (int, float)):
+                _finite("motor command target", target)
+            else:
+                if not isinstance(target, (tuple, list)) or len(target) != 3:
+                    raise ISCEError("3D motor targets must contain three finite radians")
+                for value in target:
+                    _finite("3D motor command component", value)
         for name in (
             "mechanical_strain", "prediction_error", "novelty", "action_success",
             "environmental_energy", "environmental_stress",
@@ -310,6 +333,7 @@ class ISCEKernel:
                self.fatigue_recovery_rate) < 0:
             raise ISCEError("Kernel rates cannot be negative")
         self._graph_fingerprint = self.graph.fingerprint()
+        self.biomechanics = BiomechanicsEngine()
 
     @property
     def graph_fingerprint(self) -> str:
@@ -364,35 +388,43 @@ class ISCEKernel:
         sm, a, r = state.self_model, state.attention, state.resources
         dt = inputs.dt
         graph_input = self._graph_inputs(state)
+        mechanics = self.biomechanics.step(
+            state.articulation, state.position, dt=dt,
+            motor_commands=inputs.motor_commands,
+            root_acceleration=inputs.root_acceleration,
+            motor_readiness=m.motor_readiness, body_energy=b.energy,
+        )
+        mechanical_strain = max(inputs.mechanical_strain, mechanics.mechanical_strain)
+        action_energy_cost = inputs.action_energy_cost + mechanics.metabolic_cost
 
         # The internal resource law is distinct from hardware measurements.
-        work = inputs.measured_work_units
-        reserve = _clamp(r.reserve - work * 0.001 - inputs.action_energy_cost * 0.25
+        work = inputs.measured_work_units + mechanics.work_units
+        reserve = _clamp(r.reserve - work * 0.001 - action_energy_cost * 0.25
                          + (0.0005 * dt if inputs.resting else 0.0))
         energy = _clamp(
-            b.energy - self.basal_metabolic_rate * dt - inputs.action_energy_cost
-            - inputs.mechanical_strain * 0.035
+            b.energy - self.basal_metabolic_rate * dt - action_energy_cost
+            - mechanical_strain * 0.035
             + inputs.environmental_energy * 0.012 * dt
             + (0.025 * dt if inputs.resting else 0.0)
             + (graph_input["body"] - 0.5) * 0.001 * dt
         )
         stress = _clamp(
-            b.stress + inputs.mechanical_strain * 0.22
+            b.stress + mechanical_strain * 0.22
             + inputs.environmental_stress * 0.045 * dt
             + inputs.prediction_error * 0.035
             - (0.05 if inputs.resting else self.stress_recovery_rate) * dt
             - inputs.environmental_cohesion * 0.012 * dt
             + (0.5 - graph_input["interoception"]) * 0.002 * dt
         )
-        fatigue = _clamp(b.fatigue + inputs.mechanical_strain * 0.10 * dt
+        fatigue = _clamp(b.fatigue + mechanical_strain * 0.10 * dt
                          - (0.05 if inputs.resting else self.fatigue_recovery_rate) * dt)
         repair_rate = 0.012 if energy > 0.55 and stress < 0.45 and reserve > 0.1 else 0.0
-        damage_rate = max(0.0, inputs.mechanical_strain - 0.72) * 0.025
+        damage_rate = max(0.0, mechanical_strain - 0.72) * 0.025
         integrity = _clamp(b.integrity + (repair_rate - damage_rate) * dt)
         allostatic_error = abs(0.75 - energy) + abs(0.12 - stress)
 
         smoothed_error = _clamp(0.75 * i.prediction_error + 0.25 * inputs.prediction_error)
-        pain = _clamp(i.pain + max(0.0, inputs.mechanical_strain - 0.65) * 0.08
+        pain = _clamp(i.pain + max(0.0, mechanical_strain - 0.65) * 0.08
                       - (0.02 * dt if inputs.resting else 0.002 * dt))
         hunger = _clamp(i.hunger + max(0.0, 0.75 - energy) * 0.015 * dt)
         precision = _clamp(
@@ -407,7 +439,7 @@ class ISCEKernel:
             + (graph_input["sensorimotor"] - m.motor_readiness) * 0.02
         )
         proprioceptive_error = _clamp(
-            0.7 * m.proprioceptive_error + 0.3 * inputs.mechanical_strain
+            0.7 * m.proprioceptive_error + 0.3 * max(mechanical_strain, mechanics.proprioceptive_error)
         )
         memory_strength = _clamp(
             sm.memory_strength + inputs.prediction_error * 0.035
@@ -454,13 +486,13 @@ class ISCEKernel:
 
         next_state = OrganismState(
             organism_id=state.organism_id,
-            position=state.position,
+            position=mechanics.position,
             body=BodyState(energy, stress, integrity, fatigue,
-                           abs(0.75 - energy) + abs(0.12 - stress)),
+                           _clamp(abs(0.75 - energy) + abs(0.12 - stress))),
             interoception=InteroceptiveState(hunger, pain, arousal,
                                              smoothed_error, precision),
             sensorimotor=SensorimotorState(motor_readiness, proprioceptive_error,
-                                           inputs.action_energy_cost,
+                                           _clamp(action_energy_cost),
                                            inputs.action_success),
             temporal=TemporalState(state.temporal.tick + 1,
                                    state.temporal.organism_time + dt,
@@ -471,6 +503,7 @@ class ISCEKernel:
                                       else sm.last_outcome),
             attention=AttentionState(focus, urgency),
             resources=ResourceState(reserve, r.cumulative_work_units + work),
+            articulation=mechanics.state,
         )
         if self.graph.fingerprint() != self._graph_fingerprint:
             raise ISCEError("Causal graph changed during transition")
