@@ -81,6 +81,7 @@ class EncodedObservation:
     source_id: str
     encoder_id: str
     shared_space: str | None = None
+    training_embedding: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.modality not in MODALITY_TO_SUBSPACE:
@@ -93,6 +94,11 @@ class EncodedObservation:
         object.__setattr__(self, "confidence", _unit(self.confidence, "confidence"))
         if not self.source_id or not self.encoder_id:
             raise LatentLanguageError("Observation source_id and encoder_id are required")
+        if self.training_embedding is not None:
+            training = tuple(float(value) for value in self.training_embedding)
+            if not training or any(not math.isfinite(value) for value in training):
+                raise LatentLanguageError("Training embedding must be a non-empty finite vector")
+            object.__setattr__(self, "training_embedding", training)
 
 
 @dataclass(frozen=True)
@@ -190,11 +196,16 @@ class EncoderRegistry:
         if modality not in self._encoders:
             raise LatentLanguageError(f"No real encoder registered for modality '{modality}'")
         encoder = self._encoders[modality]
-        subspace = MODALITY_TO_SUBSPACE[modality]
-        values = encoder.encode(payload)
+        training_encoder = getattr(encoder, "encode_with_training_input", None)
+        if callable(training_encoder):
+            values, training_values = training_encoder(payload)
+        else:
+            values = encoder.encode(payload)
+            training_values = values
         return EncodedObservation(
             modality, tuple(values), timestamp, confidence, source_id,
             encoder.encoder_id, getattr(encoder, "shared_space", None),
+            tuple(training_values),
         )
 
 
@@ -389,11 +400,14 @@ class SpecialistContext:
     speaker_id: str | None = None
     participant_count: int = 1
     source_refs: tuple[str, ...] = ()
+    alignment_pair: bool = False
 
     def __post_init__(self) -> None:
         _finite(self.timestamp, "context timestamp")
         if self.world_revision < 0 or self.participant_count < 1:
             raise LatentLanguageError("Invalid specialist context revision/participant count")
+        if not isinstance(self.alignment_pair, bool):
+            raise LatentLanguageError("alignment_pair must be boolean")
 
 
 @dataclass(frozen=True)
@@ -772,6 +786,7 @@ class LatentLanguageCoordinator:
         workspace: GlobalWorkspace | None = None,
         dynamics: Any | None = None,
         alignment_model: Any | None = None,
+        trajectory_recorder: Any | None = None,
         max_specialist_workers: int = 8,
     ):
         self.encoders = encoders
@@ -784,6 +799,7 @@ class LatentLanguageCoordinator:
         ))
         self.dynamics = dynamics
         self.alignment_model = alignment_model
+        self.trajectory_recorder = trajectory_recorder
         if alignment_model is not None:
             manifest = getattr(alignment_model, "encoder_manifest", None)
             validated = set(getattr(alignment_model, "validated_modalities", ()))
@@ -845,6 +861,9 @@ class LatentLanguageCoordinator:
         encoded_by_modality: dict[str, tuple[float, ...]] = {}
         confidence_by_modality: dict[str, float] = {}
         source_by_modality: dict[str, str] = {}
+        encoder_by_modality: dict[str, str] = {}
+        training_embedding_by_modality: dict[str, tuple[float, ...]] = {}
+        shared_space_by_modality: dict[str, str | None] = {}
         for item in observations:
             encoded = self.encoders.encode(
                 str(item["modality"]), item["payload"],
@@ -868,6 +887,11 @@ class LatentLanguageCoordinator:
             encoded_by_modality[encoded.modality] = encoded.embedding
             confidence_by_modality[encoded.modality] = encoded.confidence
             source_by_modality[encoded.modality] = encoded.source_id
+            encoder_by_modality[encoded.modality] = encoded.encoder_id
+            training_embedding_by_modality[encoded.modality] = (
+                encoded.training_embedding or encoded.embedding
+            )
+            shared_space_by_modality[encoded.modality] = encoded.shared_space
             working_state = self.fusion.update(working_state, encoded)
 
         prediction_error = None
@@ -944,9 +968,34 @@ class LatentLanguageCoordinator:
                  "cognition": context.timestamp},
                 working_state.revision + 1,
             )
+        feedback = ISCEFeedback(novelty_value, prediction_error, modality_novelty)
+        if self.trajectory_recorder is not None:
+            modality_records = {
+                name: {
+                    "embedding": encoded_by_modality[name],
+                    "training_embedding": training_embedding_by_modality[name],
+                    "confidence": confidence_by_modality[name],
+                    "source_id": source_by_modality[name],
+                    "encoder_id": encoder_by_modality[name],
+                    "shared_space": shared_space_by_modality[name],
+                }
+                for name in encoded_by_modality
+            }
+            # Recorder errors fail this cycle before its new latent state is
+            # published. The dataset is derived, never authoritative organism state.
+            self.trajectory_recorder.record(
+                latent_vector=working_state.vector,
+                latent_state_digest=working_state.digest,
+                timestamp=context.timestamp,
+                world_revision=context.world_revision,
+                modality_embeddings=modality_records,
+                alignment_pair=context.alignment_pair,
+                selected_proposal_ids=tuple(
+                    proposal.proposal_id for proposal in broadcast.selected
+                ),
+            )
         self.state = working_state
         self._previous_cycle_vector = tuple(working_state.vector)
-        feedback = ISCEFeedback(novelty_value, prediction_error, modality_novelty)
         return CognitiveCycleResult(working_state, broadcast, generated, feedback)
 
 
