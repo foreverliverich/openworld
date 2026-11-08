@@ -14,7 +14,7 @@ import urllib.request
 from typing import Any, Sequence
 
 from .latent_language import (
-    LatentLanguageError, LatentState, SpecialistContext, SpecialistProposal,
+    LatentState, SpecialistContext, SpecialistProposal,
 )
 
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
@@ -151,10 +151,11 @@ class OllamaReasoningSpecialist:
             return ()
         result = self._infer(context.text)
         digest = hashlib.sha256(context.text.encode("utf-8")).hexdigest()[:20]
-        proposal_id = "ollama-" + hashlib.sha256(
-            json.dumps(result, sort_keys=True).encode("utf-8")
-            .join([context.text.encode("utf-8"), self.model.encode("utf-8")])
-        ).hexdigest()[:16]
+        identity = json.dumps(
+            {"text": context.text, "model": self.model, "result": result},
+            sort_keys=True, separators=(",", ":"),
+        )
+        proposal_id = "ollama-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
         evidence_refs = tuple(context.source_refs) + (f"user-text-sha256:{digest}",)
         payload = {
             **result,
