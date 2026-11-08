@@ -11,6 +11,10 @@ from chimera.latent_language import (
 )
 from chimera.reality_engine import RealityEngine, WorldConfig
 from chimera.toolbox import ChimeraToolbox
+from chimera.organism_kernel import OrganismKernel
+from chimera.autonomous_agent import AutonomousWorldAgent
+from chimera.runtime import AutonomousRuntime
+from chimera.encoders import CalibratedSensorEncoder
 
 
 class FixedEncoder:
