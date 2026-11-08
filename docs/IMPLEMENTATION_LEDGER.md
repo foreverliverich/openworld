@@ -257,3 +257,14 @@ An opt-in natural-language-to-3D-scene parser now connects the Latent Language c
 - `POST /api/cognition` accepts `interpret_scene: true` only when the explicit `--enable-scene-interpreter` option is configured alongside Latent Language. It still queues the spatial specialist proposal; the proposal must win global-workspace competition and pass the revision/resource/evidence action gateway before RealityEngine mutation.
 - Added parser geometry tests and HTTP integration tests with a deterministic injected interpreter. No external Gemini call is used in CI.
 - Model output remains an uncertain semantic interpretation. The parser does not provide visual pixel grounding, calibrated uncertainty, photorealistic mesh generation, Blender export, or compound-mesh collision semantics.
+
+
+## Single-image semantic scene grounding — 2026-11-08
+
+Extended the opt-in Gemini scene interpreter from text-only parsing to a single-image-plus-text path.
+
+- `GeminiSceneInterpreter.interpret()` accepts an optional PNG/JPEG/WebP data URI and validates strict base64, MIME/signature agreement and a 700 KB decoded-byte ceiling before sending image content to Gemini.
+- The HTTP cognition queue extracts one image observation and supplies the same image snapshot to the configured image encoder and semantic scene interpreter. Text is optional when an image is present.
+- Gemini receives image content and the optional user instruction in the same structured-output request. The response is still constrained to the existing typed SceneGraph and existing geometric compiler.
+- Added tests for image MIME spoofing, malformed base64, text+image request construction, image-only scene interpretation, and an HTTP-to-workspace-to-action-gateway integration path.
+- The model is instructed to include only clearly visible objects. Single-view positions and dimensions remain approximate; there is no calibrated depth, camera-pose estimation, multi-view tracking, occlusion reconstruction or mesh output.

@@ -38,7 +38,6 @@ This implementation follows the uploaded *Engine of Latent Language 3.0: Continu
 - `chimera/runtime.py`: queues cognition work onto the organism-owned tick, projects the current ISCE state, exposes the shared action gateway, and feeds prior-cycle novelty/prediction error into the next ISCE transition.
 - Specialist calls run concurrently with deterministic result consolidation; latent and workspace maps are immutable snapshots.
 - Specialist implementations: emotion lexical baseline, explicit-intent baseline, read-only memory retrieval, social interaction metadata, temporal encoding, spatial scene composition and structured creative artifact generation.
-- `chimera/ollama_specialist.py`: optional local Ollama co-agent. It uses JSON-schema-constrained `/api/chat`, strict output bounds, exact source-quote validation and source-grounded entity extraction. It emits only an advisory `cognitive_reasoning` proposal; it cannot produce `world_action` or call tools.
 
 The specialist baselines are deliberately named as baselines. They are not substitutes for trained emotion/social models or a general-purpose reasoning model. The spatial composer validates ground/support constraints and compiles supported on-top/next-to placements into RealityEngine structures. Nested containment remains a symbolic creative relation because the current primitive AABB collision model has no compound-mesh interior semantics; the specialist reports that constraint instead of submitting an invalid world action. It does not claim to produce photorealistic assets or run Blender/3D diffusion.
 
@@ -116,7 +115,7 @@ This PR supplies executable interfaces and first working baselines; the followin
 1. **Model training evidence:** no paired multimodal corpus or trained projection/dynamics checkpoints are included. Downloaded pretrained encoders are available after installing dependencies, but project-specific alignment and morphogenetic dynamics must be trained and evaluated on real Chimera trajectories.
 2. **Specialist depth:** emotion and intent specialists are transparent deterministic baselines; social specialist encodes explicit interaction metadata only. Trained classifiers/LLM reasoning adapters and calibrated confidence are still required.
 3. **Persistent episodic memory:** retrieval accepts records from the caller and does not create a competing memory database. A rebuildable index over the authoritative event journal must be wired with provenance and retention policy.
-4. **Semantic scene parsing:** an opt-in Gemini text-to-scene-graph parser is now executable and validates its output against current geometric constraints. It is not a general visual scene understanding system, does not infer hidden geometry from camera pixels, and does not expose calibrated uncertainty.
+4. **Semantic scene parsing:** an opt-in Gemini text/image-to-scene-graph parser is executable. It accepts one still image plus optional text, emits bounded primitive object estimates and validates the graph against current geometry constraints. It is not a general visual scene understanding system, does not infer hidden geometry, reconstruct depth, fuse multiple camera views, or expose calibrated uncertainty. Metric dimensions and positions from a single image are approximate model estimates, not measurements.
 5. **Visual/audio sensor lifecycle:** browser capture, timestamp synchronization, worker ownership, permissions and durable sensor replay are not yet connected end-to-end.
 6. **Creative asset backends:** structured scene/concept artifacts are implemented; image diffusion, mesh generation, Blender execution/export and behavioral animation backends remain separate adapters.
 7. **Causal physiology experiments:** global-workspace and latent dynamics need CCPL intervention, sham, double-intervention and mediation batteries before any causal or consciousness-related interpretation.
@@ -124,6 +123,24 @@ This PR supplies executable interfaces and first working baselines; the followin
 9. **Legacy baseline policy:** the existing deterministic autonomous agent remains in place for compatibility. Its legacy direct construction path is not yet migrated to the new proposal gateway; all new Latent Language world actions use the gateway.
 
 No component here establishes sentience or subjective experience. The evidence produced is software behavior, deterministic tests, model-training metrics and causal intervention results only.
+
+
+## Single-image scene grounding
+
+The optional Gemini scene interpreter now accepts one still image together with an
+optional natural-language instruction. The HTTP cognition request reuses the image
+observation contract (`modality: image`, `image_base64` data URI) and passes the
+same snapshot to both the configured image encoder and the semantic scene parser.
+The parser accepts PNG, JPEG and WebP data URIs, validates base64 and file signatures,
+and caps decoded image bytes at 700 KB before making the Gemini request.
+
+The multimodal model sees the image and text in one request and emits the existing
+typed scene graph. It is restricted to clearly visible physical objects and
+conservative box-like estimates. It does not claim exact metric scale, calibrated
+camera pose, depth, occluded geometry, temporal tracking, multi-view fusion or
+mesh reconstruction. The normal scene compiler, global workspace and revision-
+checked ISCE action gateway remain mandatory. CI uses a deterministic injected
+interpreter and does not call Gemini or send user images externally.
 
 
 ## Optional local reasoning co-agent
