@@ -371,6 +371,34 @@ def _cross(a: tuple[float,float,float], b: tuple[float,float,float]) -> tuple[fl
     return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
 
 
+def _dot(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
+
+
+def _solve_dense(matrix: list[list[float]], rhs: list[float]) -> list[float]:
+    """Deterministic Gaussian elimination with partial pivoting."""
+    n = len(rhs)
+    a = [row[:] + [rhs[i]] for i, row in enumerate(matrix)]
+    for column in range(n):
+        pivot = max(range(column, n), key=lambda row: abs(a[row][column]))
+        if abs(a[pivot][column]) < 1e-10:
+            raise BiomechanicsError("Articulated mass matrix is singular")
+        if pivot != column:
+            a[column], a[pivot] = a[pivot], a[column]
+        scale = a[column][column]
+        for j in range(column, n + 1):
+            a[column][j] /= scale
+        for row in range(n):
+            if row == column:
+                continue
+            factor = a[row][column]
+            if factor == 0.0:
+                continue
+            for j in range(column, n + 1):
+                a[row][j] -= factor * a[column][j]
+    return [a[i][n] for i in range(n)]
+
+
 class BiomechanicsEngine:
     """Pure articulated-body transition solver with deterministic contacts."""
 
