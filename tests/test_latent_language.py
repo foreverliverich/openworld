@@ -132,6 +132,15 @@ class LatentLanguageTests(unittest.TestCase):
         )
         with self.assertRaises(LatentLanguageError):
             unsupported.to_blueprint()
+        overlapping = SceneGraph(
+            "overlap",
+            (
+                SceneObject("left", "cube", (0, 0.5, 0), (1, 1, 1)),
+                SceneObject("right", "cube", (0.5, 0.5, 0), (1, 1, 1)),
+            ),
+        )
+        with self.assertRaises(LatentLanguageError):
+            overlapping.to_blueprint()
 
     def test_global_workspace_competes_deterministically_with_capacity(self):
         from chimera.latent_language import SpecialistProposal
