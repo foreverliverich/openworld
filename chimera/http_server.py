@@ -214,6 +214,8 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
                 json.JSONDecodeError) as exc:
             return self._json(400, {"error": "action_rejected", "message": str(exc),
                                     "current_revision": self.app.world.revision()})
+        except RuntimeError as exc:
+            return self._json(503, {"error": "somatic_unavailable", "message": str(exc)})
         except Exception as exc:
             return self._json(500, {"error": "internal_error", "message": str(exc)})
 
