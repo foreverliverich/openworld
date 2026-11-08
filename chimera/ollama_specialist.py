@@ -51,6 +51,7 @@ class OllamaReasoningSpecialist:
         self.base_url = base_url.rstrip("/")
         self.timeout = float(timeout)
         self.temperature = float(temperature)
+        self.last_error: str | None = None
 
     @staticmethod
     def _validate_output(value: Any, original_text: str) -> dict[str, Any]:
@@ -153,8 +154,15 @@ class OllamaReasoningSpecialist:
     ) -> Sequence[SpecialistProposal]:
         if not context.text.strip():
             return ()
-        result = self._infer(context.text)
-        digest = hashlib.sha256(context.text.encode("utf-8")).hexdigest()[:20]
+        try:
+            result = self._infer(context.text)
+            self.last_error = None
+        except OllamaSpecialistError as exc:
+            # An optional co-agent must not take down the authoritative organism
+            # cycle when the local model is unavailable or returns invalid JSON.
+            self.last_error = str(exc)[:500]
+            return ()
+        digest = hashlib.sha256(context.text.encode("utf-8")).hexdigest()[:20
         identity = json.dumps(
             {"text": context.text, "model": self.model, "result": result},
             sort_keys=True, separators=(",", ":"),
