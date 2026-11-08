@@ -111,6 +111,62 @@ class DigitalCell:
             raise ValueError("stale or invalid cell step")
         self.state = result.state
 
+    def execute(
+        self,
+        observation: CellObservation,
+        organism,
+        gateway,
+        *,
+        dt: float = 0.1,
+        harvest_amount: float = 0.05,
+    ) -> dict:
+        """Run one real cell -> world action -> ISCE commit -> memory commit cycle.
+
+        Seeking consumes energy from the authoritative RealityEngine field via
+        the governed action gateway. Resting and inspecting commit their proposed
+        ISCE transition directly through the organism's existing transaction API.
+        The cell's local state advances only after the world/ISCE commit succeeds.
+        """
+        if not math.isfinite(harvest_amount) or not 0.0 < harvest_amount <= 0.25:
+            raise ValueError("harvest_amount must be finite and in (0, 0.25]")
+        proposal = self.step(observation, organism.state, organism.kernel, dt=dt)
+        receipt = None
+        if proposal.action == "seek":
+            from .action_gateway import ActionProposal
+            position = organism.state.position
+            available = gateway.world.field_at(position)["energy"]
+            amount = min(harvest_amount, available)
+            if amount <= 0.0:
+                raise ValueError("Cell selected seek but no environmental energy is available")
+            receipt = gateway.execute(
+                ActionProposal(
+                    tool="world_builder",
+                    action="harvest_energy",
+                    arguments={"position": list(position), "amount": amount},
+                    expected_revision=gateway.world.revision(),
+                    expected_success=self._clamp(0.5 + proposal.reward),
+                    novelty=observation.novelty,
+                ),
+                organism_state=proposal.organism_state,
+            )
+        else:
+            organism.commit_state(
+                proposal.organism_state,
+                expected_revision=gateway.world.revision(),
+            )
+        # Publish local membrane and learned action values only after durable commit.
+        self.commit(proposal)
+        return {
+            "action": proposal.action,
+            "reward": proposal.reward,
+            "prediction_error": proposal.prediction_error,
+            "membrane_fired": proposal.membrane_fired,
+            "cell_tick": self.state.tick,
+            "organism_tick": organism.state.temporal.tick,
+            "world_revision": gateway.world.revision(),
+            "receipt": receipt,
+        }
+
     def step(
         self,
         observation: CellObservation,
@@ -213,7 +269,8 @@ class DigitalCell:
                 sensory_salience=self._clamp(drive),
                 action_success=self._clamp(0.5 + reward),
                 outcome=f"cell:{action}:reward={reward:.6f}",
-                measured_work_units=1.0,
+                action_energy_cost=0.0005 if action == "seek" else 0.0,
+                measured_work_units=1.0 if action == "seek" else 0.25,
                 resting=(action == "rest"),
                 mechanical_strain=0.0 if action != "seek" else 0.05,
             ),
