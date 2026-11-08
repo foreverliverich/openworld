@@ -15,6 +15,7 @@ import math
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Mapping, Protocol, Sequence
 
 SUBSPACE_DIMS: dict[str, int] = {
@@ -115,8 +116,8 @@ class LatentState:
             if name not in SUBSPACE_DIMS:
                 raise LatentLanguageError(f"Unknown timestamp subspace: {name}")
             _finite(timestamp, f"{name}.updated_at")
-        object.__setattr__(self, "subspaces", normalized)
-        object.__setattr__(self, "updated_at", dict(self.updated_at))
+        object.__setattr__(self, "subspaces", MappingProxyType(normalized))
+        object.__setattr__(self, "updated_at", MappingProxyType(dict(self.updated_at)))
 
     @classmethod
     def empty(cls) -> "LatentState":
@@ -605,6 +606,13 @@ class WorkspaceBroadcast:
     rejected: tuple[SpecialistProposal, ...]
     scores: Mapping[str, float]
     proposal_fingerprints: Mapping[str, str]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scores", MappingProxyType(dict(self.scores)))
+        object.__setattr__(
+            self, "proposal_fingerprints",
+            MappingProxyType(dict(self.proposal_fingerprints)),
+        )
 
 
 class GlobalWorkspace:
