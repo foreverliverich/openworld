@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import math
 from typing import Any
 
+from .isce import OrganismState as ISCEOrganismState
 from .organism_kernel import OrganismKernel
 from .reality_engine import RevisionConflict, RealityEngine
 from .toolbox import ChimeraToolbox, ToolboxError
@@ -117,7 +118,10 @@ class OrganismActionGateway:
             return float(result.get("steps", 1))
         return 1.0
 
-    def execute(self, proposal: ActionProposal) -> ActionReceipt:
+    def execute(
+        self, proposal: ActionProposal, *,
+        organism_state: ISCEOrganismState | None = None,
+    ) -> ActionReceipt:
         if not isinstance(proposal, ActionProposal):
             raise ActionGatewayError("Gateway accepts only ActionProposal values")
         pair = (proposal.tool, proposal.action)
@@ -154,26 +158,39 @@ class OrganismActionGateway:
         prediction_error = abs(1.0 - proposal.expected_success)
         outcome = f"{proposal.tool}.{proposal.action}:committed"
         organism_result = None
-        # A concurrent world commit can advance the revision between the
-        # action and its organism outcome update. Retry the state commit only;
-        # never replay the already-committed world action.
-        for _ in range(3):
-            try:
-                organism_result = self.organism.tick(
-                    dt=self.dt,
-                    action_energy_cost=actual_work * self.ENERGY_PER_WORK_UNIT,
-                    prediction_error=prediction_error,
-                    novelty=proposal.novelty,
-                    outcome=outcome,
-                    measured_work_units=actual_work,
-                    action_success=1.0,
-                    causation_id=str(result.get("action_id", "")),
-                    correlation_id=str(result.get("action_id", "")),
-                    expected_revision=self.world.revision(),
-                )
-                break
-            except RevisionConflict:
-                continue
+        if organism_state is not None:
+            if not isinstance(organism_state, ISCEOrganismState):
+                raise ActionGatewayError("organism_state must be a proposed ISCE state")
+            if organism_state.organism_id != self.organism.organism_id:
+                raise ActionGatewayError("Proposed state belongs to another organism")
+            # Persist the exact transition computed by the digital cell. The
+            # world action is never replayed if this optimistic commit conflicts.
+            organism_result = self.organism.commit_state(
+                organism_state,
+                expected_revision=self.world.revision(),
+                causation_id=str(result.get("action_id", "")),
+                correlation_id=str(result.get("action_id", "")),
+            )
+        else:
+            # A concurrent world commit can advance the revision between the
+            # action and its organism outcome update. Retry the state commit only.
+            for _ in range(3):
+                try:
+                    organism_result = self.organism.tick(
+                        dt=self.dt,
+                        action_energy_cost=actual_work * self.ENERGY_PER_WORK_UNIT,
+                        prediction_error=prediction_error,
+                        novelty=proposal.novelty,
+                        outcome=outcome,
+                        measured_work_units=actual_work,
+                        action_success=1.0,
+                        causation_id=str(result.get("action_id", "")),
+                        correlation_id=str(result.get("action_id", "")),
+                        expected_revision=self.world.revision(),
+                    )
+                    break
+                except RevisionConflict:
+                    continue
         if organism_result is None:
             raise RuntimeError(
                 "World action committed but organism accounting could not "
