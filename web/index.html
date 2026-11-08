@@ -127,8 +127,13 @@ function updateArticulatedBody(pose){
    mesh.castShadow=true;mesh.receiveShadow=true;organismGroup.add(mesh);bodySegments.set(segment.name,mesh);
   }
   mesh.position.set(...segment.center);
-  mesh.quaternion.setFromUnitVectors(upAxis,new THREE.Vector3(...segment.direction).normalize());
+  const worldQ=segment.orientation;
+  const localAlign=new THREE.Quaternion().setFromUnitVectors(
+   upAxis,new THREE.Vector3(...segment.local_direction).normalize()
+  );
+  mesh.quaternion.set(worldQ[1],worldQ[2],worldQ[3],worldQ[0]).multiply(localAlign);
   mesh.userData.segment=segment.name;
+  mesh.userData.orientation=worldQ;
   jointKeep.add(segment.name);
   let joint=bodyJoints.get(segment.name);
   if(!joint){
