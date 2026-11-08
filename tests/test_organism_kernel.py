@@ -101,7 +101,10 @@ class OrganismKernelTests(unittest.TestCase):
         # floating position.
         self.assertGreater(persisted["position"][1], 0.0)
         self.assertLess(persisted["position"][1], 1.5)
-        self.assertTrue(persisted["articulation"]["contacts"])
+        self.assertTrue(
+            persisted["articulation"]["contacts"],
+            f"migrated position={persisted['position']}, articulation={persisted['articulation']}",
+        )
         self.assertFalse(migrated.snapshot()["migration_pending"])
         self.assertTrue(self.world.verify_event_chain())
 
