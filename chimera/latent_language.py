@@ -724,7 +724,7 @@ def _offsets():
 
 
 
-def project_isce_state(organism_state: Any) -> LatentState:
+def project_isce_state(organism_state: Any, *, timestamp: float | None = None) -> LatentState:
     """Project current ISCE-owned variables into an ephemeral model workspace.
 
     This projection is disposable: no latent subspace becomes a second durable
