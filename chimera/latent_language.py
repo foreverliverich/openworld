@@ -742,7 +742,6 @@ class LatentLanguageCoordinator:
         if organism_state is not None:
             self.state = project_isce_state(organism_state, timestamp=context.timestamp)
         modality_novelty: dict[str, float] = {}
-        encoded_observations: list[EncodedObservation] = []
         for item in observations:
             encoded = self.encoders.encode(
                 str(item["modality"]), item["payload"],
@@ -761,13 +760,12 @@ class LatentLanguageCoordinator:
             modality_novelty[encoded.modality] = max(
                 modality_novelty.get(encoded.modality, 0.0), novelty
             )
-            encoded_observations.append(encoded)
             self.state = self.fusion.update(self.state, encoded)
         prediction_error = None
         if self.dynamics is not None:
             if not getattr(self.dynamics, "trained", False) or not getattr(self.dynamics, "validated", False):
                 raise LatentLanguageError("Configured morphogenetic dynamics must be trained and held-out validated")
-            if self._previous_cycle_vector is not None:
+            if self._previous_cycle_vector is not None and organism_state is not None:
                 predicted = self.dynamics.evolve(self._previous_cycle_vector, dt=dt)
                 residual = [
                     actual - expected
