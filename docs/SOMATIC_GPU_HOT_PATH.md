@@ -60,3 +60,18 @@ default. The bridge does not record or transmit audio.
 This is a controllable spectral force coupling, not a validated acoustic or
 cymatic tissue model. It has not yet been browser/GPU tested; no sound-pressure
 calibration, material resonance model, or hardware benchmark is claimed.
+
+
+## Gaussian sort — stage 1: camera-space depth keys
+
+`web/somatic-sort-depth.wgsl` generates one 32-bit key and original particle
+index per input particle. It uses right-handed camera-space forward depth
+(`-viewPosition.z`), not Euclidean camera distance. For finite nonnegative
+IEEE-754 depths, bit patterns are monotonic; inverting those bits makes an
+ascending unsigned-integer sort produce far-to-near order.
+
+This is only the key-generation stage. It does not sort, allocate ping-pong
+buffers, build histograms, scan bucket offsets, or scatter. The complete
+stable radix pipeline remains unimplemented. The caller must supply a
+right-handed view matrix and matching storage buffers. Invalid/behind-camera
+depths receive key zero and therefore sort after visible far-to-near keys.

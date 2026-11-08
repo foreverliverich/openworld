@@ -41,3 +41,11 @@ class SomaticGPUContractTests(unittest.TestCase):
   for term in ("createAnalyser()","getFloatFrequencyData","bandLevel(20,250)","bandLevel(250,2000)","bandLevel(2000,12000)","setAudioDrive","dispose("):
    self.assertIn(term,s)
 if __name__=="__main__":unittest.main()
+
+ def test_depth_key_shader_uses_camera_space_and_monotonic_positive_float_bits(self):
+  s=(ROOT/"web"/"somatic-sort-depth.wgsl").read_text()
+  self.assertIn("camera.view * world",s)
+  self.assertIn("let depth = -viewPosition.z",s)
+  self.assertIn("~bitcast<u32>(depth)",s)
+  self.assertIn("keys[index] = key",s)
+  self.assertIn("values[index] = index",s)

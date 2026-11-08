@@ -322,3 +322,10 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
 - Extended the WebGPU uniform block from 64 to 112 bytes while preserving the 48-byte cell ABI. Shader maps bass to vertical, mids to radial and treble to tangential bounded forces.
 - Added static contract tests and usage/limitations documentation.
 - Status: source changes committed in this branch; browser audio permission, WebAudio playback, WGSL compilation, physical response and GPU timing remain unverified. This is not the historical AxiomScript/NCA, Gaussian sorter, or TDR bypass.
+
+
+## 2026-11-08 — Gaussian depth-key stage
+- Added `web/somatic-sort-depth.wgsl`: GPU camera-space depth key generation and original-index output.
+- Uses finite nonnegative right-handed view depth and monotonic positive IEEE-754 bit ordering, inverted for far-to-near ascending uint sort.
+- Added static source-contract test and documented exact scope.
+- Not implemented: radix histograms, hierarchical prefix scan, stable local rank/scatter, ping-pong orchestration, splat draw pipeline, or five-million-element benchmark. User-provided scatter pseudocode is not accepted as complete because the required prefix-scan/rank stages are absent.
