@@ -78,20 +78,22 @@ class OllamaReasoningSpecialistTests(unittest.TestCase):
         invalid = dict(self.output, evidence="the user wants a weapon")
         urlopen.return_value = FakeResponse(response(invalid))
         specialist = OllamaReasoningSpecialist("qwen2.5:3b")
-        with self.assertRaises(OllamaSpecialistError):
-            specialist.propose(
-                LatentState.empty(), SpecialistContext(1.0, 0, text=self.text),
-            )
+        proposals = specialist.propose(
+            LatentState.empty(), SpecialistContext(1.0, 0, text=self.text),
+        )
+        self.assertEqual(proposals, ())
+        self.assertIn("exact quote", specialist.last_error)
 
     @patch("chimera.ollama_specialist.urllib.request.urlopen")
     def test_rejects_attempt_to_return_action_or_unknown_intent(self, urlopen):
         invalid = dict(self.output, intent="world_action")
         urlopen.return_value = FakeResponse(response(invalid))
         specialist = OllamaReasoningSpecialist("qwen2.5:3b")
-        with self.assertRaises(OllamaSpecialistError):
-            specialist.propose(
-                LatentState.empty(), SpecialistContext(1.0, 0, text=self.text),
-            )
+        proposals = specialist.propose(
+            LatentState.empty(), SpecialistContext(1.0, 0, text=self.text),
+        )
+        self.assertEqual(proposals, ())
+        self.assertIn("unsupported intent", specialist.last_error)
 
     @patch("chimera.ollama_specialist.urllib.request.urlopen")
     def test_empty_text_does_not_call_local_model(self, urlopen):
