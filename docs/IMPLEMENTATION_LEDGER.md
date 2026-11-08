@@ -245,3 +245,15 @@ The articulated generalized system now includes the root's six rigid-body veloci
 **Model boundary:** this is quaternion attitude integration with world-frame generalized angular velocity, not a full Lie-group variational integrator. Independent rigid-body-engine comparisons, external root torque control, uneven terrain, manipulation contacts, soft-tissue collision, and calibrated anthropometry remain open.
 
 **Verification:** pending hosted CI for this branch. Do not close this gate until all standard-library tests and real Chromium/WebGL2 acceptance pass.
+
+
+## Semantic scene interpretation — 2026-11-08
+
+An opt-in natural-language-to-3D-scene parser now connects the Latent Language creative/spatial path to the existing RealityEngine construction tools.
+
+- Added `chimera/scene_interpreter.py`, a server-side Gemini structured-output adapter. It emits only typed object/relationship records; it never executes model-generated Python, GLSL, or shell commands.
+- The parser bounds prompt size, object count (32), relation count (64), world extent (50 m), object dimensions (0.05–20 m), and mass (0.01–10,000 kg). IDs, kinds and materials use restricted identifiers.
+- Every generated graph is compiled through `SceneGraph.to_blueprint()` before it can be queued. That rejects duplicate IDs, unknown references, placement cycles, unsupported containment, overlapping AABBs and invalid static support.
+- `POST /api/cognition` accepts `interpret_scene: true` only when the explicit `--enable-scene-interpreter` option is configured alongside Latent Language. It still queues the spatial specialist proposal; the proposal must win global-workspace competition and pass the revision/resource/evidence action gateway before RealityEngine mutation.
+- Added parser geometry tests and HTTP integration tests with a deterministic injected interpreter. No external Gemini call is used in CI.
+- Model output remains an uncertain semantic interpretation. The parser does not provide visual pixel grounding, calibrated uncertainty, photorealistic mesh generation, Blender export, or compound-mesh collision semantics.
