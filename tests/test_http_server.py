@@ -149,6 +149,27 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertIsNone(self.app.world.somatic_morphology())
         self.assertEqual(self.app.world.revision(), revision)
 
+    def test_visual_refinement_returns_candidate_without_mutation(self):
+        package = {
+            "label": "Wolf", "persona": "Alert", "dialogue": "I am changing.",
+            "critique": "Quadruped morphology.", "sdfScript":
+                "vec2 map_object(vec3 p) { return vec2(length(p)-1.0, 1.0); }",
+            "color": [0.4, 0.3, 0.2],
+            "material": {"roughness": 0.7, "metallic": 0.0, "sssIntensity": 0.8},
+        }
+        self.request("/api/somatic/commit", {
+            "package": package, "expected_revision": self.app.world.revision()
+        })
+        revision = self.app.world.revision()
+        with patch("chimera.http_server.refine_morph_package", return_value=package):
+            status, result = self.request("/api/somatic/refine", {
+                "iteration": 1, "imageSnapshot": "data:image/png;base64,aGVsbG8="
+            })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["package"]["label"], "Wolf")
+        self.assertEqual(self.app.world.revision(), revision)
+
+
 
 if __name__ == "__main__":
     unittest.main()
