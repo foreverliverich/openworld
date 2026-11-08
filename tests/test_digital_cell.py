@@ -41,6 +41,13 @@ class DigitalCellTests(unittest.TestCase):
         self.assertTrue(result.membrane_fired)
         self.assertEqual(result.action, "seek")
 
+
+    def test_refractory_period_suppresses_seek_even_with_high_value(self):
+        cell = DigitalCell(DigitalCellState(energy=0.8, stress=0.0, refractory_ticks=1, action_values=(-0.5, 1.0, -0.5)))
+        result = cell.step(CellObservation(1.0, 0.0), self.organism, self.kernel)
+        self.assertFalse(result.membrane_fired)
+        self.assertNotEqual(result.action, "seek")
+
     def test_stale_commit_cannot_overwrite_newer_state(self):
         cell = DigitalCell()
         obs = CellObservation(0.5, 0.2)
