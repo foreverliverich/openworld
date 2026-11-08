@@ -247,6 +247,34 @@ class LatentLanguageTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+
+    def test_action_gateway_rejects_cost_above_isce_reserve(self):
+        from dataclasses import replace
+        from chimera.latent_language import SpecialistProposal
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            world = RealityEngine(WorldConfig(database=os.path.join(tmp.name, "reserve.sqlite3")))
+            organism = OrganismKernel(world, "reserve-test")
+            organism.state = replace(
+                organism.state,
+                resources=replace(organism.state.resources, reserve=0.1),
+            )
+            toolbox = ChimeraToolbox(world)
+            workspace = GlobalWorkspace()
+            proposal = SpecialistProposal(
+                "too-expensive", "spatial", "world_action",
+                {"tool": "world_builder", "action": "create_structure",
+                 "arguments": {"blueprint": {"name": "x", "parts": []}}},
+                0.95, 0.9, 0.2, 0.5, 0.5, world.revision(), ("scene:test",),
+            )
+            workspace.compete(LatentState.empty(), [proposal])
+            gateway = CognitiveActionGateway(toolbox, workspace, organism)
+            with self.assertRaises(LatentLanguageError):
+                gateway.execute(proposal)
+            world.close()
+        finally:
+            tmp.cleanup()
+
     def test_gateway_rejects_unselected_proposal(self):
         from chimera.latent_language import SpecialistProposal
         tmp = tempfile.TemporaryDirectory()
