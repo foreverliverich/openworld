@@ -68,6 +68,25 @@ class ComputationalBloodstreamTests(unittest.TestCase):
         self.assertEqual(result.state.as_dict(), state.as_dict())
         self.assertEqual(result.flow_events, ())
 
+    def test_circulation_is_invariant_to_edge_declaration_order(self):
+        organs = [
+            OrganSpec("core", capacity=1.0, setpoint=0.65, minimum=0.10),
+            OrganSpec("motor", capacity=1.0, setpoint=0.55, minimum=0.10),
+            OrganSpec("sensor", capacity=1.0, setpoint=0.55, minimum=0.10),
+        ]
+        edges = [
+            CirculationEdge("core", "motor", 0.8),
+            CirculationEdge("core", "sensor", 0.8),
+        ]
+        calibration = MetabolicCalibration(version="order-test-v1")
+        forward = ComputationalBloodstream(organs, edges, calibration)
+        reverse = ComputationalBloodstream(organs, list(reversed(edges)), calibration)
+        initial = {"core": 0.95, "motor": 0.20, "sensor": 0.20}
+        a = forward.step(forward.initial_state(initial), {})
+        b = reverse.step(reverse.initial_state(initial), {})
+        for name, value in a.state.as_dict().items():
+            self.assertAlmostEqual(value, b.state.as_dict()[name], places=12)
+
     def test_work_admission_changes_when_circulation_is_enabled(self):
         state = self.system.initial_state({
             "core": 0.95, "motor": 0.20, "sensor": 0.55,
