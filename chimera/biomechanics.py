@@ -658,8 +658,7 @@ class BiomechanicsEngine:
             contacts=tuple(contact_names),
             mechanical_strain=_clamp(limit_strain + contact_force / 5000.0, 0.0, 1.0),
             proprioceptive_error=_clamp(
-                sum(abs(commands.get(name, 0.0)-updated[name].angle)
-                    for name in updated) / max(1, len(updated)) / 1.2,
+                proprioceptive_sum / max(1, proprioceptive_axes) / 1.2,
                 0.0, 1.0,
             ),
             metabolic_work=state.metabolic_work + total_work,
