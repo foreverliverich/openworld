@@ -49,12 +49,16 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.log{fon
   <div class="wide"><button class="primary" type="submit">Commit object to world</button></div>
  </form></section>
  <section class="section"><h2>Articulated body · motor control</h2>
-  <p class="note">Live 16-segment / 15-joint body pose is projected from ISCE. Commands are target joint angles in radians and are committed through the revision-checked body actuator.</p>
+  <p class="note">Live quaternion-based 3D body pose: ball joints at spine, neck, shoulders and hips; two-axis wrists and ankles; bounded hinge knees/elbows. Joint angles are radians. Motor commands pass through compliant tendon dynamics and the revision-checked ISCE actuator.</p>
   <form id="bodyForm">
-   <div><label>Left hip · thigh_l (rad)</label><input name="thigh_l" type="number" step=".05" min="-.95" max="1.65" value=".45"></div>
-   <div><label>Left knee · shin_l (rad)</label><input name="shin_l" type="number" step=".05" min="-2.45" max=".12" value="-.3"></div>
-   <div><label>Left shoulder · upper_arm_l (rad)</label><input name="upper_arm_l" type="number" step=".05" min="-2.7" max="2.7" value=".25"></div>
-   <div><label>Left elbow · forearm_l (rad)</label><input name="forearm_l" type="number" step=".05" min="-2.35" max=".12" value="-.4"></div>
+   <div><label>Left hip · flexion (rad)</label><input name="thigh_l" type="number" step=".05" min="-.95" max="1.65" value=".45"></div>
+   <div><label>Left hip · abduction (rad)</label><input name="thigh_l_y" type="number" step=".05" min="-.78" max=".78" value=".20"></div>
+   <div><label>Left hip · rotation (rad)</label><input name="thigh_l_z" type="number" step=".05" min="-.72" max=".72" value="0"></div>
+   <div><label>Left knee · hinge (rad)</label><input name="shin_l" type="number" step=".05" min="-2.45" max=".12" value="-.3"></div>
+   <div><label>Left shoulder · flexion (rad)</label><input name="upper_arm_l" type="number" step=".05" min="-2.7" max="2.7" value=".25"></div>
+   <div><label>Left shoulder · abduction (rad)</label><input name="upper_arm_l_y" type="number" step=".05" min="-1.9" max="1.9" value=".15"></div>
+   <div><label>Left shoulder · axial rotation (rad)</label><input name="upper_arm_l_z" type="number" step=".05" min="-2.7" max="2.7" value="0"></div>
+   <div><label>Left elbow · hinge (rad)</label><input name="forearm_l" type="number" step=".05" min="-2.35" max=".12" value="-.4"></div>
    <div><label>Root acceleration X (m/s²)</label><input name="ax" type="number" step=".1" value="0"></div>
    <div><label>Root acceleration Z (m/s²)</label><input name="az" type="number" step=".1" value="0"></div>
    <div class="wide"><button class="primary" type="submit">Commit motor targets</button></div>
@@ -152,7 +156,7 @@ async function refresh(){const s=await api('/api/state');renderState(s);await re
 $('#tick').onclick=async()=>{try{$('#tick').disabled=true;const r=await api('/api/tick',{ticks:1});renderState(r.state);await refreshBody();log(r.frames[0])}catch(e){log(e.message)}finally{$('#tick').disabled=false}};
 $('#observe').onclick=()=>refresh().catch(e=>log(e.message));
 $('#events').onclick=async()=>{try{const r=await api('/api/events?after_revision=0&limit=100');log({chain_valid:r.chain_valid,revision:r.revision,events:r.events})}catch(e){log(e.message)}};
-$('#bodyForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);const commands={};for(const name of ['thigh_l','shin_l','upper_arm_l','forearm_l'])commands[name]=Number(f.get(name));try{const r=await api('/api/body/actuate',{expected_revision:lastRevision,motor_commands:commands,root_acceleration:[Number(f.get('ax')),0,Number(f.get('az'))]});renderState(r.state);updateArticulatedBody(r.body);log({actuation:r.result,contacts:r.body.contacts,joints:r.body.joints})}catch(e){log(e.message);await refresh()}};
+$('#bodyForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target);const commands={thigh_l:[Number(f.get('thigh_l')),Number(f.get('thigh_l_y')),Number(f.get('thigh_l_z'))],shin_l:Number(f.get('shin_l')),upper_arm_l:[Number(f.get('upper_arm_l')),Number(f.get('upper_arm_l_y')),Number(f.get('upper_arm_l_z'))],forearm_l:Number(f.get('forearm_l'))};try{const r=await api('/api/body/actuate',{expected_revision:lastRevision,motor_commands:commands,root_acceleration:[Number(f.get('ax')),0,Number(f.get('az'))]});renderState(r.state);updateArticulatedBody(r.body);log({actuation:r.result,contacts:r.body.contacts,joints:r.body.joints})}catch(e){log(e.message);await refresh()}};
 $('#objectForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'world_builder',action:'create_object',expected_revision:lastRevision,arguments:{kind:f.get('kind'),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n,n],material:'stone',dynamic:true}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
 $('#toolForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'tool_fabricator',action:'fabricate',expected_revision:lastRevision,arguments:{name:f.get('name'),capabilities:f.get('capabilities').split(',').map(v=>v.trim()).filter(Boolean),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n,n],material:'wood',dynamic:true,specification:{fabricated_in:'browser_toolbox'}}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
 $('#lifeForm').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.target),n=Number(f.get('size'));try{const r=await api('/api/tool',{tool:'life_generator',action:'spawn',expected_revision:lastRevision,arguments:{species:f.get('species'),identity:f.get('identity'),position:[Number(f.get('x')),Number(f.get('y')),Number(f.get('z'))],size:[n,n*1.5,n],material:'biomorphic',dynamic:true}});renderState(r.state);log(r.result)}catch(e){log(e.message);await refresh()}};
