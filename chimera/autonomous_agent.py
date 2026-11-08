@@ -15,6 +15,7 @@ from .action_gateway import ActionProposal, OrganismActionGateway
 from .organism_kernel import OrganismKernel
 from .reality_engine import RealityEngine, WorldResult
 from .toolbox import ChimeraToolbox
+from .sensory import capture_sensory_evidence
 
 
 @dataclass(frozen=True)
@@ -137,18 +138,18 @@ class AutonomousWorldAgent:
             return AgentStep(goal, "rest_regulation",
                              result.revision, result.details)
 
-        observation = self.world.observe(
-            center=self.organism.state.position, radius=20.0
+        evidence = capture_sensory_evidence(
+            self.world, self.organism.state.position, radius=20.0,
+            previous_token=self.organism.state.self_model.last_outcome,
         )
-        entity_count = observation["entity_count"]
-        # A deterministic surprise proxy for this baseline: a change in observed
-        # entity count relative to the organism's stored previous outcome.
-        previous = self.organism.state.self_model.last_outcome or ""
-        novelty = 0.15 if str(entity_count) not in previous else 0.02
+        observation = evidence.observation
+        entity_count = evidence.total_entity_count
         result = self.organism.tick(
             dt=dt, action_energy_cost=0.002, mechanical_strain=0.0,
-            prediction_error=0.08, novelty=novelty,
-            outcome=f"observed_entities:{entity_count}",
+            prediction_error=evidence.prediction_error, novelty=evidence.novelty,
+            sensory_salience=evidence.salience,
+            measured_work_units=0.25,
+            outcome=evidence.memory_token,
             expected_revision=observation["revision"],
         )
         return AgentStep(
