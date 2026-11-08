@@ -47,6 +47,7 @@ class AutonomousRuntime:
         self.cognition = cognition
         self.cognition_gateway = cognition_gateway
         self._pending_cognition: list[tuple[list[dict[str, Any]], Any]] = []
+        self._pending_feedback: dict[str, float] = {}
         self._tick = 0
         self._running = False
 
@@ -74,7 +75,8 @@ class AutonomousRuntime:
             actor_id="reality-runtime",
             expected_revision=self.world.revision(),
         )
-        agent_result = self.agent.step()
+        agent_result = self.agent.step(cognitive_feedback=self._pending_feedback)
+        self._pending_feedback = {}
         self._tick += 1
         organism_position = self.agent.organism.state.position
         observation = self.world.observe(
@@ -98,7 +100,15 @@ class AutonomousRuntime:
                     for p in cycle.broadcast.selected
                 ],
                 "rejected_count": len(cycle.broadcast.rejected),
+                "feedback": {
+                    "novelty": cycle.feedback.novelty,
+                    "prediction_error": cycle.feedback.prediction_error,
+                    "modality_novelty": dict(cycle.feedback.modality_novelty),
+                },
             }
+            self._pending_feedback = {"novelty": cycle.feedback.novelty}
+            if cycle.feedback.prediction_error is not None:
+                self._pending_feedback["prediction_error"] = cycle.feedback.prediction_error
         return RuntimeFrame(
             tick=self._tick,
             world_revision=observation["revision"],
@@ -159,4 +169,5 @@ class AutonomousRuntime:
             "cognition_workspace_tick": (
                 self.cognition.workspace.tick if self.cognition is not None else None
             ),
+            "pending_cognitive_feedback": dict(self._pending_feedback),
         }
