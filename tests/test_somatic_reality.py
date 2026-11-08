@@ -64,11 +64,23 @@ class SomaticRealityEngineTests(unittest.TestCase):
         self.assertTrue(self.world.verify_event_chain())
 
     def test_somatic_state_survives_database_reopen(self):
-        package = morph("Wolf", "vec2 map_object(vec3 p) { return vec2(length(p)-1.0, 1.0); }")
-        self.world.apply_somatic_morphology(package, actor_id="test")
+        first_script = "vec2 map_object(vec3 p) { return vec2(length(p)-1.0, 1.0); }"
+        second_script = "vec2 map_object(vec3 p) { return vec2(length(p)-0.8, 5.0); }"
+        first = morph("Wolf", first_script)
+        second = morph("Dragon", second_script)
+        self.world.apply_somatic_morphology(first, actor_id="test")
+        self.world.apply_somatic_morphology(second, actor_id="test")
+        self.assertTrue(self.world.verify_event_chain())
+
         self.world.close()
         self.world = RealityEngine(WorldConfig(database=self.database))
-        self.assertEqual(self.world.somatic_morphology()["label"], "Wolf")
+        restored = self.world.somatic_morphology()
+
+        self.assertEqual(restored["label"], "Dragon")
+        self.assertEqual(restored["prevSdfScript"], first_script)
+        self.assertEqual(restored["sdfScript"], second_script)
+        self.assertEqual(restored["iteration"], 2)
+        self.assertTrue(self.world.verify_event_chain())
 
 if __name__ == "__main__":
     unittest.main()
