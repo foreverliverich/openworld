@@ -1,7 +1,13 @@
+import os
+import tempfile
 import unittest
 
 from chimera.digital_cell import CellObservation, DigitalCell, DigitalCellState
 from chimera.isce import ISCEKernel, OrganismState
+from chimera.action_gateway import OrganismActionGateway
+from chimera.organism_kernel import OrganismKernel
+from chimera.reality_engine import RealityEngine, WorldConfig
+from chimera.toolbox import ChimeraToolbox
 
 
 class DigitalCellTests(unittest.TestCase):
@@ -68,6 +74,61 @@ class DigitalCellTests(unittest.TestCase):
             CellObservation(2.0, 0.0)
         with self.assertRaises(ValueError):
             DigitalCellState(energy=float("nan"))
+
+    def test_cell_executes_seek_through_world_gateway_and_commits_isce(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            world = RealityEngine(WorldConfig(
+                database=os.path.join(tmp, "cell-world.sqlite3")
+            ))
+            try:
+                organism = OrganismKernel(world, "integrated-cell")
+                toolbox = ChimeraToolbox(world, actor_id=organism.organism_id)
+                gateway = OrganismActionGateway(world, organism, toolbox)
+                world.inject_field(
+                    "energy", organism.state.position, 0.2,
+                    actor_id="environment", radius=0,
+                )
+                cell = DigitalCell(DigitalCellState(
+                    energy=0.2, stress=0.0, membrane_potential=0.7,
+                    action_values=(-0.5, 1.0, -0.5),
+                ))
+                before = world.field_at(organism.state.position)["energy"]
+                result = cell.execute(
+                    CellObservation(energy_supply=before, environmental_stress=0.0),
+                    organism, gateway,
+                )
+                after = world.field_at(organism.state.position)["energy"]
+                self.assertEqual(result["action"], "seek")
+                self.assertIsNotNone(result["receipt"])
+                self.assertAlmostEqual(before - after, 0.05)
+                self.assertEqual(cell.state.tick, 1)
+                self.assertEqual(organism.state.temporal.tick, 1)
+                self.assertEqual(world.revision(), 3)
+                self.assertTrue(world.verify_event_chain())
+            finally:
+                world.close()
+
+    def test_cell_rest_commits_proposed_isce_state_before_cell_memory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            world = RealityEngine(WorldConfig(
+                database=os.path.join(tmp, "rest-world.sqlite3")
+            ))
+            try:
+                organism = OrganismKernel(world, "resting-cell")
+                gateway = OrganismActionGateway(world, organism)
+                cell = DigitalCell(DigitalCellState(energy=0.1, stress=0.2))
+                result = cell.execute(
+                    CellObservation(energy_supply=0.0, environmental_stress=0.0),
+                    organism, gateway,
+                )
+                self.assertEqual(result["action"], "rest")
+                self.assertIsNone(result["receipt"])
+                self.assertEqual(cell.state.tick, 1)
+                self.assertEqual(organism.state.temporal.tick, 1)
+                self.assertGreater(cell.state.energy, 0.1)
+                self.assertTrue(world.verify_event_chain())
+            finally:
+                world.close()
 
     def test_identical_inputs_are_reproducible(self):
         obs = CellObservation(0.7, 0.2, 0.3)
