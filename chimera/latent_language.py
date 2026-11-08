@@ -240,8 +240,10 @@ class SceneObject:
     dynamic: bool = True
 
     def __post_init__(self) -> None:
-        if not self.object_id or not self.kind:
-            raise LatentLanguageError("Scene objects require object_id and kind")
+        if not self.object_id or not self.kind or not isinstance(self.material, str) or not self.material:
+            raise LatentLanguageError("Scene objects require object_id, kind and material")
+        if not isinstance(self.dynamic, bool):
+            raise LatentLanguageError("Scene object dynamic flag must be boolean")
         object.__setattr__(self, "position", _vector(self.position, 3, "position"))
         object.__setattr__(self, "size", _vector(self.size, 3, "size"))
         if any(v <= 0 for v in self.size) or not math.isfinite(self.mass) or self.mass <= 0:
@@ -363,6 +365,7 @@ class MemoryRecord:
     def __post_init__(self) -> None:
         if not self.record_id or not self.text:
             raise LatentLanguageError("Memory record requires id and text")
+        _finite(self.timestamp, "memory record timestamp")
         object.__setattr__(self, "embedding", _vector(
             self.embedding, SUBSPACE_DIMS["language"], "memory embedding"
         ))
