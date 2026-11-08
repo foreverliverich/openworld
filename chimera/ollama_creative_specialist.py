@@ -16,6 +16,7 @@ from .latent_language import LatentState, SpecialistContext, SpecialistProposal
 
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 MAX_CREATIVE_PROMPT_CHARS = 5000
+MAX_RESPONSE_BYTES = 32 * 1024
 MAX_TITLE_CHARS = 120
 MAX_CONCEPT_CHARS = 1800
 MAX_ELEMENTS = 12
@@ -88,8 +89,10 @@ class OllamaCreativeSpecialist:
             raise OllamaCreativeError(f"elements must be a list of at most {MAX_ELEMENTS} items")
         clean_elements = []
         for index, item in enumerate(elements):
-            if not isinstance(item, dict):
-                raise OllamaCreativeError(f"elements[{index}] must be an object")
+            if not isinstance(item, dict) or set(item) != {"name", "detail"}:
+                raise OllamaCreativeError(
+                    f"elements[{index}] must contain exactly name and detail"
+                )
             clean_elements.append({
                 "name": cls._bounded_text(
                     item.get("name"), label=f"elements[{index}].name",
@@ -192,7 +195,10 @@ class OllamaCreativeSpecialist:
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
+                raw_response = response.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw_response) > MAX_RESPONSE_BYTES:
+                    raise OllamaCreativeError("Ollama creative response exceeds the 32 KiB limit")
+                result = json.loads(raw_response.decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")[:800]
             raise OllamaCreativeError(f"Ollama returned HTTP {exc.code}: {detail}") from exc
