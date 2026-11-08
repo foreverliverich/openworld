@@ -8,9 +8,9 @@
 - chimera/reality_engine.py now owns a SQLite somatic_morphology record. It stores the current SDF, previous SDF, package metadata, iteration and morph start time. Every committed morph advances the existing world revision and appends a hash-chained somatic_morph event. Progress is derived from the stored start time at the specified 1.5/sec rate.
 - chimera/http_server.py exposes GET /api/somatic/state, POST /api/somatic/morph (generate only), and POST /api/somatic/commit (commit only after browser shader compilation). Stale revisions are rejected by the existing world transaction boundary.
 - web/somatic-core.js implements a WebGL2 full-screen raymarcher with previous/target SDF functions, per-frame A/B distance/material blending, finite-difference normals, ambient occlusion, diffusion noise, latent domain warp, fur displacement, pores, subdermal flow, material-ID shading and wrapped-light SSS. A target shader is compiled and linked before it can replace the currently displayed program.
-- web/somatic.html provides the language-to-morphology interface and restores the canonical SDF pair from SQLite on load.
+- web/somatic.html provides the language-to-morphology interface, restores the canonical SDF pair from SQLite on load, and offers a ten-iteration image-conditioned visual refinement loop.
 - web/index.html no longer presents the rigid primitive Body Forge as creature embodiment; it links to the Somatic Core interface.
-- tests/test_somatic_kernel.py covers package validation, missing credentials and a mocked Gemini response. tests/test_somatic_reality.py covers durable A/B state, revision conflicts and event-chain integrity. tests/test_http_server.py covers candidate generation without mutation, commit validation and the HTTP integration.
+- tests/test_somatic_kernel.py covers package validation, missing credentials, the ten-iteration cap, image-data validation and a mocked multimodal Gemini response. tests/test_somatic_reality.py covers durable A/B state, revision conflicts and event-chain integrity. tests/test_http_server.py covers candidate generation without mutation, refinement candidates without mutation, commit validation and the HTTP integration.
 
 ## Run
 
@@ -29,7 +29,8 @@ Open http://127.0.0.1:8765/web/somatic.html. WebGL2 is required. Without a confi
 2. Server asks Gemini for a structured morphology package. The browser receives it as a candidate; no database mutation has occurred.
 3. Browser compiles and links the candidate with the existing BioPBR header and the previous SDF. If compilation fails, the old program and canonical database state remain untouched.
 4. Browser submits the candidate package with the world revision it read. The server validates it again; RealityEngine checks the revision, stores prevSdfScript and sdfScript, advances the revision, and appends the morphology event atomically.
-5. Browser installs the already-compiled program and blends from A to B. Reload reads the same pair and derives the current progress from the persisted start timestamp.
+5. Browser installs the already-compiled program and projects the RealityEngine-owned start timestamp as the A/B blend clock. Reload reads the same pair and resumes at the correct progress.
+6. Optional auto-refinement captures a downscaled canvas image, asks Gemini for a refinement candidate, compiles it, and commits it through the same revision-checked path. One user-triggered run is hard-capped at ten iterations; each failed generation, compile or commit stops the loop without replacing the last committed form.
 
 The server binds to loopback by default. Do not expose it publicly or to a LAN without authentication, origin/CSRF protections and a security review.
 
@@ -42,7 +43,7 @@ Therefore the whitepaper's T1–T7 acceptance suite is **not claimed as passed**
 - Run the browser on an actual WebGL2 implementation and capture shader compile/link results for the seed and generated morphologies.
 - Exercise T1–T7 repeatedly, including a deliberately invalid generated shader and confirmation that no broken target is committed.
 - Validate wolf/dragon/abstract morphology quality against the generated GLSL, not merely package shape.
-- Add bounded automatic visual refinement (whitepaper §10), image-conditioned refinement, and its ten-iteration cap.
+- Verify the ten-step refinement loop against real Gemini image input and shader quality; automated tests cover request construction and bounds, not visual improvement.
 - Add camera interaction and explicit loading/retry handling for long-running generation requests.
 
 This branch now has a connected, durable SDF morphogenesis path; it is not yet a verified completion of every P0 acceptance test. No GPU particle counts, articulated locomotion, consciousness or sentience claims are made.
