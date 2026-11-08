@@ -193,3 +193,19 @@ The former body-mechanics backlog has an executable first implementation on bran
 
 **Verification status:** GitHub Actions run [42433374952](https://github.com/foreverliverich/openworld/actions/runs/42433374952) passed both gates: all **100 standard-library tests** and the real Chromium/ANGLE/SwiftShader Three.js browser acceptance. The browser test verifies the live WebGL2 scene, all 16 segment projections, valid 3D motor controls, a hip abduction command submitted through the UI, and the committed joint pose returned by the application API. The mechanics gate includes quaternion 3D kinematics, compliant tendon state, force-length/force-velocity torque scaling, bounded angular speed, Jacobian-assembled generalized mass matrix, finite-difference Christoffel/Coriolis terms, pivoted linear solve, whole-body capsule ground contact, sagittal-to-3D migration, HTTP/API and ISCE persistence regressions. This is a deterministic rigid-segment articulated model, not a complete biological digital twin. Generalized contact impulses, root degrees of freedom in the mass matrix, self-collision, friction cones, antagonistic muscle pairs, calibrated tissue mechanics, multimodal sensory grounding and high-fidelity skin/SDF deformation remain open.
 
+
+
+## Contact-constrained articulated dynamics — 2026-11-07
+
+The next embodiment gate extends the articulated solver from joint-only generalized dynamics plus penalty-style root support to a coupled root-translation/joint system with impulse-based ground constraints.
+
+- `chimera/biomechanics.py`: the generalized coordinate layout now includes world root translation (X/Y/Z) before all enabled joint rotations. Root translational Jacobian columns contribute to the same segment kinetic-energy mass matrix; root/joint inertial cross terms are retained. Gravity and Coriolis terms operate over the expanded coordinate vector. A requested root acceleration is converted through the full mass matrix into generalized force.
+- Contact points are selected from the lower endpoint of each segment capsule. Their point Jacobians include root translation and all ancestor rotational coordinates.
+- A projected Gauss-Seidel contact solver computes effective masses using `M^-1 J^T`, enforces non-negative unilateral normal impulses, and projects two tangential impulses onto a circular Coulomb friction cone (current coefficient 0.75). Contact impulses update root and joint velocities in the same generalized system; joint coordinates are reintegrated from constrained velocities.
+- Residual penetration uses split positional stabilization after the velocity-level constraint solve. The contact model is non-restitutive and ground-plane-only.
+- `tests/test_biomechanics.py`: added checks for root translational mass coupling, normal impact response, friction response, and the absence of ground friction while separated.
+- `docs/ARTICULATED_BIOMECHANICS.md`: equations, assumptions, contact algorithm, and limitations updated.
+
+**Model boundary:** root translation is now a generalized coordinate; root orientation/angular momentum are still not generalized coordinates. This does not yet implement self-collision, uneven terrain, grasping, multi-body contact, or calibrated friction. The solver remains a deterministic rigid-segment model with approximate anthropometric parameters, not a validated biological simulator.
+
+**Verification:** pending hosted CI for this branch. Do not treat this gate as closed until the standard-library suite and real Chromium/WebGL2 acceptance both pass.
