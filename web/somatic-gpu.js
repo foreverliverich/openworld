@@ -14,6 +14,8 @@ struct SomaticCell {
 struct SimParams {
   dt: f32, gravity: f32, groundY: f32, restitution: f32,
   friction: f32, energyDrain: f32, cellCount: u32, _pad: u32,
+  attractionCenter: vec4<f32>,
+  attractionStrength: f32, maxAttractionAcceleration: f32, _pad2: vec2<f32>,
 };
 @group(0) @binding(0) var<storage, read_write> cells: array<SomaticCell>;
 @group(0) @binding(1) var<uniform> params: SimParams;
@@ -25,6 +27,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let dt=clamp(params.dt,0.0,0.0333333333);
   let mass=max(c.position.w,0.0001);
   var v=c.velocity.xyz;
+  // Optional bounded goal steering. A zero-distance guard prevents NaNs.
+  let toGoal=params.attractionCenter.xyz-c.position.xyz;
+  let goalDistance=length(toGoal);
+  if(params.attractionStrength>0.0 && goalDistance>1e-5){
+    let acceleration=min(params.attractionStrength*goalDistance,
+                         max(params.maxAttractionAcceleration,0.0));
+    v=v+(toGoal/goalDistance)*acceleration*dt;
+  }
   v.y=v.y-params.gravity*dt;
   var p=c.position.xyz+v*dt;
   if(p.y<params.groundY){
@@ -76,23 +86,35 @@ export class SomaticGPU {
       const bytes=count*CELL_BYTES;
       const buffer=device.createBuffer({label:"Somatic cells "+offset,size:align(bytes,4),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
       device.queue.writeBuffer(buffer,0,floats);
-      const uniform=device.createBuffer({label:"Somatic parameters",size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+      const uniform=device.createBuffer({label:"Somatic parameters",size:64,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
       const bindGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
         {binding:0,resource:{buffer,size:bytes}},{binding:1,resource:{buffer:uniform}}
       ]});
       pages.push({buffer,uniform,bindGroup,count,offset});offset+=count;remaining-=count;
     }
-    return new SomaticGPU({device,pipeline,pages,cellCount,gravity,groundY,restitution,friction,energyDrain});
+    return new SomaticGPU({device,pipeline,pages,cellCount,gravity,groundY,restitution,friction,energyDrain,
+      attractionCenter:[0,0,0],attractionStrength:0,maxAttractionAcceleration:8});
   }
   constructor(options){Object.assign(this,options);this.disposed=false;this.steps=0;this.simulationTime=0;}
+  setAttractor(x,y,z,{strength=1,maxAcceleration=8}={}){
+    if(this.disposed)throw new Error("SomaticGPU disposed");
+    if(![x,y,z,strength,maxAcceleration].every(Number.isFinite))throw new TypeError("Attractor values must be finite");
+    if(strength<0||maxAcceleration<0)throw new RangeError("Attractor strength and acceleration must be non-negative");
+    this.attractionCenter=[x,y,z];
+    this.attractionStrength=strength;
+    this.maxAttractionAcceleration=maxAcceleration;
+  }
+  clearAttractor(){this.setAttractor(0,0,0,{strength:0,maxAcceleration:this.maxAttractionAcceleration});}
   step(deltaSeconds){
     if(this.disposed)throw new Error("SomaticGPU disposed");
     if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw new RangeError("deltaSeconds must be finite and non-negative");
     const dt=Math.min(deltaSeconds,MAX_DT),encoder=this.device.createCommandEncoder({label:"Somatic step"});
     const pass=encoder.beginComputePass();pass.setPipeline(this.pipeline);
     for(const page of this.pages){
-      const data=new ArrayBuffer(32),f=new Float32Array(data),u=new Uint32Array(data);
+      const data=new ArrayBuffer(64),f=new Float32Array(data),u=new Uint32Array(data);
       f[0]=dt;f[1]=this.gravity;f[2]=this.groundY;f[3]=this.restitution;f[4]=this.friction;f[5]=this.energyDrain;u[6]=page.count;u[7]=0;
+      f[8]=this.attractionCenter[0];f[9]=this.attractionCenter[1];f[10]=this.attractionCenter[2];f[11]=0;
+      f[12]=this.attractionStrength;f[13]=this.maxAttractionAcceleration;f[14]=0;f[15]=0;
       this.device.queue.writeBuffer(page.uniform,0,data);
       pass.setBindGroup(0,page.bindGroup);pass.dispatchWorkgroups(Math.ceil(page.count/WORKGROUP_SIZE));
     }
