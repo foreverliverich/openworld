@@ -79,8 +79,8 @@ def run_ccpl(
     initial: OrganismState,
     inputs: Iterable[TransitionInput],
     *,
-    source: Intervention = Intervention("body.energy", 0.20),
-    second: Intervention = Intervention("resources.reserve", 0.20),
+    source: Intervention = Intervention("body.integrity", -0.20),
+    second: Intervention = Intervention("resources.reserve", -0.20),
     mediator_target: str = "interoception.precision",
     outcome_target: str = "attention.focus",
     intervention_tick: int = 0,
@@ -89,8 +89,9 @@ def run_ccpl(
 
     Intervention values are bounded state clamps applied at the end of the
     selected transition. The mediation condition then holds the named mediator
-    to its paired baseline trajectory for the remaining trial. This explicit
-    operational definition avoids calling a generic correlation a mediation.
+    to its paired baseline trajectory for the remainder of the trial. This
+    explicit operational definition avoids calling a generic correlation a
+    mediation.
     """
     sequence = tuple(inputs)
     if not sequence:
