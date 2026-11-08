@@ -139,6 +139,19 @@ Tool definitions are discoverable with `tools.manifest()`. Every mutation suppor
 python -m unittest discover -s tests -p "test_toolbox.py" -v
 ```
 
+## Latent Language 3.0 cognition
+
+The repository now includes an executable multimodal latent workspace, pretrained
+encoder adapters, specialist proposals, global-workspace arbitration, structured
+spatial composition, contrastive alignment training, and trainable morphogenetic
+dynamics. The latent vector is an ephemeral projection of ISCE—not a second
+organism-state owner—and world actions pass through a revision-checked gateway.
+
+See [docs/LATENT_LANGUAGE_3_IMPLEMENTATION.md](docs/LATENT_LANGUAGE_3_IMPLEMENTATION.md)
+for the exact 2,464-D schema, model setup, training/evaluation procedure, tests and
+remaining research gates. Optional model dependencies are listed in
+`requirements-latent.txt`; the core runtime remains standard-library Python.
+
 ## Autonomous organism runtime
 
 `OrganismKernel` is the first coupled organism-state mechanism. The local
