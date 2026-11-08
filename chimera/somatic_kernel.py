@@ -124,9 +124,6 @@ def refine_morph_package(
         raise ValueError("refinement iteration must be between 1 and 10")
     if not isinstance(current_state, dict) or not isinstance(current_state.get("sdfScript"), str):
         raise ValueError("current morphology state is required for refinement")
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
-    if not api_key:
-        raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY on the server.")
     parts: list[dict[str, Any]] = [{
         "text": (
             "Visually refine this existing creature morphology. This is refinement iteration "
@@ -161,6 +158,9 @@ def refine_morph_package(
                 "data": match.group(2),
             }
         })
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
+    if not api_key:
+        raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY on the server.")
     body = {
         "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
         "contents": [{"role": "user", "parts": parts}],
