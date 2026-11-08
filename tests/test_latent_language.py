@@ -14,7 +14,7 @@ from chimera.toolbox import ChimeraToolbox
 from chimera.organism_kernel import OrganismKernel
 from chimera.autonomous_agent import AutonomousWorldAgent
 from chimera.runtime import AutonomousRuntime
-from chimera.encoders import CalibratedSensorEncoder
+from chimera.encoders import CalibratedSensorEncoder, SharedSpaceEmbedding
 
 
 class FixedEncoder:
@@ -68,6 +68,16 @@ class LatentLanguageTests(unittest.TestCase):
         right = EncodedObservation("text", (0.1,) * 768, 5, 1, "t", "bert")
         with self.assertRaises(LatentLanguageError):
             fusion.aligned_similarity(left, right)
+
+
+    def test_cross_modal_similarity_requires_and_uses_shared_clip_space(self):
+        from chimera.latent_language import MultimodalFusion
+        image = SharedSpaceEmbedding("image", (1.0, 0.0, 0.0), "clip-512")
+        matching_text = SharedSpaceEmbedding("text", (1.0, 0.0, 0.0), "clip-512")
+        unrelated = SharedSpaceEmbedding("text", (0.0, 1.0, 0.0), "other-space")
+        self.assertAlmostEqual(MultimodalFusion.aligned_similarity(image, matching_text), 1.0)
+        with self.assertRaises(LatentLanguageError):
+            MultimodalFusion.aligned_similarity(image, unrelated)
 
     def test_scene_graph_compiles_relation_and_rejects_invalid_containment(self):
         graph = SceneGraph(
