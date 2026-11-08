@@ -206,6 +206,9 @@ class LatentLanguageTests(unittest.TestCase):
             spatial = next(p for p in selected if p.specialist == "spatial")
             committed = runtime.execute_cognitive_proposal(spatial)
             self.assertTrue(committed["accepted"])
+            prior_memory = organism.state.self_model.memory_strength
+            runtime.tick()
+            self.assertGreater(organism.state.self_model.memory_strength, prior_memory)
         finally:
             if world is not None:
                 world.close()
