@@ -49,6 +49,9 @@ class BrowserAPIIntegrationTests(unittest.TestCase):
         self.assertIn("PROJECT", html)
         self.assertIn("CHIMERA", html)
         self.assertIn("/api/state", html)
+        self.assertIn("bodyForm", html)
+        self.assertIn("/api/body/pose", html)
+        self.assertIn("/api/body/actuate", html)
         for tool_name in ("World Builder", "Somatic Core", "Tool Fabricator", "Life Generator", "Movement Lab", "Research Lab"):
             self.assertIn(tool_name, html)
 
