@@ -67,7 +67,7 @@ class LatentTrajectoryRecorder:
 
     def record(
         self, *, latent_vector: Sequence[float], latent_state_digest: str,
-        timestamp: float, world_revision: int,
+        timestamp: float, sample_dt: float, world_revision: int,
         modality_embeddings: Mapping[str, Mapping[str, Any]],
         alignment_pair: bool = False,
         selected_proposal_ids: Sequence[str] = (),
@@ -80,6 +80,11 @@ class LatentTrajectoryRecorder:
         timestamp = float(timestamp)
         if not math.isfinite(timestamp):
             raise LatentDatasetError("timestamp must be finite")
+        if isinstance(sample_dt, bool) or not isinstance(sample_dt, (int, float)):
+            raise LatentDatasetError("sample_dt must be numeric")
+        sample_dt = float(sample_dt)
+        if not math.isfinite(sample_dt) or not 0 < sample_dt <= 0.25:
+            raise LatentDatasetError("sample_dt must be finite and in (0, 0.25]")
         if isinstance(world_revision, bool) or not isinstance(world_revision, int) or world_revision < 0:
             raise LatentDatasetError("world_revision must be a non-negative integer")
         if not isinstance(alignment_pair, bool):
@@ -141,6 +146,7 @@ class LatentTrajectoryRecorder:
                 "trajectory_id": self.trajectory_id,
                 "sequence_index": self._sequence_index,
                 "timestamp": timestamp,
+                "sample_dt": sample_dt,
                 "world_revision": world_revision,
                 "latent_dimension": LATENT_DIMENSIONS,
                 "latent_vector": vector,
@@ -200,9 +206,15 @@ def load_trajectory_sessions(path: str | Path) -> dict[str, list[list[float]]]:
                 raise LatentDatasetError(f"Trajectory {trajectory_id} has an invalid timestamp")
             timestamp = float(timestamp)
             if not math.isfinite(timestamp) or (
-                previous_timestamp is not None and timestamp <= previous_timestamp
+                previous_timestamp is not None and timestamp < previous_timestamp
             ):
-                raise LatentDatasetError(f"Trajectory {trajectory_id} timestamps must increase strictly")
+                raise LatentDatasetError(f"Trajectory {trajectory_id} timestamps must be monotonic")
+            sample_dt = record.get("sample_dt")
+            if isinstance(sample_dt, bool) or not isinstance(sample_dt, (int, float)):
+                raise LatentDatasetError(f"Trajectory {trajectory_id} has an invalid sample_dt")
+            sample_dt = float(sample_dt)
+            if not math.isfinite(sample_dt) or not 0 < sample_dt <= 0.25:
+                raise LatentDatasetError(f"Trajectory {trajectory_id} has an invalid sample_dt")
             vector = _finite_vector(record.get("latent_vector"), LATENT_DIMENSIONS, "latent_vector")
             digest = _vector_digest(vector)
             if record.get("vector_digest") != digest:
@@ -328,3 +340,26 @@ def merge_alignment_sessions(
     if len(merged["text"]) < 2:
         raise LatentDatasetError("At least two aligned pairs are required")
     return merged
+
+
+def load_trajectory_dataset(path: str | Path) -> tuple[
+    dict[str, list[list[float]]], float
+]:
+    """Load sessions and require one fixed integration step across the dataset."""
+    sessions = load_trajectory_sessions(path)
+    sample_steps: set[float] = set()
+    with Path(path).expanduser().open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            value = record.get("sample_dt")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise LatentDatasetError(f"Invalid sample_dt on line {line_number}")
+            sample_steps.add(float(value))
+    if len(sample_steps) != 1:
+        raise LatentDatasetError(
+            "Dynamics training requires a single fixed sample_dt; collect separate datasets "
+            "for different runtime integration steps"
+        )
+    return sessions, next(iter(sample_steps))
