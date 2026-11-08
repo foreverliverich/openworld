@@ -134,6 +134,7 @@ class FlowEvent:
 @dataclass(frozen=True)
 class MetabolicResult:
     state: MetabolicState
+    calibration_version: str
     admitted: tuple[tuple[str, bool], ...]
     requested_cost: tuple[tuple[str, float], ...]
     consumed_cost: tuple[tuple[str, float], ...]
@@ -184,9 +185,14 @@ class ComputationalBloodstream:
         dt = _finite_nonnegative("dt", dt)
         if dt <= 0:
             raise MetabolismError("dt must be positive")
+        if not isinstance(state, MetabolicState):
+            raise MetabolismError("state must be a MetabolicState")
         current = state.as_dict()
         if set(current) != set(self.organs):
             raise MetabolismError("state organ set does not match this bloodstream")
+        for name, reserve in current.items():
+            if reserve > self.organs[name].capacity:
+                raise MetabolismError(f"reserve[{name}] exceeds organ capacity")
         if set(measurements) - set(self.organs):
             raise MetabolismError("measurement references unknown organ")
         production = dict(production or {})
@@ -280,6 +286,7 @@ class ComputationalBloodstream:
         )
         return MetabolicResult(
             state=next_state,
+            calibration_version=self.calibration.version,
             admitted=tuple(sorted(admitted.items())),
             requested_cost=tuple(sorted(requested.items())),
             consumed_cost=tuple(sorted(consumed.items())),
