@@ -50,6 +50,11 @@ class GeminiSceneInterpreter:
             raise SceneInterpretationError(f"Scene must contain 1..{MAX_OBJECTS} objects")
         if not isinstance(raw_relations, list) or len(raw_relations) > MAX_RELATIONS:
             raise SceneInterpretationError(f"Scene may contain at most {MAX_RELATIONS} relations")
+        resolved_scene_id = payload.get("scene_id") or scene_id
+        if not isinstance(resolved_scene_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9_-]{1,48}", resolved_scene_id
+        ):
+            raise SceneInterpretationError("scene_id must be a 1..48 character safe identifier")
         objects = []
         for index, item in enumerate(raw_objects):
             if not isinstance(item, dict):
@@ -93,7 +98,7 @@ class GeminiSceneInterpreter:
                 float(item.get("gap", 0.05)),
             ))
         try:
-            graph = SceneGraph(str(payload.get("scene_id") or scene_id), tuple(objects), tuple(relations))
+            graph = SceneGraph(resolved_scene_id, tuple(objects), tuple(relations))
             # Compile now: catches overlap, cycles, unsupported containment, and
             # static objects without ground/support before arbitration.
             graph.to_blueprint()
