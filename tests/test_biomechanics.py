@@ -135,6 +135,60 @@ class ArticulatedBodyTests(unittest.TestCase):
         joints = {joint.name: joint for joint in result.state.joints}
         self.assertGreater(abs(joints["arm_b"].angular_velocity_xyz[0]), 0.0)
 
+    def test_root_orientation_rotates_the_entire_kinematic_tree(self):
+        import math
+        orientation = (
+            math.cos(math.pi / 4.0), 0.0, 0.0, math.sin(math.pi / 4.0)
+        )
+        rotated = ArticulatedBodyState(
+            joints=self.state.joints, root_orientation=orientation
+        )
+        poses = {pose.name: pose for pose in self.engine.forward_kinematics((0, 1, 0), rotated)}
+        self.assertLess(poses["head"].end[0], -0.5)
+        self.assertAlmostEqual(
+            sum(value * value for value in rotated.root_orientation), 1.0, places=7
+        )
+
+    def test_root_angular_degrees_are_in_the_generalized_mass_matrix(self):
+        layout = self.engine._dof_layout()
+        self.assertEqual(layout[:6], tuple(
+            ("__root__", axis) for axis in range(6)
+        ))
+        mass, _ = self.engine._mass_matrix_and_gravity(
+            (0, 1, 0), self.state, layout
+        )
+        for axis in range(3, 6):
+            self.assertGreater(mass[axis][axis], 0.0)
+        # A displaced centre of mass couples root rotation and translation.
+        self.assertGreater(
+            max(abs(mass[axis][other])
+                for axis in range(3) for other in range(3, 6)),
+            1e-5,
+        )
+
+    def test_root_angular_velocity_updates_quaternion_through_the_solver(self):
+        import math
+        moving = ArticulatedBodyState(
+            joints=self.state.joints,
+            root_angular_velocity=(0.0, 0.0, 1.0),
+        )
+        result = self.engine.step(moving, (0, 3, 0), dt=0.02)
+        self.assertNotEqual(result.state.root_orientation, moving.root_orientation)
+        self.assertAlmostEqual(
+            sum(value * value for value in result.state.root_orientation),
+            1.0, places=7,
+        )
+        self.assertTrue(all(math.isfinite(v) for v in result.state.root_angular_velocity))
+
+    def test_root_angular_velocity_round_trips_through_state_serialization(self):
+        state = ArticulatedBodyState(
+            joints=self.state.joints,
+            root_orientation=(0.9238795325, 0.0, 0.0, 0.3826834324),
+            root_angular_velocity=(0.2, -0.3, 0.4),
+        )
+        restored = ArticulatedBodyState.from_dict(state.to_dict())
+        self.assertEqual(restored, state)
+
     def test_root_translation_is_part_of_the_coupled_mass_matrix(self):
         layout = self.engine._dof_layout()
         self.assertEqual(layout[:3], (
