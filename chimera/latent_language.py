@@ -655,11 +655,15 @@ class WorkspaceBroadcast:
 class GlobalWorkspace:
     """Deterministic limited-capacity winner-take-most proposal competition."""
 
-    def __init__(self, *, capacity: int = 3, max_per_specialist: int = 1):
+    def __init__(
+        self, *, capacity: int = 3, max_per_specialist: int = 1,
+        min_score: float = 0.15,
+    ):
         if capacity < 1 or max_per_specialist < 1:
             raise LatentLanguageError("Workspace capacity limits must be positive")
         self.capacity = capacity
         self.max_per_specialist = max_per_specialist
+        self.min_score = _unit(min_score, "min_score")
         self.tick = 0
         self.latest: WorkspaceBroadcast | None = None
 
@@ -687,6 +691,8 @@ class GlobalWorkspace:
         for proposal in ranked:
             if len(selected) >= self.capacity:
                 break
+            if self.score(proposal) < self.min_score:
+                continue
             if counts.get(proposal.specialist, 0) >= self.max_per_specialist:
                 continue
             if proposal.conflict_key and proposal.conflict_key in conflicts:
