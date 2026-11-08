@@ -192,3 +192,19 @@ Added chimera/ccpl.py and tests/test_ccpl.py on the isolated research/ccpl-causa
 **Verification status:** tests have been added but have not yet been executed by hosted CI. The authoring environment could not reach GitHub for a local clone. The workflow now includes research/** push branches so the isolated research branch will run the same Python 3.11 regression suite. Do not mark CCPL or ICCR acceptance complete until the hosted run passes and the experiment's expected causal effects are confirmed.
 
 Details: CCPL_INTERVENTION_BATTERY.md.
+
+
+## Governed organism action path — 2026-11-08
+
+Added chimera/action_gateway.py and tests/test_action_gateway.py. AutonomousWorldAgent now routes shelter and workbench construction through OrganismActionGateway and the existing ChimeraToolbox; it no longer writes those structures directly to RealityEngine. OrganismKernel.tick accepts a backward-compatible action_success input and persists it through the existing ISCE sensorimotor partition.
+
+- The gateway accepts typed ActionProposal values and enforces a fixed mutation allowlist.
+- It rejects stale world revisions, non-viable organisms and insufficient energy/reserve before dispatch.
+- It delegates validation and mutation to the existing toolbox/RealityEngine path; no new world or organism state owner is introduced.
+- It measures deterministic logical work from the committed operation (e.g. actual structure part count), charges prototype ISCE reserve/energy units, and records success, prediction error, novelty and outcome.
+- The action event and organism outcome update are sequential transactions, not a cross-database atomic transaction. A reconciliation error is explicit; the committed action is never replayed automatically.
+- Logical work units are operation counts, not hardware cycles, joules or measured GPU/CPU time.
+
+**Verification:** GitHub Actions run 42511093047 passed the complete Python 3.11 standard-library suite: 90 tests in 6.507 seconds, including all six action-gateway tests, nine CCPL tests and the existing autonomous-agent/runtime regressions. CCPL tests confirm deterministic replay, sham=baseline, intervention effects, same-boundary double intervention, mediator attenuation and invariant graph fingerprint. This verifies the software contracts exercised by the tests; it does not establish full ICCR, biological metabolism or consciousness.
+
+Details: ACTION_GATEWAY.md and CCPL_INTERVENTION_BATTERY.md.
