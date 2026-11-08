@@ -219,11 +219,11 @@ def load_trajectory_sessions(path: str | Path) -> dict[str, list[list[float]]]:
     return sessions
 
 
-def split_trajectory_sessions(
-    sessions: Mapping[str, Sequence[Sequence[float]]], *,
-    validation_fraction: float = 0.2, seed: str = "chimera-v1",
-) -> tuple[list[list[list[float]]], list[list[list[float]]]]:
-    """Deterministically split by whole organism session, never adjacent rows."""
+def split_named_sessions(
+    sessions: Mapping[str, Any], *, validation_fraction: float = 0.2,
+    seed: str = "chimera-v1",
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Deterministically split whole session IDs, never rows from one trajectory."""
     if isinstance(validation_fraction, bool) or not isinstance(validation_fraction, (int, float)):
         raise LatentDatasetError("validation_fraction must be numeric")
     fraction = float(validation_fraction)
@@ -231,14 +231,27 @@ def split_trajectory_sessions(
         raise LatentDatasetError("validation_fraction must be in [0.05, 0.5]")
     if len(sessions) < 2:
         raise LatentDatasetError("At least two independent trajectory sessions are required")
-    ordered = sorted(
-        sessions.items(),
-        key=lambda item: hashlib.sha256(f"{seed}:{item[0]}".encode()).hexdigest(),
+    ordered_ids = sorted(
+        sessions,
+        key=lambda key: hashlib.sha256(f"{seed}:{key}".encode()).hexdigest(),
     )
-    validation_count = max(1, min(len(ordered) - 1, round(len(ordered) * fraction)))
-    validation_ids = {key for key, _ in ordered[:validation_count]}
-    train = [list(map(list, values)) for key, values in sessions.items() if key not in validation_ids]
-    validation = [list(map(list, values)) for key, values in sessions.items() if key in validation_ids]
+    validation_count = max(1, min(len(ordered_ids) - 1, round(len(ordered_ids) * fraction)))
+    validation_ids = set(ordered_ids[:validation_count])
+    train = {key: value for key, value in sessions.items() if key not in validation_ids}
+    validation = {key: value for key, value in sessions.items() if key in validation_ids}
+    return train, validation
+
+
+def split_trajectory_sessions(
+    sessions: Mapping[str, Sequence[Sequence[float]]], *,
+    validation_fraction: float = 0.2, seed: str = "chimera-v1",
+) -> tuple[list[list[list[float]]], list[list[list[float]]]]:
+    """Deterministically split latent trajectories by whole organism session."""
+    train_sessions, validation_sessions = split_named_sessions(
+        sessions, validation_fraction=validation_fraction, seed=seed,
+    )
+    train = [list(map(list, values)) for values in train_sessions.values()]
+    validation = [list(map(list, values)) for values in validation_sessions.values()]
     return train, validation
 
 
@@ -246,6 +259,9 @@ def load_alignment_sessions(
     path: str | Path, *, include_audio: bool = False,
 ) -> dict[str, dict[str, list[list[float]]]]:
     """Load explicitly paired text/image cycles, optionally requiring raw 768-D audio."""
+    # Verify every record's session ordering, state-vector digest and continuity
+    # chain before using any modality row for supervised alignment.
+    load_trajectory_sessions(path)
     grouped: dict[str, list[dict[str, Any]]] = {}
     with Path(path).expanduser().open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, 1):
