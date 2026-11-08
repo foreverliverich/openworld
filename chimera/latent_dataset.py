@@ -17,7 +17,7 @@ from typing import Any, Mapping, Sequence
 
 from .latent_language import LATENT_DIMENSIONS
 
-DATASET_SCHEMA_VERSION = 1
+DATASET_SCHEMA_VERSION = 2
 ALIGNMENT_DIMS = {"text": 768, "image": 512, "audio": 768}
 
 
@@ -63,6 +63,7 @@ class LatentTrajectoryRecorder:
         self._lock = threading.Lock()
         self._sequence_index = 0
         self._previous_vector_digest: str | None = None
+        self._previous_record_digest: str | None = None
         self.last_record_digest: str | None = None
 
     def record(
@@ -168,10 +169,16 @@ class LatentTrajectoryRecorder:
                 "latent_state_digest": latent_state_digest,
                 "vector_digest": vector_digest,
                 "previous_vector_digest": self._previous_vector_digest,
+                "previous_record_digest": self._previous_record_digest,
                 "modalities": modalities,
                 "alignment_pair": alignment_pair,
                 "selected_proposal_ids": list(selected_proposal_ids),
             }
+            canonical = json.dumps(
+                record, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+            record_digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            record["record_digest"] = record_digest
             line = json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False)
             try:
                 with self.path.open("a", encoding="utf-8") as handle:
@@ -181,7 +188,8 @@ class LatentTrajectoryRecorder:
                 raise LatentDatasetError(f"Cannot append latent trajectory record: {exc}") from exc
             self._sequence_index += 1
             self._previous_vector_digest = vector_digest
-            self.last_record_digest = hashlib.sha256(line.encode("utf-8")).hexdigest()
+            self._previous_record_digest = record_digest
+            self.last_record_digest = record_digest
             return record
 
 
@@ -208,6 +216,7 @@ def load_trajectory_sessions(path: str | Path) -> dict[str, list[list[float]]]:
         records.sort(key=lambda item: item.get("sequence_index", -1))
         vectors: list[list[float]] = []
         previous_digest = None
+        previous_record_digest = None
         previous_timestamp = None
         for expected_index, record in enumerate(records):
             if record.get("sequence_index") != expected_index:
@@ -235,9 +244,21 @@ def load_trajectory_sessions(path: str | Path) -> dict[str, list[list[float]]]:
             if record.get("vector_digest") != digest:
                 raise LatentDatasetError(f"Trajectory {trajectory_id} vector digest mismatch")
             if record.get("previous_vector_digest") != previous_digest:
-                raise LatentDatasetError(f"Trajectory {trajectory_id} continuity chain mismatch")
+                raise LatentDatasetError(f"Trajectory {trajectory_id} vector continuity chain mismatch")
+            if record.get("previous_record_digest") != previous_record_digest:
+                raise LatentDatasetError(f"Trajectory {trajectory_id} record continuity chain mismatch")
+            stored_record_digest = record.get("record_digest")
+            unsigned_record = dict(record)
+            unsigned_record.pop("record_digest", None)
+            canonical = json.dumps(
+                unsigned_record, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+            expected_record_digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            if stored_record_digest != expected_record_digest:
+                raise LatentDatasetError(f"Trajectory {trajectory_id} record digest mismatch")
             vectors.append(vector)
             previous_digest = digest
+            previous_record_digest = stored_record_digest
             previous_timestamp = timestamp
         if len(vectors) >= 2:
             sessions[trajectory_id] = vectors
