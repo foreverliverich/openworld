@@ -272,3 +272,27 @@ Not implemented: inter-cell broadphase/contact, joints, torsion, bonded-cell lea
   ownership protocol, or calibrated GPU telemetry commits. The standalone
   Python server in the proposal is not used because it could create a second
   RealityEngine authority.
+
+
+## Browser cross-origin isolation prerequisite
+
+- `chimera/http_server.py` now emits COOP `same-origin`, COEP `require-corp`
+  and CORP `same-site` from the common `end_headers()` path, covering API,
+  static and error responses.
+- `tests/test_http_server.py` checks these headers on API, root HTML and 404
+  responses.
+- This enables the browser isolation prerequisite for `SharedArrayBuffer`;
+  it does not make SharedArrayBuffer directly GPU-bindable and does not add
+  zero-copy CPU/GPU sharing.
+- COEP can block cross-origin subresources that do not opt in. The current
+  Three.js import map uses unpkg; browser validation must confirm that CDN
+  module responses satisfy CORS/COEP or move Three.js to same-origin hosting.
+- The current app has a Three.js world renderer and a separate WebGL2 Somatic
+  Core page plus an opt-in WebGPU compute test. It does not yet have the
+  proposed two-canvas fused renderer, shared camera contract, Gaussian splat
+  renderer, or a GPU draw pipeline. Camera matrix synchronization is therefore
+  deferred until a real GPU renderer consumes those matrices.
+- The proposed 64-byte OmniKernel and 20-worker matrix remain unadopted: they
+  conflict with the existing 48-byte GPU cell ABI and lack an ownership /
+  synchronization protocol. Preserve the 48-byte ABI until a measured,
+  tested migration is justified.
