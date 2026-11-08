@@ -758,12 +758,20 @@ class BiomechanicsEngine:
                 if distance > 1e-8:
                     normal = _scale(delta, 1.0 / distance)
                 else:
+                    # At an exact centerline intersection the closest-point
+                    # difference is undefined. Prefer the perpendicular to
+                    # the two segment axes so crossing limbs separate out of
+                    # their shared plane instead of sliding through each other.
+                    axis_normal = _cross(first.direction, second.direction)
+                    axis_length = math.sqrt(_dot(axis_normal, axis_normal))
                     center_delta = _sub(second.center, first.center)
                     center_length = math.sqrt(_dot(center_delta, center_delta))
-                    normal = (
-                        _scale(center_delta, 1.0 / center_length)
-                        if center_length > 1e-8 else (1.0, 0.0, 0.0)
-                    )
+                    if axis_length > 1e-8:
+                        normal = _scale(axis_normal, 1.0 / axis_length)
+                    elif center_length > 1e-8:
+                        normal = _scale(center_delta, 1.0 / center_length)
+                    else:
+                        normal = (1.0, 0.0, 0.0)
                 jacobian_a = self._contact_jacobian(
                     point_a, first.name, root_position, state, layout
                 )
