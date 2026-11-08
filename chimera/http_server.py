@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from .somatic_kernel import generate_morph_package
+from .somatic_kernel import generate_morph_package, validate_morph_package
 from urllib.parse import parse_qs, urlparse
 
 from . import (
@@ -186,17 +186,19 @@ class ChimeraRequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/somatic/morph":
                 description = payload.get("description")
                 current_label = payload.get("current_label", "")
-                expected = payload.get("expected_revision")
                 if not isinstance(description, str) or not isinstance(current_label, str):
                     raise ValueError("description and current_label must be strings")
+                package = generate_morph_package(description, current_label)
+                return self._json(200, {"package": package})
+            if self.path == "/api/somatic/commit":
+                expected = payload.get("expected_revision")
                 if expected is not None and (not isinstance(expected, int) or isinstance(expected, bool)):
                     raise ValueError("expected_revision must be an integer")
-                package = generate_morph_package(description, current_label)
+                package = validate_morph_package(payload.get("package"))
                 result = self.app.world.apply_somatic_morphology(
                     package, actor_id="somatic-kernel", expected_revision=expected
                 )
                 return self._json(200, {
-                    "package": package,
                     "result": {"revision": result.revision, **result.details},
                     "state": self.app.world.somatic_morphology(),
                 })
