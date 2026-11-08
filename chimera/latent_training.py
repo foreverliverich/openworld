@@ -63,7 +63,7 @@ class MultimodalProjectionModel:
         values = self._batch(audio_hidden, 768, "audio")
         self.audio_compressor.eval()
         with self.torch.inference_mode():
-            return self.audio_compressor(values)
+            return self.torch.nn.functional.normalize(self.audio_compressor(values), dim=-1)
 
     def _require_validated(self, modality: str) -> None:
         if not self.trained or modality not in self.validated_modalities:
@@ -245,7 +245,7 @@ class MultimodalProjectionModel:
                     au = audio[indices]
                     ap = functional.normalize(self.audio_projection(au), dim=-1)
                     audio_loss = self._symmetric_info_nce(functional, tp, ap, temperature)
-                    compressed = self.audio_compressor(au)
+                    compressed = functional.normalize(self.audio_compressor(au), dim=-1)
                     reconstructed = self.audio_reconstructor(compressed)
                     reconstruction_loss = functional.mse_loss(reconstructed, au)
                 total = loss + audio_loss + 0.1 * reconstruction_loss
@@ -304,7 +304,7 @@ class MultimodalProjectionModel:
                         audio_similarity.shape[0], device=self.device
                     )
                 ).float().mean().cpu())
-                compressed = self.audio_compressor(audio)
+                compressed = functional.normalize(self.audio_compressor(audio), dim=-1)
                 reconstructed = self.audio_reconstructor(compressed)
                 metrics["audio_reconstruction_mse"] = float(
                     functional.mse_loss(reconstructed, audio).cpu()
