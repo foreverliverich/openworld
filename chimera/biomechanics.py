@@ -758,7 +758,7 @@ class BiomechanicsEngine:
                 if distance > 1e-8:
                     normal = _scale(delta, 1.0 / distance)
                 else:
-                    center_delta = _sub(first.center, second.center)
+                    center_delta = _sub(second.center, first.center)
                     center_length = math.sqrt(_dot(center_delta, center_delta))
                     normal = (
                         _scale(center_delta, 1.0 / center_length)
@@ -832,6 +832,7 @@ class BiomechanicsEngine:
                 continue
             prepared.append({
                 "name": contact["name"], "gap": float(contact["gap"]),
+                "target_normal_speed": float(contact.get("target_normal_speed", 0.0)),
                 "normal": normal_row, "tx": tangent_x_row, "tz": tangent_z_row,
                 "rn": response_n, "rx": response_x, "rz": response_z,
                 "en": effective_n, "ex": effective_x, "ez": effective_z,
