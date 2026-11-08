@@ -122,8 +122,8 @@ The existing organism-kernel persistence/restart tests also exercise the expande
 
 This closes the first executable articulated-body gate, not all embodiment. Remaining engineering work includes:
 
-- contact constraints and root degrees of freedom coupled into the generalized mass matrix; compare the current Lagrangian/Jacobian solver against recursive Newton–Euler reference implementations
-- self-collision, terrain collision, friction cones and grasp/contact mechanics
+- root orientation and angular momentum as generalized coordinates; compare the current Lagrangian/Jacobian solver against recursive Newton–Euler reference implementations
+- self-collision, uneven terrain, grasp/contact mechanics, multi-body contact manifolds and calibrated friction parameters
 - antagonistic agonist/antagonist muscle pairs, pennation and physiological cross-sectional area, tendon slack/strain calibration, muscle-level fatigue and recovery
 - sensor observations from actual segment/contact geometry and camera/audio/touch modalities
 - a single governed action gateway that translates planner intent into validated motor targets
