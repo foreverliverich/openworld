@@ -61,6 +61,19 @@ class SensoryAdapterTests(unittest.TestCase):
         near_evidence = capture_sensory_evidence(self.world, (0, 1, 0), radius=20)
         self.assertGreater(near_evidence.salience, far_evidence.salience)
 
+    def test_sensory_salience_drives_attention_dynamics(self):
+        from chimera.isce import ISCEKernel, OrganismState, TransitionInput
+        kernel = ISCEKernel()
+        initial = OrganismState("sensory-attention")
+        neutral = kernel.transition(
+            initial, TransitionInput(dt=0.5, sensory_salience=0.0)
+        ).state
+        salient = kernel.transition(
+            initial, TransitionInput(dt=0.5, sensory_salience=1.0)
+        ).state
+        self.assertGreater(salient.attention.urgency, neutral.attention.urgency)
+        self.assertGreater(salient.attention.focus, neutral.attention.focus)
+
     def test_identical_world_observations_are_deterministic(self):
         self.world.create_primitive(
             "stable", (2, 1, 0), (0.5, 0.5, 0.5),
