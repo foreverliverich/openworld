@@ -95,7 +95,7 @@ class EncodedObservation:
 
 @dataclass(frozen=True)
 class LatentState:
-    """The complete concatenated latent state; ISCE remains the organism owner."""
+    """Ephemeral working representation projected from ISCE; never persisted as organism state."""
 
     subspaces: Mapping[str, tuple[float, ...]]
     updated_at: Mapping[str, float]
@@ -722,6 +722,51 @@ def _offsets():
         yield offset, (name, size)
         offset += size
 
+
+
+def project_isce_state(organism_state: Any) -> LatentState:
+    """Project current ISCE-owned variables into an ephemeral model workspace.
+
+    This projection is disposable: no latent subspace becomes a second durable
+    organism state. Sensory embeddings are added only by registered encoders.
+    """
+    try:
+        body = organism_state.body
+        intero = organism_state.interoception
+        sensorimotor = organism_state.sensorimotor
+        temporal = organism_state.temporal
+        self_model = organism_state.self_model
+        attention = organism_state.attention
+        resources = organism_state.resources
+    except AttributeError as exc:
+        raise LatentLanguageError("organism_state must expose the canonical ISCE partitions") from exc
+    now = float(temporal.organism_time)
+    emotion = _expand_features((
+        body.stress, body.fatigue, body.allostatic_error,
+        intero.hunger, intero.pain, intero.arousal, intero.precision,
+    ), SUBSPACE_DIMS["emotion"])
+    cognition = _expand_features((
+        self_model.confidence, self_model.curiosity, attention.focus,
+        attention.urgency, sensorimotor.motor_readiness,
+        sensorimotor.proprioceptive_error,
+    ), SUBSPACE_DIMS["cognition"])
+    memory = _expand_features((
+        self_model.memory_strength, float(temporal.tick > 0),
+        float(bool(self_model.last_outcome)), resources.reserve,
+    ), SUBSPACE_DIMS["memory"])
+    temporal_vector = []
+    for index in range(SUBSPACE_DIMS["temporal"] // 2):
+        phase = now / (2.0 ** index)
+        temporal_vector.extend((math.sin(phase), math.cos(phase)))
+    spaces = {name: (0.0,) * size for name, size in SUBSPACE_DIMS.items()}
+    spaces.update({
+        "emotion": emotion, "cognition": cognition, "memory": memory,
+        "temporal": tuple(temporal_vector),
+    })
+    updated = {
+        name: now for name in ("emotion", "cognition", "memory", "temporal")
+    }
+    return LatentState(spaces, updated, revision=0)
 
 class CognitiveActionGateway:
     """Only selected, evidence-bearing, revision-current proposals can mutate world."""
