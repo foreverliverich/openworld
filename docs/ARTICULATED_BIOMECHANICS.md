@@ -29,7 +29,7 @@ Articulation is a nested immutable value inside the existing ISCE organism state
 - local XYZ rotation and angular velocity per joint, with legacy X-axis angle/velocity aliases
 - muscle activation plus per-axis tendon extension and tendon velocity
 - root linear velocity
-- active ground-contact feet
+- active ground-contact segment capsules
 - current mechanical strain and proprioceptive error
 - accumulated mechanical work
 
@@ -82,9 +82,9 @@ Per-axis limits clamp the coordinate, remove outward velocity and contribute to 
 
 ## 4. Root motion and ground contact
 
-The root receives explicit world-frame acceleration and gravity. Root velocity is integrated semi-implicitly and bounded to 12 m/s per axis. Feet are evaluated from the same forward-kinematic pose used for contact; a unilateral ground plane corrects foot penetration, cancels downward root velocity while supported and applies horizontal damping while feet are in contact.
+The root receives explicit world-frame acceleration and gravity. Root velocity is integrated semi-implicitly and bounded to 12 m/s per axis. Every segment is represented by a capsule for ground-plane support, with the feet as the intended stance surfaces and torso/head/arm capsules preventing the organism from tunnelling through the floor during a fall. Penetration is corrected by root translation, downward root velocity is cancelled while supported, and horizontal root velocity is damped while contact is active.
 
-This is a deterministic ground-contact model for a single articulated organism. Contact currently uses a unilateral ground-plane penetration correction and velocity damping; contact forces are not yet solved as constraint impulses in the generalized mass matrix. It does not implement self-collision, foot friction cones, contact manifolds, momentum-conserving impact impulses, uneven terrain or root translation/rotation as generalized coordinates.
+This is a deterministic ground-contact model for a single articulated organism. Contact currently uses unilateral capsule/ground penetration correction and root-velocity damping; contact forces are not yet solved as constraint impulses in the generalized mass matrix. It does not implement self-collision, foot friction cones, contact manifolds, momentum-conserving impact impulses, uneven terrain or root translation/rotation as generalized coordinates.
 
 ## 5. ISCE coupling
 
