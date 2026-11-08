@@ -690,6 +690,107 @@ class BiomechanicsEngine:
     def _row_dot(row: Sequence[float], vector: Sequence[float]) -> float:
         return sum(a * b for a, b in zip(row, vector))
 
+    @staticmethod
+    def _closest_points_on_segments(
+        p1: tuple[float, float, float], q1: tuple[float, float, float],
+        p2: tuple[float, float, float], q2: tuple[float, float, float],
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        """Return the closest points on two finite 3D line segments."""
+        d1, d2, r = _sub(q1, p1), _sub(q2, p2), _sub(p1, p2)
+        a, e, f = _dot(d1, d1), _dot(d2, d2), _dot(d2, r)
+        epsilon = 1e-12
+        if a <= epsilon and e <= epsilon:
+            return p1, p2
+        if a <= epsilon:
+            s = 0.0
+            t = _clamp(f / e, 0.0, 1.0)
+        else:
+            c = _dot(d1, r)
+            if e <= epsilon:
+                t = 0.0
+                s = _clamp(-c / a, 0.0, 1.0)
+            else:
+                b = _dot(d1, d2)
+                denominator = a * e - b * b
+                s = _clamp((b * f - c * e) / denominator, 0.0, 1.0) if abs(denominator) > epsilon else 0.0
+                t = (b * s + f) / e
+                if t < 0.0:
+                    t = 0.0
+                    s = _clamp(-c / a, 0.0, 1.0)
+                elif t > 1.0:
+                    t = 1.0
+                    s = _clamp((b - c) / a, 0.0, 1.0)
+        return _add(p1, _scale(d1, s)), _add(p2, _scale(d2, t))
+
+    def _near_kinematic_ancestor_pair(self, first: str, second: str) -> bool:
+        # Ignore a segment and its parent/grandparent: their capsule overlap
+        # represents a shared anatomical joint, not a self-collision.
+        for descendant, ancestor in ((first, second), (second, first)):
+            cursor = descendant
+            for _ in range(2):
+                parent = self._specs[cursor].parent
+                if parent is None:
+                    break
+                if parent == ancestor:
+                    return True
+                cursor = parent
+        return False
+
+    def _self_collision_constraints(
+        self, poses: Sequence[SegmentPose], root_position: Iterable[float],
+        state: ArticulatedBodyState, layout: tuple[tuple[str, int], ...],
+        *, dt: float,
+    ) -> list[dict[str, object]]:
+        """Build non-adjacent capsule/capsule constraints for one organism."""
+        constraints: list[dict[str, object]] = []
+        for first_index, first in enumerate(poses):
+            for second in poses[first_index + 1:]:
+                if self._near_kinematic_ancestor_pair(first.name, second.name):
+                    continue
+                point_a, point_b = self._closest_points_on_segments(
+                    first.start, first.end, second.start, second.end
+                )
+                delta = _sub(point_b, point_a)
+                distance = math.sqrt(_dot(delta, delta))
+                gap = distance - first.radius - second.radius
+                if gap >= 0.005:
+                    continue
+                if distance > 1e-8:
+                    normal = _scale(delta, 1.0 / distance)
+                else:
+                    center_delta = _sub(first.center, second.center)
+                    center_length = math.sqrt(_dot(center_delta, center_delta))
+                    normal = (
+                        _scale(center_delta, 1.0 / center_length)
+                        if center_length > 1e-8 else (1.0, 0.0, 0.0)
+                    )
+                jacobian_a = self._contact_jacobian(
+                    point_a, first.name, root_position, state, layout
+                )
+                jacobian_b = self._contact_jacobian(
+                    point_b, second.name, root_position, state, layout
+                )
+                relative_jacobian = tuple(
+                    [jacobian_b[axis][column] - jacobian_a[axis][column]
+                     for column in range(len(layout))]
+                    for axis in range(3)
+                )
+                reference = (0.0, 1.0, 0.0) if abs(normal[1]) < 0.9 else (1.0, 0.0, 0.0)
+                tangent_1_raw = _cross(normal, reference)
+                tangent_1_length = math.sqrt(_dot(tangent_1_raw, tangent_1_raw))
+                tangent_1 = _scale(tangent_1_raw, 1.0 / max(1e-12, tangent_1_length))
+                tangent_2 = _cross(normal, tangent_1)
+                constraints.append({
+                    "name": f"self:{first.name}:{second.name}",
+                    "gap": gap,
+                    "jacobian": relative_jacobian,
+                    "normal": normal,
+                    "tangent1": tangent_1,
+                    "tangent2": tangent_2,
+                    "target_normal_speed": max(0.0, -0.2 * gap / dt),
+                })
+        return constraints
+
     def _apply_contact_impulses(
         self, mass_matrix: list[list[float]], velocity: list[float],
         contacts: Sequence[dict[str, object]], *, dt: float,
@@ -706,9 +807,21 @@ class BiomechanicsEngine:
         prepared = []
         for contact in contacts:
             rows = contact["jacobian"]
-            normal_row = rows[1]
-            tangent_x_row = rows[0]
-            tangent_z_row = rows[2]
+            normal = contact.get("normal", (0.0, 1.0, 0.0))
+            tangent_1 = contact.get("tangent1", (1.0, 0.0, 0.0))
+            tangent_2 = contact.get("tangent2", (0.0, 0.0, 1.0))
+            normal_row = [
+                sum(normal[axis] * rows[axis][column] for axis in range(3))
+                for column in range(len(layout))
+            ]
+            tangent_x_row = [
+                sum(tangent_1[axis] * rows[axis][column] for axis in range(3))
+                for column in range(len(layout))
+            ]
+            tangent_z_row = [
+                sum(tangent_2[axis] * rows[axis][column] for axis in range(3))
+                for column in range(len(layout))
+            ]
             response_n = _solve_dense(mass_matrix, list(normal_row))
             response_x = _solve_dense(mass_matrix, list(tangent_x_row))
             response_z = _solve_dense(mass_matrix, list(tangent_z_row))
@@ -734,10 +847,11 @@ class BiomechanicsEngine:
         for _ in range(iterations):
             for item in prepared:
                 normal_speed = self._row_dot(item["normal"], velocity)
-                # This is a non-restitutive contact model. Positional
-                # penetration is corrected separately after the impulse solve;
-                # the velocity constraint therefore targets zero normal speed.
-                target_normal_speed = 0.0
+                # Ground contacts use zero normal speed; penetrated self-
+                # contacts use bounded Baumgarte separation velocity.
+                target_normal_speed = max(
+                    0.0, float(item.get("target_normal_speed", 0.0))
+                )
                 old_normal = item["ln"]
                 new_normal = max(
                     0.0, old_normal
@@ -1018,8 +1132,15 @@ class BiomechanicsEngine:
                     "jacobian": self._contact_jacobian(
                         endpoint, segment.name, candidate_root, candidate_state, layout
                     ),
+                    "normal": (0.0, 1.0, 0.0),
+                    "tangent1": (1.0, 0.0, 0.0),
+                    "tangent2": (0.0, 0.0, 1.0),
+                    "target_normal_speed": 0.0,
                 })
 
+        contact_constraints.extend(self._self_collision_constraints(
+            candidate_poses, candidate_root, candidate_state, layout, dt=dt
+        ))
         constrained_velocity, _, _ = self._apply_contact_impulses(
             mass_matrix, generalized_velocity, contact_constraints, dt=dt
         )
