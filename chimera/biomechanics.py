@@ -473,11 +473,16 @@ class BiomechanicsEngine:
         return self._world_transforms(position, state)[1]
 
     def _dof_layout(self) -> tuple[tuple[str, int], ...]:
-        return tuple(
+        # Root translation is part of the same generalized coordinate vector
+        # as the articulated joints. This creates translational/joint coupling
+        # in M(q), rather than integrating the pelvis as a separate particle.
+        root_dofs = (("__root__", 0), ("__root__", 1), ("__root__", 2))
+        joint_dofs = tuple(
             (spec.name, axis)
             for spec in self.skeleton.segments if spec.parent is not None
             for axis, enabled in enumerate(spec.dof_mask) if enabled
         )
+        return root_dofs + joint_dofs
 
     def _mass_matrix_and_gravity(
         self, position: Iterable[float], state: ArticulatedBodyState,
@@ -532,7 +537,12 @@ class BiomechanicsEngine:
                 ancestor_names.append(cursor)
                 cursor = self._specs[cursor].parent
 
-            jacobian_columns = []
+            jacobian_columns = [
+                (index[("__root__", axis)], tuple(
+                    1.0 if component == axis else 0.0 for component in range(3)
+                ), (0.0, 0.0, 0.0))
+                for axis in range(3)
+            ]
             for joint_name in ancestor_names:
                 for axis_index, enabled in enumerate(self._specs[joint_name].dof_mask):
                     if not enabled:
@@ -572,13 +582,21 @@ class BiomechanicsEngine:
         count = len(layout)
         qdot = []
         for joint_name, axis_index in layout:
-            coordinate = next(j for j in state.joints if j.name == joint_name)
-            qdot.append(coordinate.angular_velocity_xyz[axis_index])
+            if joint_name == "__root__":
+                qdot.append(state.root_velocity[axis_index])
+            else:
+                coordinate = next(j for j in state.joints if j.name == joint_name)
+                qdot.append(coordinate.angular_velocity_xyz[axis_index])
         if max((abs(value) for value in qdot), default=0.0) < 1e-12:
             return [0.0 for _ in range(count)]
         derivatives = []
         epsilon = 1e-4
         for joint_name, axis_index in layout:
+            if joint_name == "__root__":
+                derivatives.append([[
+                    0.0 for _ in range(count)
+                ] for _ in range(count)])
+                continue
             changed = []
             joint_spec = self._specs[joint_name]
             coordinate = next(j for j in state.joints if j.name == joint_name)
@@ -628,6 +646,125 @@ class BiomechanicsEngine:
                     total += christoffel * qdot[j] * qdot[k]
             coriolis[i] = total
         return coriolis
+
+    def _contact_jacobian(
+        self, point: tuple[float, float, float], segment_name: str,
+        root_position: Iterable[float], state: ArticulatedBodyState,
+        layout: tuple[tuple[str, int], ...],
+    ) -> tuple[list[float], list[float], list[float]]:
+        """World-space point Jacobian for root translation and ancestor joints."""
+        transforms, _ = self._world_transforms(root_position, state)
+        coordinates = self._validate_state(state)
+        index = {key: i for i, key in enumerate(layout)}
+        rows = [[0.0 for _ in layout] for _ in range(3)]
+        for axis in range(3):
+            rows[axis][index[("__root__", axis)]] = 1.0
+
+        cursor = segment_name
+        while self._specs[cursor].parent is not None:
+            spec = self._specs[cursor]
+            parent_q = transforms[spec.parent][1]
+            rx, ry, _ = coordinates[cursor].rotation_xyz
+            qx = _q_axis((1.0, 0.0, 0.0), rx)
+            qy = _q_axis((0.0, 1.0, 0.0), ry)
+            q_after_x = _q_mul(parent_q, qx)
+            q_after_y = _q_mul(q_after_x, qy)
+            axes = (
+                _q_rotate(parent_q, (1.0, 0.0, 0.0)),
+                _q_rotate(q_after_x, (0.0, 1.0, 0.0)),
+                _q_rotate(q_after_y, (0.0, 0.0, 1.0)),
+            )
+            joint_origin = transforms[cursor][0]
+            lever = _sub(point, joint_origin)
+            for axis_index, enabled in enumerate(spec.dof_mask):
+                if not enabled:
+                    continue
+                column = index[(cursor, axis_index)]
+                linear = _cross(axes[axis_index], lever)
+                for component in range(3):
+                    rows[component][column] = linear[component]
+            cursor = spec.parent
+        return rows[0], rows[1], rows[2]
+
+    @staticmethod
+    def _row_dot(row: Sequence[float], vector: Sequence[float]) -> float:
+        return sum(a * b for a, b in zip(row, vector))
+
+    def _apply_contact_impulses(
+        self, mass_matrix: list[list[float]], velocity: list[float],
+        contacts: Sequence[dict[str, object]], *, dt: float,
+        friction_coefficient: float = 0.75, iterations: int = 10,
+    ) -> tuple[list[float], float, float]:
+        """Solve unilateral normal and Coulomb-friction impulses by PGS.
+
+        The contact effective masses are computed from M^-1 J^T. Normal
+        impulses are non-negative; the two tangential impulses are projected
+        onto a circular Coulomb friction cone bounded by mu * normal_impulse.
+        """
+        if not contacts:
+            return velocity, 0.0, 0.0
+        prepared = []
+        for contact in contacts:
+            rows = contact["jacobian"]
+            normal_row = rows[1]
+            tangent_x_row = rows[0]
+            tangent_z_row = rows[2]
+            response_n = _solve_dense(mass_matrix, list(normal_row))
+            response_x = _solve_dense(mass_matrix, list(tangent_x_row))
+            response_z = _solve_dense(mass_matrix, list(tangent_z_row))
+            effective_n = self._row_dot(normal_row, response_n)
+            effective_x = self._row_dot(tangent_x_row, response_x)
+            effective_z = self._row_dot(tangent_z_row, response_z)
+            if min(effective_n, effective_x, effective_z) <= 1e-10:
+                continue
+            prepared.append({
+                "name": contact["name"], "gap": float(contact["gap"]),
+                "normal": normal_row, "tx": tangent_x_row, "tz": tangent_z_row,
+                "rn": response_n, "rx": response_x, "rz": response_z,
+                "en": effective_n, "ex": effective_x, "ez": effective_z,
+                "ln": 0.0, "lx": 0.0, "lz": 0.0,
+            })
+
+        def apply(response: Sequence[float], impulse_delta: float) -> None:
+            if impulse_delta == 0.0:
+                return
+            for k in range(len(velocity)):
+                velocity[k] += response[k] * impulse_delta
+
+        for _ in range(iterations):
+            for item in prepared:
+                normal_speed = self._row_dot(item["normal"], velocity)
+                # Baumgarte stabilization only corrects existing penetration;
+                # it does not pull separated bodies toward the ground.
+                target_normal_speed = max(0.0, -0.18 * min(0.0, item["gap"]) / dt)
+                old_normal = item["ln"]
+                new_normal = max(
+                    0.0, old_normal
+                    + (target_normal_speed - normal_speed) / item["en"]
+                )
+                item["ln"] = new_normal
+                apply(item["rn"], new_normal - old_normal)
+
+                speed_x = self._row_dot(item["tx"], velocity)
+                speed_z = self._row_dot(item["tz"], velocity)
+                old_x, old_z = item["lx"], item["lz"]
+                candidate_x = old_x - speed_x / item["ex"]
+                candidate_z = old_z - speed_z / item["ez"]
+                friction_limit = friction_coefficient * item["ln"]
+                magnitude = math.hypot(candidate_x, candidate_z)
+                if magnitude > friction_limit and magnitude > 0.0:
+                    scale = friction_limit / magnitude
+                    candidate_x *= scale
+                    candidate_z *= scale
+                item["lx"], item["lz"] = candidate_x, candidate_z
+                apply(item["rx"], candidate_x - old_x)
+                apply(item["rz"], candidate_z - old_z)
+
+        return (
+            velocity,
+            sum(float(item["ln"]) for item in prepared),
+            sum(math.hypot(float(item["lx"]), float(item["lz"])) for item in prepared),
+        )
 
     def step(self, state: ArticulatedBodyState, position: Iterable[float], *,
              dt: float, motor_commands: Sequence[tuple[str, object]] = (),
@@ -775,8 +912,21 @@ class BiomechanicsEngine:
 
         mass_matrix, gravity_vector = self._mass_matrix_and_gravity(root, state, layout)
         coriolis = self._coriolis_vector(root, state, layout, mass_matrix)
+        # A commanded root acceleration is converted to a generalized force
+        # through the complete mass matrix. This preserves the requested free
+        # acceleration while retaining root/joint inertial coupling.
+        root_acceleration_vector = [
+            acceleration[axis] if name == "__root__" else 0.0
+            for name, axis in layout
+        ]
+        external_generalized_force = [
+            sum(mass_matrix[i][j] * root_acceleration_vector[j]
+                for j in range(len(layout)))
+            for i in range(len(layout))
+        ]
         generalized_force = [
             actuator_torque[i] + gravity_vector[i] - coriolis[i]
+            + external_generalized_force[i]
             for i in range(len(layout))
         ]
         generalized_acceleration = _solve_dense(mass_matrix, generalized_force)
@@ -827,59 +977,141 @@ class BiomechanicsEngine:
                 tendon_velocity_xyz=actuator["tendon_velocity"],  # type: ignore[arg-type]
             )
 
-        next_state = ArticulatedBodyState(
+        # Assemble the free generalized velocity from the coupled solve.
+        generalized_velocity = []
+        for name, axis in layout:
+            if name == "__root__":
+                value = state.root_velocity[axis] + generalized_acceleration[
+                    dof_index[(name, axis)]
+                ] * dt
+            else:
+                value = updated[name].angular_velocity_xyz[axis]
+            generalized_velocity.append(value)
+
+        # Predict contact geometry, then solve impulses against the same
+        # generalized mass matrix used by the unconstrained articulated solve.
+        candidate_root_velocity = tuple(
+            _clamp(generalized_velocity[dof_index[("__root__", axis)]], -12.0, 12.0)
+            for axis in range(3)
+        )
+        candidate_root = tuple(
+            root[axis] + candidate_root_velocity[axis] * dt for axis in range(3)
+        )
+        candidate_state = ArticulatedBodyState(
             skeleton_version=self.skeleton.version,
             joints=tuple(updated[s.name] for s in self.skeleton.segments if s.parent is not None),
-            root_velocity=state.root_velocity,
-            contacts=state.contacts,
-            mechanical_strain=state.mechanical_strain,
-            proprioceptive_error=state.proprioceptive_error,
-            metabolic_work=state.metabolic_work,
+            root_velocity=candidate_root_velocity,
         )
-        velocity = list(next_state.root_velocity)
-        velocity[0] += acceleration[0] * dt
-        velocity[1] += (acceleration[1] - GRAVITY) * dt
-        velocity[2] += acceleration[2] * dt
-        velocity = [_clamp(v, -12.0, 12.0) for v in velocity]
-        root = [root[i] + velocity[i] * dt for i in range(3)]
-        poses = self.forward_kinematics(root, next_state)
-        by_name = {pose.name: pose for pose in poses}
+        candidate_poses = self.forward_kinematics(candidate_root, candidate_state)
+        contact_constraints: list[dict[str, object]] = []
         contact_names: list[str] = []
-        penetration = 0.0
-        # Every rigid segment is represented by a capsule for ground
-        # support. Feet are the intended stance contacts, but a fall must not
-        # allow the torso, head or arms to tunnel through the ground plane.
-        for segment in poses:
+        for segment in candidate_poses:
+            endpoint = segment.start if segment.start[1] <= segment.end[1] else segment.end
             bottom = min(segment.start[1], segment.end[1]) - segment.radius
-            penetration = max(penetration, self.ground_height - bottom)
-            if bottom <= self.ground_height + .012:
+            gap = bottom - self.ground_height
+            if gap <= 0.02:
                 contact_names.append(segment.name)
-        contact_force = 0.0
-        if penetration > 0.0:
-            root[1] += penetration
-            contact_force = penetration * self.contact_stiffness
-        if contact_names and velocity[1] < 0.0:
-            contact_force += -velocity[1] * self.contact_damping
-            velocity[1] = 0.0
-        if contact_names:
-            velocity[0] *= math.exp(-2.5*dt)
-            velocity[2] *= math.exp(-2.5*dt)
-        corrected_position = tuple(root)
-        corrected_state = ArticulatedBodyState(
+                contact_constraints.append({
+                    "name": segment.name,
+                    "gap": gap,
+                    "jacobian": self._contact_jacobian(
+                        endpoint, segment.name, candidate_root, candidate_state, layout
+                    ),
+                })
+
+        constrained_velocity, normal_impulse, friction_impulse = (
+            self._apply_contact_impulses(
+                mass_matrix, generalized_velocity, contact_constraints, dt=dt
+            )
+        )
+
+        # Constraint impulses alter both root and joint velocities. Reintegrate
+        # joint coordinates from the pre-step configuration using the
+        # constrained velocities so pose and momentum cannot disagree.
+        constrained_joints: dict[str, JointCoordinate] = {}
+        for spec in self.skeleton.segments:
+            if spec.parent is None:
+                continue
+            original = coordinates[spec.name]
+            actuator = updated[spec.name]
+            rotation = list(original.rotation_xyz)
+            angular_velocity = list(original.angular_velocity_xyz)
+            for axis_index, enabled in enumerate(spec.dof_mask):
+                if not enabled:
+                    rotation[axis_index] = 0.0
+                    angular_velocity[axis_index] = 0.0
+                    continue
+                index = dof_index[(spec.name, axis_index)]
+                angular_velocity[axis_index] = _clamp(
+                    constrained_velocity[index],
+                    -spec.angular_speed_limit, spec.angular_speed_limit,
+                )
+                unconstrained = rotation[axis_index] + angular_velocity[axis_index] * dt
+                low, high = spec.min_rotation_xyz[axis_index], spec.max_rotation_xyz[axis_index]
+                rotation[axis_index] = _clamp(unconstrained, low, high)
+                impact = abs(unconstrained - rotation[axis_index])
+                if impact > 0.0:
+                    angular_velocity[axis_index] = 0.0
+                    limit_strain += min(1.0, impact * 3.0)
+            constrained_joints[spec.name] = JointCoordinate(
+                name=spec.name, angle=rotation[0], velocity=angular_velocity[0],
+                activation=actuator.activation, rotation_xyz=tuple(rotation),
+                angular_velocity_xyz=tuple(angular_velocity),
+                tendon_extension_xyz=actuator.tendon_extension_xyz,
+                tendon_velocity_xyz=actuator.tendon_velocity_xyz,
+            )
+
+        root_velocity = tuple(
+            _clamp(constrained_velocity[dof_index[("__root__", axis)]], -12.0, 12.0)
+            for axis in range(3)
+        )
+        root = [root[axis] + root_velocity[axis] * dt for axis in range(3)]
+        provisional_state = ArticulatedBodyState(
             skeleton_version=self.skeleton.version,
-            joints=next_state.joints,
-            root_velocity=tuple(velocity),
+            joints=tuple(
+                constrained_joints[s.name] for s in self.skeleton.segments
+                if s.parent is not None
+            ),
+            root_velocity=root_velocity,
             contacts=tuple(contact_names),
-            mechanical_strain=_clamp(limit_strain + contact_force / 5000.0, 0.0, 1.0),
+            mechanical_strain=_clamp(limit_strain, 0.0, 1.0),
             proprioceptive_error=_clamp(
-                proprioceptive_sum / max(1, proprioceptive_axes) / 1.2,
-                0.0, 1.0,
+                proprioceptive_sum / max(1, proprioceptive_axes) / 1.2, 0.0, 1.0
             ),
             metabolic_work=state.metabolic_work + total_work,
         )
-        final_poses = self.forward_kinematics(corrected_position, corrected_state)
-        metabolic_cost = (total_work * 0.000015 + total_effort * 0.00008)
-        work_units = total_work + total_effort
+        final_poses = self.forward_kinematics(root, provisional_state)
+
+        # Split positional stabilization removes residual capsule penetration;
+        # the velocity response itself has already been handled by impulses.
+        penetration = max(
+            0.0,
+            max(
+                self.ground_height
+                - (min(pose.start[1], pose.end[1]) - pose.radius)
+                for pose in final_poses
+            ),
+        )
+        if penetration > 0.0:
+            root[1] += penetration
+        corrected_position = tuple(root)
+        final_poses = self.forward_kinematics(corrected_position, provisional_state)
+        final_contacts = tuple(
+            pose.name for pose in final_poses
+            if min(pose.start[1], pose.end[1]) - pose.radius
+            <= self.ground_height + 0.012
+        )
+        corrected_state = ArticulatedBodyState(
+            skeleton_version=self.skeleton.version,
+            joints=provisional_state.joints,
+            root_velocity=provisional_state.root_velocity,
+            contacts=final_contacts,
+            mechanical_strain=provisional_state.mechanical_strain,
+            proprioceptive_error=provisional_state.proprioceptive_error,
+            metabolic_work=provisional_state.metabolic_work,
+        )
+        metabolic_cost = total_work * 0.000015 + total_effort * 0.00008
+        work_units = total_work + total_effort + normal_impulse * 0.000001 + friction_impulse * 0.000001
         return BiomechanicsResult(
             corrected_state, corrected_position, final_poses,
             corrected_state.mechanical_strain,
