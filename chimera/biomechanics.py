@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from typing import Iterable, Mapping, Optional, Sequence, Tuple
 
 
-SKELETON_VERSION = "human-sagittal-1"
+SKELETON_VERSION = "human-3d-1"
 GRAVITY = 9.81
 
 
@@ -61,6 +61,12 @@ class SegmentSpec:
     kp: float
     kd: float
     axis: tuple[float, float, float] = (1.0, 0.0, 0.0)
+    dof_mask: tuple[bool, bool, bool] = (True, False, False)
+    min_rotation_xyz: Optional[tuple[float, float, float]] = None
+    max_rotation_xyz: Optional[tuple[float, float, float]] = None
+    tendon_stiffness: float = 1200.0
+    tendon_damping: float = 18.0
+    activation_tau: float = 0.045
 
     def __post_init__(self) -> None:
         if not self.name:
