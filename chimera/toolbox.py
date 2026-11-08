@@ -39,7 +39,7 @@ class ChimeraToolbox:
             ),
             "world_builder": ToolDefinition(
                 "world_builder", "Construct and inspect persistent world structures.",
-                ("create_object", "create_structure", "inspect"),
+                ("create_object", "create_structure", "harvest_energy", "inspect"),
             ),
             "tool_fabricator": ToolDefinition(
                 "tool_fabricator", "Fabricate a persistent tool entity from a declared specification.",
@@ -90,6 +90,7 @@ class ChimeraToolbox:
             ("body_forge", "inspect_body"): lambda: self._inspect_kind("body", arguments),
             ("world_builder", "create_object"): lambda: self._create_object(arguments, actor, rev),
             ("world_builder", "create_structure"): lambda: self._create_structure(arguments, actor, rev),
+            ("world_builder", "harvest_energy"): lambda: self._harvest_energy(arguments, actor, rev),
             ("world_builder", "inspect"): lambda: self._observe(arguments),
             ("tool_fabricator", "fabricate"): lambda: self._fabricate(arguments, actor, rev),
             ("tool_fabricator", "inspect_tool"): lambda: self._inspect_kind("tool", arguments),
@@ -128,6 +129,29 @@ class ChimeraToolbox:
             blueprint, actor_id=actor, expected_revision=rev
         )
         return self._result(result)
+
+    def _harvest_energy(self, a: dict[str, Any], actor: str, rev: int) -> dict[str, Any]:
+        """Consume a bounded amount of local environmental energy into the organism."""
+        position = self._vec(a, "position")
+        amount = float(a.get("amount", 0.0))
+        if not math.isfinite(amount) or not 0.0 < amount <= 0.25:
+            raise ToolboxError("harvest amount must be finite and in (0, 0.25]")
+        available = self.world.field_at(position)["energy"]
+        if available < amount:
+            raise ToolboxError("Insufficient environmental energy at harvest position")
+        result = self.world.inject_field(
+            "energy", position, -amount, actor_id=actor, radius=0,
+            expected_revision=rev,
+        )
+        return {
+            "accepted": result.accepted,
+            "action": result.action,
+            "action_id": result.action_id,
+            "entity_id": result.entity_id,
+            "revision": result.revision,
+            "details": {**result.details, "harvested": amount,
+                        "remaining_energy": self.world.field_at(position)["energy"]},
+        }
 
     def _create_body(self, a: dict[str, Any], actor: str, rev: int) -> dict[str, Any]:
         """Create a grounded body prototype; articulated joints are a later body solver."""
