@@ -41,6 +41,7 @@ from .latent_language import (
     SpecialistContext,
 )
 from .latent_runtime import build_latent_language
+from .scene_interpreter import GeminiSceneInterpreter, SceneInterpretationError
 
 MAX_BODY_BYTES = 12 * 1_048_576
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
@@ -60,6 +61,8 @@ class ChimeraApplication:
         audio_model_id: str = "facebook/wav2vec2-base",
         sensor_calibration: dict[str, tuple[float, float]] | None = None,
         device: str = "cpu",
+        scene_interpreter: Any | None = None,
+        enable_scene_interpreter: bool = False,
     ):
         if cognition is not None and enable_latent_language:
             raise ValueError("Pass a coordinator or enable model loading, not both")
@@ -69,6 +72,11 @@ class ChimeraApplication:
         self.organism = OrganismKernel(self.world, "chimera")
         self.agent = AutonomousWorldAgent(self.world, self.organism)
         self.toolbox = ChimeraToolbox(self.world, actor_id="player")
+        if scene_interpreter is not None and enable_scene_interpreter:
+            raise ValueError("Pass a scene interpreter or enable the Gemini scene interpreter, not both")
+        self.scene_interpreter = (
+            scene_interpreter or (GeminiSceneInterpreter() if enable_scene_interpreter else None)
+        )
         self.cognition = cognition
         cognition_gateway = None
         if enable_latent_language:
@@ -222,6 +230,19 @@ class ChimeraApplication:
 
         scene_graph = None
         scene_data = payload.get("scene_graph")
+        interpret_scene = payload.get("interpret_scene", False)
+        if not isinstance(interpret_scene, bool):
+            raise ValueError("interpret_scene must be boolean")
+        if scene_data is not None and interpret_scene:
+            raise ValueError("Provide scene_graph or interpret_scene, not both")
+        if interpret_scene:
+            if self.scene_interpreter is None:
+                raise RuntimeError(
+                    "Semantic scene interpretation is disabled; start with --enable-scene-interpreter"
+                )
+            if not text.strip():
+                raise ValueError("interpret_scene requires a non-empty text prompt")
+            scene_graph = self.scene_interpreter.interpret(text, scene_id=request_id)
         if scene_data is not None:
             if not isinstance(scene_data, dict):
                 raise ValueError("scene_graph must be an object")
@@ -519,6 +540,8 @@ def main() -> None:
     parser.add_argument("--database", default="chimera_world.sqlite3")
     parser.add_argument("--enable-latent-language", action="store_true",
                         help="Load real pretrained modality encoders and enable cognition endpoints")
+    parser.add_argument("--enable-scene-interpreter", action="store_true",
+                        help="Enable Gemini natural-language-to-validated-3D-scene parsing")
     parser.add_argument("--alignment-checkpoint", default=None,
                         help="Validated multimodal projection checkpoint")
     parser.add_argument("--dynamics-checkpoint", default=None,
@@ -548,6 +571,7 @@ def main() -> None:
         audio_model_id=args.audio_model,
         sensor_calibration=calibration,
         device=args.device,
+        enable_scene_interpreter=args.enable_scene_interpreter,
     )
     server = ChimeraHTTPServer((args.host, args.port), app)
     print(f"Chimera running at http://{args.host}:{args.port}")
