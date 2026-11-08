@@ -50,6 +50,7 @@ class AutonomousRuntime:
         self.cognition_gateway = cognition_gateway
         self._pending_cognition: list[tuple[list[dict[str, Any]], Any]] = []
         self._pending_feedback: dict[str, float] = {}
+        self._last_cognition_result: dict[str, Any] | None = None
         self._tick = 0
         self._running = False
 
@@ -71,6 +72,23 @@ class AutonomousRuntime:
             raise RuntimeError("No governed cognitive action gateway is configured")
         return self.cognition_gateway.execute(proposal, actor_id=actor_id)
 
+    def execute_selected_proposal(
+        self, proposal_id: str, *, actor_id: str = "chimera"
+    ) -> dict[str, Any]:
+        """Execute only a proposal selected in the latest global-workspace broadcast."""
+        if self.cognition is None or self.cognition.workspace.latest is None:
+            raise RuntimeError("No global-workspace broadcast is available")
+        if not isinstance(proposal_id, str) or not proposal_id:
+            raise ValueError("proposal_id must be a non-empty string")
+        proposal = next(
+            (item for item in self.cognition.workspace.latest.selected
+             if item.proposal_id == proposal_id),
+            None,
+        )
+        if proposal is None:
+            raise ValueError("proposal_id is not selected in the latest workspace broadcast")
+        return self.execute_cognitive_proposal(proposal, actor_id=actor_id)
+
     def tick(self) -> RuntimeFrame:
         """Advance physics, baseline policy, perception and one queued cognition cycle."""
         physics = self.world.step(
@@ -87,7 +105,10 @@ class AutonomousRuntime:
         cognition_result = None
         if self._pending_cognition:
             observations, context = self._pending_cognition.pop(0)
-            context = replace(context, world_revision=self.world.revision())
+            context = replace(
+                context, world_revision=self.world.revision(),
+                timestamp=self.world.simulation_time(),
+            )
             cycle = self.cognition.cycle(
                 observations, context, dt=self.world.config.fixed_dt,
                 organism_state=self.agent.organism.state,
@@ -111,6 +132,7 @@ class AutonomousRuntime:
             self._pending_feedback = {"novelty": cycle.feedback.novelty}
             if cycle.feedback.prediction_error is not None:
                 self._pending_feedback["prediction_error"] = cycle.feedback.prediction_error
+            self._last_cognition_result = cognition_result
         return RuntimeFrame(
             tick=self._tick,
             world_revision=observation["revision"],
@@ -172,4 +194,21 @@ class AutonomousRuntime:
                 self.cognition.workspace.tick if self.cognition is not None else None
             ),
             "pending_cognitive_feedback": dict(self._pending_feedback),
+            "cognition": (
+                {
+                    "latent_revision": self.cognition.state.revision,
+                    "latent_digest": self.cognition.state.digest(),
+                    "workspace_tick": self.cognition.workspace.tick,
+                    "latest": self._last_cognition_result,
+                    "selected": [
+                        {"proposal_id": item.proposal_id, "specialist": item.specialist,
+                         "kind": item.kind, "confidence": item.confidence}
+                        for item in (
+                            self.cognition.workspace.latest.selected
+                            if self.cognition.workspace.latest is not None else ()
+                        )
+                    ],
+                }
+                if self.cognition is not None else None
+            ),
         }
