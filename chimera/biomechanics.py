@@ -734,9 +734,10 @@ class BiomechanicsEngine:
         for _ in range(iterations):
             for item in prepared:
                 normal_speed = self._row_dot(item["normal"], velocity)
-                # Baumgarte stabilization only corrects existing penetration;
-                # it does not pull separated bodies toward the ground.
-                target_normal_speed = max(0.0, -0.18 * min(0.0, item["gap"]) / dt)
+                # This is a non-restitutive contact model. Positional
+                # penetration is corrected separately after the impulse solve;
+                # the velocity constraint therefore targets zero normal speed.
+                target_normal_speed = 0.0
                 old_normal = item["ln"]
                 new_normal = max(
                     0.0, old_normal
