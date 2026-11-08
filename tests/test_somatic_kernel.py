@@ -100,6 +100,25 @@ class SomaticKernelValidationTests(unittest.TestCase):
                 result = refine_morph_package(state, 1, snapshot)
         self.assertEqual(result["label"], "Wolf")
 
+    def test_generation_receives_current_sdf_context(self):
+        body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return json.dumps(body).encode()
+        current_script = "vec2 map_object(vec3 p) { return vec2(length(p)-0.9, 1.0); }"
+        def fake_open(request, timeout):
+            sent = json.loads(request.data)
+            prompt = sent["contents"][0]["parts"][0]["text"]
+            self.assertIn(current_script, prompt)
+            self.assertIn("preserving identity", prompt)
+            return Response()
+        context = {"label": "Seed", "sdfScript": current_script, "color": [0.5, 0.4, 0.3]}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            with patch("chimera.somatic_kernel.urllib.request.urlopen", side_effect=fake_open):
+                result = generate_morph_package("become a wolf", "Seed", context)
+        self.assertEqual(result["label"], "Wolf")
+
     def test_sends_prompt_to_gemini_and_validates_response(self):
         body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
         class Response:
