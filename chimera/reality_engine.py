@@ -60,6 +60,7 @@ class ActionType(str, Enum):
     FIELD_INJECT = "field_inject"
     PHYSICS_STEP = "physics_step"
     ORGANISM_TICK = "organism_tick"
+    SOMATIC_MORPH = "somatic_morph"
 
 
 @dataclass(frozen=True)
@@ -215,6 +216,11 @@ class RealityEngine:
         );
 
         CREATE TABLE IF NOT EXISTS organism_state (
+            singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+            payload TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS somatic_morphology (
             singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
             payload TEXT NOT NULL
         );
@@ -608,6 +614,85 @@ class RealityEngine:
                 self._commit()
                 return WorldResult(action_id, revision, ActionType.FIELD_INJECT.value,
                                    None, True, payload)
+            except Exception:
+                self._rollback()
+                raise
+
+    def somatic_morphology(self) -> Optional[dict[str, Any]]:
+        """Read the canonical A/B SDF pair and derive morph progress from its start time."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT payload FROM somatic_morphology WHERE singleton=1"
+            ).fetchone()
+            if row is None:
+                return None
+            state = json.loads(row["payload"])
+            started = float(state.pop("morph_started_at", 0.0))
+            state["evolutionProgress"] = min(1.0, max(0.0, (time.time() - started) * 1.5))
+            state["world_revision"] = self.revision()
+            return state
+
+    def apply_somatic_morphology(
+        self, package: dict[str, Any], *, actor_id: str,
+        expected_revision: Optional[int] = None,
+    ) -> WorldResult:
+        """Atomically replace the current SDF while retaining the previous SDF for A/B morphing."""
+        required = {"label", "persona", "dialogue", "critique", "sdfScript", "color", "material"}
+        if not isinstance(package, dict) or not required.issubset(package):
+            raise InvalidWorldAction("Somatic package is missing required fields")
+        script = package["sdfScript"]
+        if not isinstance(script, str) or not 40 <= len(script) <= 24000:
+            raise InvalidWorldAction("Somatic SDF must contain 40..24000 characters")
+        if not isinstance(package["color"], list) or len(package["color"]) != 3:
+            raise InvalidWorldAction("Somatic color must contain three channels")
+        action_id = str(uuid.uuid4())
+        with self._lock:
+            self._begin()
+            try:
+                self._check_revision(expected_revision)
+                row = self._db.execute(
+                    "SELECT payload FROM somatic_morphology WHERE singleton=1"
+                ).fetchone()
+                previous = json.loads(row["payload"])["sdfScript"] if row else (
+                    "vec2 map_object(vec3 p){vec2 h=sdHumanoidBase(p);"
+                    "vec3 q=p-vec3(0.,.35,0.);"
+                    "float a=sdCapsule(q,vec3(-.28,.12,0.),vec3(-.48,-.35,0.),.095);"
+                    "float b=sdCapsule(q,vec3(.28,.12,0.),vec3(.48,-.35,0.),.095);"
+                    "float l=sdCapsule(p,vec3(-.16,-.42,0.),vec3(-.19,-.95,.02),.12);"
+                    "float r=sdCapsule(p,vec3(.16,-.42,0.),vec3(.19,-.95,.02),.12);"
+                    "float d=smin(smin(smin(smin(h.x,a,.09),b,.09),l,.1),r,.1);"
+                    "return vec2(opFur(d,opLatentWarp(p,.012),2.8,.006),1.);}"
+                )
+                state = {
+                    "label": str(package["label"])[:200],
+                    "persona": str(package["persona"])[:2000],
+                    "dialogue": str(package["dialogue"])[:2000],
+                    "critique": str(package["critique"])[:2000],
+                    "prevSdfScript": previous,
+                    "sdfScript": script,
+                    "color": package["color"],
+                    "material": package["material"],
+                    "iteration": int(json.loads(row["payload"]).get("iteration", 0) + 1) if row else 1,
+                    "morph_started_at": time.time(),
+                }
+                self._db.execute(
+                    "INSERT INTO somatic_morphology(singleton,payload) VALUES(1,?) "
+                    "ON CONFLICT(singleton) DO UPDATE SET payload=excluded.payload",
+                    (json.dumps(state, sort_keys=True),),
+                )
+                revision = self._advance_revision()
+                self._append_event(
+                    action_id, revision, ActionType.SOMATIC_MORPH, actor_id, None,
+                    {"label": state["label"], "iteration": state["iteration"],
+                     "previous_sdf": previous, "target_sdf": script,
+                     "color": state["color"], "material": state["material"]},
+                )
+                self._commit()
+                return WorldResult(
+                    action_id, revision, ActionType.SOMATIC_MORPH.value, None, True,
+                    {"label": state["label"], "iteration": state["iteration"],
+                     "evolutionProgress": 0.0},
+                )
             except Exception:
                 self._rollback()
                 raise
