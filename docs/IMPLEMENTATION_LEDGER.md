@@ -60,6 +60,35 @@ starting model, not proof that the full historical graph has been recovered.
 
 Implementation detail: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KERNEL_IMPLEMENTATION.md).
 
+## V-OMEGA P2 computational bloodstream prototype
+
+A separate deterministic prototype has been added on research branch
+`research/computational-bloodstream-p2` and pull request
+[17](https://github.com/foreverliverich/openworld/pull/17).
+
+- `chimera/metabolism.py` defines organ reserves, a directed resource-circulation
+  network, measured work counters, versioned calibration into simulated reserve
+  units, and a starvation gate that rejects work when payment would breach an
+  organ's minimum reserve.
+- Transfers are proposed from one pre-flow snapshot and applied simultaneously.
+  Donor surplus and receiver deficits bound each flow; declaration order does
+  not confer priority.
+- `tests/test_metabolism.py` covers reserve conservation, edge-order invariance,
+  deterministic replay, measured-counter calibration, capacity limits,
+  starvation rejection and the intervention of enabling/disabling circulation.
+- `docs/COMPUTATIONAL_BLOODSTREAM_P2.md` records equations, unit boundaries,
+  test command and open research gates.
+
+**Ownership boundary:** this is an isolated experiment adapter. It does not
+change ISCE schema v1, persist a second organism state, or replace the current
+aggregate reserve. Integration requires a versioned ISCE migration and
+single-owner acceptance tests.
+
+**Verification:** pull request CI is running; no passing result is claimed yet.
+The prototype's reserve units are simulated units, not joules or hardware
+power measurements. It is a P2 engineering step, not evidence of novelty,
+biological equivalence or consciousness.
+
 ## System ownership invariants
 
 1. `RealityEngine` and its SQLite database are the sole authority for persistent world entities, transforms, physics, fields, revisions and world events.
