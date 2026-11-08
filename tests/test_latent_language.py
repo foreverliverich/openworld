@@ -205,13 +205,13 @@ class LatentLanguageTests(unittest.TestCase):
             )
             selected = coordinator.workspace.latest.selected
             spatial = next(p for p in selected if p.specialist == "spatial")
+            prior_reserve = organism.state.resources.reserve
             committed = runtime.execute_cognitive_proposal(spatial)
             self.assertTrue(committed["accepted"])
+            self.assertLess(organism.state.resources.reserve, prior_reserve)
             prior_memory = organism.state.self_model.memory_strength
-            prior_reserve = organism.state.resources.reserve
             runtime.tick()
             self.assertGreater(organism.state.self_model.memory_strength, prior_memory)
-            self.assertLess(organism.state.resources.reserve, prior_reserve)
         finally:
             if world is not None:
                 world.close()
