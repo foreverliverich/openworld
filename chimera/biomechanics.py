@@ -302,18 +302,64 @@ class BiomechanicsResult:
     contacts: tuple[str, ...]
 
 
-def _rotation_x(angle: float, vector: tuple[float, float, float]) -> tuple[float,float,float]:
-    c, s = math.cos(angle), math.sin(angle)
-    x, y, z = vector
-    return (x, c*y - s*z, s*y + c*z)
+Quaternion = tuple[float, float, float, float]
+
+
+def _q_mul(a: Quaternion, b: Quaternion) -> Quaternion:
+    aw, ax, ay, az = a
+    bw, bx, by, bz = b
+    return (
+        aw*bw - ax*bx - ay*by - az*bz,
+        aw*bx + ax*bw + ay*bz - az*by,
+        aw*by - ax*bz + ay*bw + az*bx,
+        aw*bz + ax*by - ay*bx + az*bw,
+    )
+
+
+def _q_conjugate(q: Quaternion) -> Quaternion:
+    return (q[0], -q[1], -q[2], -q[3])
+
+
+def _q_normalize(q: Quaternion) -> Quaternion:
+    norm = math.sqrt(sum(v*v for v in q))
+    if norm < 1e-12:
+        raise BiomechanicsError("Quaternion norm cannot be zero")
+    return tuple(v / norm for v in q)  # type: ignore[return-value]
+
+
+def _q_axis(axis: tuple[float, float, float], angle: float) -> Quaternion:
+    half = angle * 0.5
+    sine = math.sin(half)
+    return (math.cos(half), axis[0]*sine, axis[1]*sine, axis[2]*sine)
+
+
+def _q_from_euler_xyz(rotation: tuple[float, float, float]) -> Quaternion:
+    qx = _q_axis((1.0, 0.0, 0.0), rotation[0])
+    qy = _q_axis((0.0, 1.0, 0.0), rotation[1])
+    qz = _q_axis((0.0, 0.0, 1.0), rotation[2])
+    return _q_normalize(_q_mul(_q_mul(qx, qy), qz))
+
+
+def _q_rotate(q: Quaternion, vector: tuple[float, float, float]) -> tuple[float, float, float]:
+    pure = (0.0, vector[0], vector[1], vector[2])
+    rotated = _q_mul(_q_mul(q, pure), _q_conjugate(q))
+    return (rotated[1], rotated[2], rotated[3])
 
 
 def _add(a: tuple[float,float,float], b: tuple[float,float,float]) -> tuple[float,float,float]:
     return (a[0]+b[0], a[1]+b[1], a[2]+b[2])
 
 
+def _sub(a: tuple[float,float,float], b: tuple[float,float,float]) -> tuple[float,float,float]:
+    return (a[0]-b[0], a[1]-b[1], a[2]-b[2])
+
+
 def _scale(v: tuple[float,float,float], amount: float) -> tuple[float,float,float]:
     return (v[0]*amount, v[1]*amount, v[2]*amount)
+
+
+def _cross(a: tuple[float,float,float], b: tuple[float,float,float]) -> tuple[float,float,float]:
+    return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
 
 
 class BiomechanicsEngine:
@@ -354,26 +400,30 @@ class BiomechanicsEngine:
                 raise BiomechanicsError(f"Joint {name} is outside its anatomical range")
         return coordinates
 
-    def forward_kinematics(self, position: Iterable[float],
-                           state: ArticulatedBodyState) -> tuple[SegmentPose, ...]:
+    def _world_transforms(self, position: Iterable[float], state: ArticulatedBodyState):
         root = _vec3("root position", position)
         coordinates = self._validate_state(state)
-        transforms: dict[str, tuple[tuple[float,float,float], float]] = {}
+        transforms: dict[str, tuple[tuple[float, float, float], Quaternion]] = {}
         poses: list[SegmentPose] = []
         for spec in self.skeleton.segments:
             if spec.parent is None:
-                origin, parent_angle = root, 0.0
-                angle = 0.0
+                origin, parent_q = root, (1.0, 0.0, 0.0, 0.0)
+                world_q = parent_q
             else:
-                parent_origin, parent_angle = transforms[spec.parent]
-                origin = _add(parent_origin, _rotation_x(parent_angle, spec.offset))
-                angle = parent_angle + coordinates[spec.name].angle
-            end = _add(origin, _rotation_x(angle, _scale(spec.direction, spec.length)))
-            center = _add(origin, _scale(_add(end, _scale(origin, -1.0)), .5))
-            direction = _scale(_add(end, _scale(origin, -1.0)), 1.0/spec.length)
-            transforms[spec.name] = (origin, angle)
-            poses.append(SegmentPose(spec.name, origin, end, center, direction, spec.radius))
-        return tuple(poses)
+                parent_origin, parent_q = transforms[spec.parent]
+                origin = _add(parent_origin, _q_rotate(parent_q, spec.offset))
+                local_q = _q_from_euler_xyz(coordinates[spec.name].rotation_xyz)
+                world_q = _q_normalize(_q_mul(parent_q, local_q))
+            end = _add(origin, _q_rotate(world_q, _scale(spec.direction, spec.length)))
+            center = _add(origin, _scale(_sub(end, origin), .5))
+            direction = _scale(_sub(end, origin), 1.0/spec.length)
+            transforms[spec.name] = (origin, world_q)
+            poses.append(SegmentPose(spec.name, origin, end, center, direction, spec.radius, world_q))
+        return transforms, tuple(poses)
+
+    def forward_kinematics(self, position: Iterable[float],
+                           state: ArticulatedBodyState) -> tuple[SegmentPose, ...]:
+        return self._world_transforms(position, state)[1]
 
     def step(self, state: ArticulatedBodyState, position: Iterable[float], *,
              dt: float, motor_commands: Sequence[tuple[str, float]] = (),
