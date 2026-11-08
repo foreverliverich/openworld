@@ -32,9 +32,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if(v.y<0.0){v.y=-v.y*clamp(params.restitution,0.0,1.0);}
     let tangent=vec2<f32>(v.x,v.z);
     let speed=length(tangent);
-    let impulse=min(speed,max(params.friction,0.0)*dt*params.gravity);
+    let frictionImpulse=min(speed,max(params.friction,0.0)*dt*params.gravity);
     if(speed>1e-7){
-      let damped=tangent*((speed-impulse)/speed);
+      let damped=tangent*((speed-frictionImpulse)/speed);
       v.x=damped.x; v.z=damped.y;
     }
   }
