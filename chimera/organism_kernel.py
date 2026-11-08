@@ -132,6 +132,8 @@ class OrganismKernel:
         resting: bool = False,
         expected_revision: Optional[int] = None,
         measured_work_units: float = 0.0,
+        motor_commands: tuple[tuple[str, float], ...] = (),
+        root_acceleration: tuple[float, float, float] = (0.0, 0.0, 0.0),
     ) -> WorldResult:
         position = self.state.position
         local = self.world.field_at(position)
@@ -148,6 +150,8 @@ class OrganismKernel:
             resting=resting,
             outcome=outcome,
             measured_work_units=measured_work_units,
+            motor_commands=motor_commands,
+            root_acceleration=root_acceleration,
         )
         transition = self.kernel.transition(self.state, transition_input)
         next_state = transition.state
