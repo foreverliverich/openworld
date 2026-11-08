@@ -34,6 +34,8 @@ from .encoders import (
     HuggingFaceCLIPImageEncoder, HuggingFaceCLIPTextEncoder,
     HuggingFaceTextEncoder, SharedSpaceEmbedding,
 )
+from .latent_training import AlignmentTrainingError, MultimodalProjectionModel
+from .learned_dynamics import DynamicsTrainingError, TorchMorphogeneticDynamics
 
 __all__ = [
     "ActionType", "Entity", "InvalidWorldAction", "RealityEngine",
@@ -54,4 +56,6 @@ __all__ = [
     "HuggingFaceTextEncoder", "HuggingFaceCLIPImageEncoder",
     "HuggingFaceCLIPTextEncoder", "HuggingFaceAudioEncoder",
     "CalibratedSensorEncoder", "SharedSpaceEmbedding",
+    "AlignmentTrainingError", "MultimodalProjectionModel",
+    "DynamicsTrainingError", "TorchMorphogeneticDynamics",
 ]
