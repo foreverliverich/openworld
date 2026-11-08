@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from chimera.somatic_kernel import _validate_package, generate_morph_package
+from chimera.somatic_kernel import _validate_package, generate_morph_package, refine_morph_package
 
 
 def package():
@@ -57,6 +57,31 @@ class SomaticKernelValidationTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "Set GEMINI_API_KEY"):
                 generate_morph_package("become a wolf")
+
+    def test_refinement_enforces_ten_iteration_cap(self):
+        with self.assertRaises(ValueError):
+            refine_morph_package({"sdfScript": package()["sdfScript"]}, 11)
+
+    def test_refinement_rejects_invalid_image_snapshot(self):
+        with self.assertRaises(ValueError):
+            refine_morph_package({"sdfScript": package()["sdfScript"]}, 1, "data:text/html;base64,PHNjcmlwdD4=")
+
+    def test_refinement_sends_multimodal_snapshot_and_validates_result(self):
+        body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return json.dumps(body).encode()
+        def fake_open(request, timeout):
+            sent = json.loads(request.data)
+            self.assertEqual(sent["contents"][0]["parts"][1]["inlineData"]["mimeType"], "image/png")
+            return Response()
+        snapshot = "data:image/png;base64,aGVsbG8="
+        state = {"sdfScript": package()["sdfScript"], "label": "Wolf"}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            with patch("chimera.somatic_kernel.urllib.request.urlopen", side_effect=fake_open):
+                result = refine_morph_package(state, 1, snapshot)
+        self.assertEqual(result["label"], "Wolf")
 
     def test_sends_prompt_to_gemini_and_validates_response(self):
         body = {"candidates": [{"content": {"parts": [{"text": json.dumps(package())}]}}]}
