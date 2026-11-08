@@ -77,6 +77,18 @@ class ArticulatedBodyBrowserAcceptance(unittest.TestCase):
                     self.assertIn("WebGL 2", renderer["version"] or "", renderer)
 
                     # Submit a hip abduction target through the visible form.
+                    # Check native HTML constraint validation before clicking:
+                    # a rejected form would silently suppress the submit event.
+                    validity = page.locator('#bodyForm').evaluate(
+                        """form => Array.from(form.elements)
+                          .filter(element => element.willValidate)
+                          .map(element => ({
+                            name: element.name,
+                            valid: element.validity.valid,
+                            message: element.validationMessage
+                          }))"""
+                    )
+                    self.assertTrue(all(item["valid"] for item in validity), validity)
                     # The resulting pose must come back from the authoritative API.
                     page.locator('input[name="thigh_l_y"]').fill("0.45")
                     with page.expect_response(
