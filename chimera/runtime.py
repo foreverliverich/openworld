@@ -119,7 +119,8 @@ class AutonomousRuntime:
                 "selected": [
                     {"proposal_id": p.proposal_id, "specialist": p.specialist,
                      "kind": p.kind, "confidence": p.confidence,
-                     "world_revision": p.world_revision}
+                     "world_revision": p.world_revision,
+                     "artifact": dict(p.payload) if p.kind == "creative_artifact" else None}
                     for p in cycle.broadcast.selected
                 ],
                 "rejected_count": len(cycle.broadcast.rejected),
@@ -202,7 +203,8 @@ class AutonomousRuntime:
                     "latest": self._last_cognition_result,
                     "selected": [
                         {"proposal_id": item.proposal_id, "specialist": item.specialist,
-                         "kind": item.kind, "confidence": item.confidence}
+                         "kind": item.kind, "confidence": item.confidence,
+                         "artifact": dict(item.payload) if item.kind == "creative_artifact" else None}
                         for item in (
                             self.cognition.workspace.latest.selected
                             if self.cognition.workspace.latest is not None else ()
