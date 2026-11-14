@@ -41,6 +41,24 @@ python -m unittest discover -s tests -p "test_tecq_contract.py" -v
 
 These contracts preserve the 48-byte SomaticCell ABI, distinguish the compact identity seed from 4KB form genes and SEED2, and refuse to call a compact fold lossless without a complete external checkpoint. They do not claim that the TEC-Q solver or GPU implementation is complete.
 
+## TEC-Q coupled cell runtime
+
+The coupled TEC-Q CPU reference engine can be enabled in the existing browser
+application without creating a second organism or world state owner:
+
+```bash
+python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_world.sqlite3 --tecq-cells 15000
+```
+
+The browser dashboard then reports cell count, bonds, swarm intent, activation,
+energy, stress, memory, cohesion, prediction error and strain. TEC-Q aggregate
+feedback enters the existing ISCE transition; RealityEngine remains the durable
+world authority. Start with the documented 15,000-cell research target, but
+treat the current Python solver as a correctness reference until measured
+performance and the WebGPU backend are complete.
+
+Implementation and remaining gates: [docs/TECQ_FULL_RUNTIME.md](docs/TECQ_FULL_RUNTIME.md).
+
 ## Quick start
 
 Python 3.10+; no third-party package is required for the core.
