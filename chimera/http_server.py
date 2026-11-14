@@ -71,6 +71,8 @@ class ChimeraApplication:
         trajectory_organism_id: str = "chimera",
         tecq_cells: int = 0,
     ):
+        if not isinstance(tecq_cells, int) or isinstance(tecq_cells, bool) or (tecq_cells != 0 and tecq_cells < 2):
+            raise ValueError("tecq_cells must be 0 (disabled) or an integer >= 2")
         if cognition is not None and enable_latent_language:
             raise ValueError("Pass a coordinator or enable model loading, not both")
         if not enable_latent_language and (
@@ -81,8 +83,6 @@ class ChimeraApplication:
         self.organism = OrganismKernel(self.world, "chimera")
         self.agent = AutonomousWorldAgent(self.world, self.organism)
         self.toolbox = ChimeraToolbox(self.world, actor_id="player")
-        if not isinstance(tecq_cells, int) or isinstance(tecq_cells, bool) or tecq_cells not in (0,) and tecq_cells < 2:
-            raise ValueError("tecq_cells must be 0 (disabled) or an integer >= 2")
         self.tecq_engine = None
         if tecq_cells:
             tecq_config = TECQConfig(cell_count=tecq_cells)
