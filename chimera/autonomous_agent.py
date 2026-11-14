@@ -109,7 +109,6 @@ class AutonomousWorldAgent:
                 self._shelter_blueprint(),
                 actor_id=self.organism.organism_id,
                 expected_revision=self.world.revision(),
-                environmental_feedback=environmental_feedback,
             )
             self.organism.tick(
                 dt=dt, action_energy_cost=0.12, mechanical_strain=0.35,
@@ -132,6 +131,7 @@ class AutonomousWorldAgent:
                 prediction_error=max(0.2, prediction_error), novelty=max(0.65, novelty_feedback),
                 outcome="workbench_committed",
                 expected_revision=result.revision,
+                environmental_feedback=environmental_feedback,
             )
             return AgentStep(goal, "construct_structure",
                              self.world.revision(), result.details)
@@ -142,6 +142,7 @@ class AutonomousWorldAgent:
                 prediction_error=max(0.05, prediction_error), novelty=novelty_feedback,
                 outcome="rest_regulation", resting=True,
                 expected_revision=self.world.revision(),
+                environmental_feedback=environmental_feedback,
             )
             return AgentStep(goal, "rest_regulation",
                              result.revision, result.details)
@@ -159,6 +160,7 @@ class AutonomousWorldAgent:
             prediction_error=max(0.08, prediction_error), novelty=max(novelty, novelty_feedback),
             outcome=f"observed_entities:{entity_count}",
             expected_revision=observation["revision"],
+            environmental_feedback=environmental_feedback,
         )
         return AgentStep(
             goal, "observe_and_consolidate", result.revision,
