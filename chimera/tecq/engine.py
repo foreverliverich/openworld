@@ -250,4 +250,4 @@ class TECQEngine:
         return {"environmental_energy":sum(s.energy)/n,"environmental_stress":sum(s.stress)/n,
                 "environmental_memory":sum(s.memory)/n,"environmental_cohesion":sum(s.cohesion)/n,
                 "prediction_error":sum(s.prediction_error)/n,"novelty":sum(s.prediction_error)/n,
-                "measured_work_units":float(len(s.bonds)+n)}
+                "estimated_work_units":float(len(s.bonds)+n)}
