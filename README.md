@@ -57,7 +57,7 @@ world authority. Start with the documented 15,000-cell research target, but
 treat the current Python solver as a correctness reference until measured
 performance and the WebGPU backend are complete.
 
-Implementation and remaining gates: [docs/TECQ_FULL_RUNTIME.md](docs/TECQ_FULL_RUNTIME.md).
+Implementation and remaining gates: [docs/TECQ_FULL_RUNTIME.md](docs/TECQ_FULL_RUNTIME.md). The swarm comparison protocol is [docs/TECQ_SWARM_ABLATION.md](docs/TECQ_SWARM_ABLATION.md).
 
 ## Quick start
 
