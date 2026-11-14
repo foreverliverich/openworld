@@ -31,7 +31,6 @@ class TECQOrganismAdapter:
                 mechanical_strain=metrics["max_strain"],
                 prediction_error=feedback["prediction_error"],
                 novelty=feedback["novelty"],
-                measured_work_units=feedback["measured_work_units"],
                 environmental_feedback={
                     "energy": feedback["environmental_energy"],
                     "stress": feedback["environmental_stress"],
