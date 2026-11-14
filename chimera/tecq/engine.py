@@ -34,6 +34,9 @@ class Bond:
 
 def _norm(v:Iterable[float])->float: return math.sqrt(sum(x*x for x in v))
 def _clamp(x:float,lo:float=0.,hi:float=1.)->float: return max(lo,min(hi,x))
+def _phase_coherence(a:float,b:float)->float:
+    d=abs(a-b)%(2.0*math.pi); d=min(d,2.0*math.pi-d)
+    return 1.0-min(1.0,d/math.pi)
 
 class TECQState:
     """Structure-of-arrays state indexed by stable cell id."""
@@ -149,7 +152,7 @@ class TECQEngine:
         s,c=self.state,self.config
         for key,b in list(s.bonds.items()):
             a,z=key; d=_norm(s.position[a][k]-s.position[z][k] for k in range(3))
-            coherence=1.-min(1.,abs(s.phase[a]-s.phase[z])/math.pi)
+            coherence=_phase_coherence(s.phase[a],s.phase[z])
             predict=1.-.5*(s.prediction_error[a]+s.prediction_error[z])
             useful=_clamp(.45*coherence+.35*predict+.20*min(s.memory[a],s.memory[z]))
             b.weight=_clamp(.92*b.weight+.08*useful)
@@ -170,7 +173,7 @@ class TECQEngine:
                 if j<=i or key in existing or degree[j]>=c.max_neighbors: continue
                 d2=sum((s.position[j][k]-p[k])**2 for k in range(3))
                 if 1e-16<d2<=r2:
-                    coh=1.-min(1.,abs(s.phase[i]-s.phase[j])/math.pi)
+                    coh=_phase_coherence(s.phase[i],s.phase[j])
                     score=.55*coh+.25*(1.-s.prediction_error[i])+.20*s.memory[i]
                     if score>=c.topology_on: candidates.append((d2,j))
             for d2,j in sorted(candidates):
