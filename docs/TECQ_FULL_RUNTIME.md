@@ -6,6 +6,20 @@ world or intrinsic-state owner. TEC-Q aggregates are passed through the existing
 OrganismKernel facade into the authoritative ISCE TransitionInput, then
 RealityEngine commits the ISCE state and world fields transactionally.
 
+## Run it
+
+Start the existing local Chimera application with TEC-Q enabled:
+
+```bash
+python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_world.sqlite3 --tecq-cells 15000
+```
+
+Use `--tecq-cells 0` (the default) to leave TEC-Q disabled. The configured
+cell count is visible in the normal `/api/state` response under `tecq`, and
+each `/api/tick` frame includes `tecq_result`. The current implementation is
+CPU reference code; 15,000 cells is the intended experiment size, not a
+validated real-time performance guarantee.
+
 ## Included
 
 - Stable cell IDs and structure-of-arrays sidecars for position, velocity,
