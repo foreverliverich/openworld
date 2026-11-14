@@ -25,5 +25,6 @@ from .contract import (
 )
 
 from .engine import TECQConfig, TECQEngine, TECQError, TECQState, Bond, lattice_state
+from .integration import TECQOrganismAdapter
 
 __all__ = [name for name in globals() if not name.startswith("_")]
