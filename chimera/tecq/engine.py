@@ -18,7 +18,10 @@ class TECQConfig:
     topology_on:float=.58; topology_off:float=.22
     metabolic_rate:float=.0008; repair_rate:float=.0015; seed:int=7
     def validate(self):
-        if self.cell_count<2 or self.max_neighbors<1: raise TECQError("invalid cell or neighbor count")
+        if not isinstance(self.cell_count,int) or isinstance(self.cell_count,bool) or self.cell_count<2: raise TECQError("cell_count must be an integer >= 2")
+        if not isinstance(self.max_neighbors,int) or isinstance(self.max_neighbors,bool) or self.max_neighbors<1: raise TECQError("max_neighbors must be a positive integer")
+        if not isinstance(self.topology_interval,int) or isinstance(self.topology_interval,bool) or self.topology_interval<0: raise TECQError("topology_interval must be a non-negative integer")
+        if not isinstance(self.neural_refractory_ticks,int) or isinstance(self.neural_refractory_ticks,bool) or self.neural_refractory_ticks<0: raise TECQError("neural_refractory_ticks must be a non-negative integer")
         for k in ("spacing","neighbor_radius","dt","spring_k","damping","torsion_k","field_diffusion","neural_threshold","metabolic_rate","repair_rate"):
             v=float(getattr(self,k))
             if not math.isfinite(v) or v<0: raise TECQError(k+" must be finite and non-negative")
@@ -48,6 +51,28 @@ class TECQState:
         if len(self.organ_id)!=n: raise TECQError("organ_ids length mismatch")
         self.tick=0; self.time=0.; self.bonds:dict[tuple[int,int],Bond]={}
         self.adjacency=[[] for _ in range(n)]
+        self.validate()
+    def validate(self):
+        n=self.count
+        if n<2: raise TECQError("state must contain at least two cells")
+        for name in self.DOMAINS:
+            if len(getattr(self,name))!=n: raise TECQError(f"{name} sidecar length mismatch")
+        for name,width in (("position",3),("velocity",3),("orientation",4),("angular_velocity",3)):
+            for i,row in enumerate(getattr(self,name)):
+                if len(row)!=width or any(not math.isfinite(float(v)) for v in row): raise TECQError(f"invalid {name} vector at cell {i}")
+        for i,q in enumerate(self.orientation):
+            if abs(_norm(q)-1.0)>1e-3: raise TECQError(f"orientation quaternion {i} is not normalized")
+        for name in ("energy","stress","memory","cohesion","potential","activation","swarm_intent","strain","prediction_error"):
+            for i,v in enumerate(getattr(self,name)):
+                if not math.isfinite(float(v)) or not 0.0<=float(v)<=1.0: raise TECQError(f"invalid {name} value at cell {i}")
+        for i,v in enumerate(self.phase):
+            if not math.isfinite(float(v)) or not 0.0<=float(v)<2.0*math.pi: raise TECQError(f"invalid phase at cell {i}")
+        if any(not isinstance(v,int) or isinstance(v,bool) or v<0 for v in self.refractory): raise TECQError("refractory counters must be non-negative integers")
+        if any(not isinstance(v,int) or isinstance(v,bool) or v<0 for v in self.organ_id): raise TECQError("organ_id values must be non-negative integers")
+        if self.tick<0 or not math.isfinite(self.time) or self.time<0: raise TECQError("invalid simulation clock")
+        for key,b in self.bonds.items():
+            if key!=(min(b.a,b.b),max(b.a,b.b)) or b.a==b.b or b.a<0 or b.b>=n: raise TECQError("invalid bond endpoints")
+            if not math.isfinite(b.rest) or b.rest<=0 or not math.isfinite(b.weight) or not 0<=b.weight<=1 or not math.isfinite(b.torsion) or b.torsion<0: raise TECQError("invalid bond state")
     @property
     def count(self): return len(self.position)
     def rebuild_adjacency(self):
@@ -76,11 +101,14 @@ class TECQState:
             if key in s.bonds or key[0]==key[1] or key[1]>=s.count or key[0]<0: raise TECQError("invalid checkpoint bond")
             s.bonds[key]=b
         s.rebuild_adjacency()
+        s.validate()
         if s.digest()!=data.get("digest"): raise TECQError("checkpoint digest mismatch")
         return s
 
 def lattice_state(config:TECQConfig,organ_count:int=3)->TECQState:
-    config.validate(); n=config.cell_count; side=math.ceil(n**(1/3)); pos=[]
+    config.validate()
+    if not isinstance(organ_count,int) or isinstance(organ_count,bool) or organ_count<1: raise TECQError("organ_count must be a positive integer")
+    n=config.cell_count; side=math.ceil(n**(1/3)); pos=[]
     for i in range(n):
         x=i%side; rem=i//side; y=rem%side; z=rem//side
         pos.append((x*config.spacing,y*config.spacing,z*config.spacing))
@@ -207,6 +235,7 @@ class TECQEngine:
             s.phase[i]=(s.phase[i]+c.dt*(.25+.5*s.swarm_intent[i]+.2*pd[i]))%(2.*math.pi)
             s.strain[i]=strain[i]
         s.tick+=1; s.time+=c.dt
+        s.validate()
         return self.metrics()
     def metrics(self):
         s=self.state; n=s.count; mean=lambda x:sum(x)/n
