@@ -14,6 +14,16 @@ class TECQEngineTests(unittest.TestCase):
         s=lattice_state(c); e=TECQEngine(s,c)
         for _ in range(4): e.step([.1]*125)
         self.assertTrue(all(len(row)<=c.max_neighbors for row in s.adjacency))
+    def test_quaternion_misalignment_generates_restoring_torsion(self):
+        import math
+        c=TECQConfig(cell_count=2,dt=.01)
+        s=lattice_state(c)
+        s.orientation[1]=[0.0,0.0,math.sin(.25),math.cos(.25)]
+        e=TECQEngine(s,c)
+        e.step()
+        self.assertGreater(s.angular_velocity[0][2],0.0)
+        self.assertLess(s.angular_velocity[1][2],0.0)
+        self.assertGreater(next(iter(s.bonds.values())).torsion,0.0)
     def test_checkpoint_round_trip(self):
         c=TECQConfig(cell_count=32); s=lattice_state(c); e=TECQEngine(s,c)
         for _ in range(3): e.step([.05]*32)
