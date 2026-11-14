@@ -92,6 +92,7 @@ class AutonomousWorldAgent:
     def step(
         self, dt: float | None = None,
         cognitive_feedback: Mapping[str, float] | None = None,
+        environmental_feedback: Mapping[str, float] | None = None,
     ) -> AgentStep:
         """Perform one autonomous cycle, incorporating prior-cycle sensory evidence."""
         dt = self.world.config.fixed_dt if dt is None else float(dt)
@@ -108,12 +109,14 @@ class AutonomousWorldAgent:
                 self._shelter_blueprint(),
                 actor_id=self.organism.organism_id,
                 expected_revision=self.world.revision(),
+                environmental_feedback=environmental_feedback,
             )
             self.organism.tick(
                 dt=dt, action_energy_cost=0.12, mechanical_strain=0.35,
                 prediction_error=max(0.25, prediction_error), novelty=max(0.9, novelty_feedback),
                 outcome="shelter_committed",
                 expected_revision=result.revision,
+                environmental_feedback=environmental_feedback,
             )
             return AgentStep(goal, "construct_structure",
                              self.world.revision(), result.details)
