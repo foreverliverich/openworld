@@ -16,7 +16,7 @@ python -m chimera.http_server --host 127.0.0.1 --port 8765 --database chimera_wo
 
 Use `--tecq-cells 0` (the default) to leave TEC-Q disabled. The configured
 cell count is visible in the normal `/api/state` response under `tecq`, and
-each `/api/tick` frame includes `tecq_result`. The current implementation is
+each `/api/tick` frame includes `tecq_result`. The browser dashboard shows the live TEC-Q cell, bond, field and swarm metrics. The current implementation is
 CPU reference code; 15,000 cells is the intended experiment size, not a
 validated real-time performance guarantee.
 
@@ -34,6 +34,7 @@ validated real-time performance guarantee.
 - Leaky integrate-and-fire nervous dynamics with refractory gating.
 - Local swarm-intent consensus modulated by prediction error and viability.
 - Metabolic depletion, repair/cohesion feedback and ISCE aggregate projection.
+- Estimated operation count is reported separately; it is not mislabeled as measured hardware work or energy.
 - Transactional adapter that restores the TEC-Q checkpoint if the ISCE/world
   commit rejects.
 - Optional AutonomousRuntime integration; TEC-Q advances before the agent's
