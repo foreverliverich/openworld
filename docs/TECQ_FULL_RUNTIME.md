@@ -1,10 +1,10 @@
 # TEC-Q coupled runtime
 
-This branch adds an executable coupled TEC-Q cell engine to the existing
-contract and ISCE/RealityEngine project. It does not create a second world or
-intrinsic-state owner. TECQEngine.isce_projection() supplies aggregate signals
-for the next authoritative ISCE TransitionInput; RealityEngine remains the
-persistent world transaction boundary.
+This branch adds an executable coupled TEC-Q cell engine and wires it into
+the existing organism-owned AutonomousRuntime. It does not create a second
+world or intrinsic-state owner. TEC-Q aggregates are passed through the existing
+OrganismKernel facade into the authoritative ISCE TransitionInput, then
+RealityEngine commits the ISCE state and world fields transactionally.
 
 ## Included
 
@@ -20,6 +20,10 @@ persistent world transaction boundary.
 - Leaky integrate-and-fire nervous dynamics with refractory gating.
 - Local swarm-intent consensus modulated by prediction error and viability.
 - Metabolic depletion, repair/cohesion feedback and ISCE aggregate projection.
+- Transactional adapter that restores the TEC-Q checkpoint if the ISCE/world
+  commit rejects.
+- Optional AutonomousRuntime integration; TEC-Q advances before the agent's
+  single ISCE tick and its field/prediction feedback enters that same tick.
 - Versioned exact checkpoint/restore guarded by SHA-256 state digest.
 
 ## ABI and integration invariants
@@ -31,7 +35,9 @@ TEC-Q does not write ISCE or RealityEngine directly.
 
 ## Verification status
 
-Unit tests are included under tests/test_tecq_engine.py. They must pass in CI
-before merge. This is a CPU reference engine, not a measured 15,000-cell speed
-claim. A WebGPU/WGSL backend, CPU/GPU parity, runtime scheduler wiring, full
-CCPL/ICCR experiments and measured 15k/1M-cell benchmarks remain open.
+Unit tests are included under tests/test_tecq_engine.py,
+tests/test_tecq_integration.py and tests/test_tecq_runtime.py. CI verification
+is required before merge. The current solver is the CPU reference backend, not
+a measured 15,000-cell speed claim. A production WebGPU/WGSL backend,
+CPU/GPU parity, full CCPL/ICCR experiments and measured 15k/1M-cell benchmarks
+remain open.
