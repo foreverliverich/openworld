@@ -41,6 +41,7 @@ from .latent_language import (
     SpecialistContext,
 )
 from .latent_runtime import build_latent_language
+from .tecq.engine import TECQConfig, TECQEngine, lattice_state
 from .scene_interpreter import GeminiSceneInterpreter, SceneInterpretationError
 
 MAX_BODY_BYTES = 12 * 1_048_576
@@ -68,6 +69,7 @@ class ChimeraApplication:
         ollama_timeout: float = 30.0,
         trajectory_log: str | None = None,
         trajectory_organism_id: str = "chimera",
+        tecq_cells: int = 0,
     ):
         if cognition is not None and enable_latent_language:
             raise ValueError("Pass a coordinator or enable model loading, not both")
@@ -79,6 +81,12 @@ class ChimeraApplication:
         self.organism = OrganismKernel(self.world, "chimera")
         self.agent = AutonomousWorldAgent(self.world, self.organism)
         self.toolbox = ChimeraToolbox(self.world, actor_id="player")
+        if not isinstance(tecq_cells, int) or isinstance(tecq_cells, bool) or tecq_cells not in (0,) and tecq_cells < 2:
+            raise ValueError("tecq_cells must be 0 (disabled) or an integer >= 2")
+        self.tecq_engine = None
+        if tecq_cells:
+            tecq_config = TECQConfig(cell_count=tecq_cells)
+            self.tecq_engine = TECQEngine(lattice_state(tecq_config), tecq_config)
         if scene_interpreter is not None and enable_scene_interpreter:
             raise ValueError("Pass a scene interpreter or enable the Gemini scene interpreter, not both")
         self.scene_interpreter = (
@@ -110,6 +118,7 @@ class ChimeraApplication:
             self.world, self.agent,
             cognition=self.cognition,
             cognition_gateway=cognition_gateway,
+            tecq_engine=self.tecq_engine,
         )
         self._mutation_lock = threading.RLock()
 
@@ -137,6 +146,7 @@ class ChimeraApplication:
                     "physics_result": frame.physics_result,
                     "agent_result": frame.agent_result,
                     "cognition_result": frame.cognition_result,
+                    "tecq_result": frame.tecq_result,
                 })
         return {"frames": frames, "state": self.state()}
 
@@ -572,6 +582,8 @@ def main() -> None:
                         help="Bind to loopback by default; do not expose publicly without authentication")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--database", default="chimera_world.sqlite3")
+    parser.add_argument("--tecq-cells", type=int, default=0,
+                        help="Enable TEC-Q with this many cells (0 disables; start with 15000 for the research target)")
     parser.add_argument("--enable-latent-language", action="store_true",
                         help="Load real pretrained modality encoders and enable cognition endpoints")
     parser.add_argument("--enable-scene-interpreter", action="store_true",
@@ -621,6 +633,7 @@ def main() -> None:
         ollama_timeout=args.ollama_timeout,
         trajectory_log=args.latent_trajectory_log,
         trajectory_organism_id=args.trajectory_organism_id,
+        tecq_cells=args.tecq_cells,
     )
     server = ChimeraHTTPServer((args.host, args.port), app)
     print(f"Chimera running at http://{args.host}:{args.port}")
