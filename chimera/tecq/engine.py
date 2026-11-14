@@ -193,12 +193,20 @@ class TECQEngine:
             dist=max(1e-9,_norm(delta)); direction=[v/dist for v in delta]
             ext=dist-b.rest; rel=[s.velocity[z][k]-s.velocity[a][k] for k in range(3)]
             mag=c.spring_k*b.weight*ext+c.damping*sum(rel[k]*direction[k] for k in range(3))
+            qa=s.orientation[a]; qb=s.orientation[z]
+            rx=-qb[3]*qa[0]+qb[0]*qa[3]-qb[1]*qa[2]+qb[2]*qa[1]
+            ry=-qb[3]*qa[1]+qb[0]*qa[2]+qb[1]*qa[3]-qb[2]*qa[0]
+            rz=-qb[3]*qa[2]-qb[0]*qa[1]+qb[1]*qa[0]+qb[2]*qa[3]
+            rw=qb[3]*qa[3]+qb[0]*qa[0]+qb[1]*qa[1]+qb[2]*qa[2]
+            if rw<0: rx,ry,rz,rw=-rx,-ry,-rz,-rw
+            relang=[s.angular_velocity[z][k]-s.angular_velocity[a][k] for k in range(3)]
+            rotvec=(rx,ry,rz)
             for k in range(3):
                 f=mag*direction[k]; force[a][k]+=f; force[z][k]-=f
-                t=c.torsion_k*b.weight*(s.angular_velocity[z][k]-s.angular_velocity[a][k])
+                t=b.weight*(2.0*c.torsion_k*rotvec[k]+c.damping*relang[k])
                 torque[a][k]+=t; torque[z][k]-=t
-            relang=[s.angular_velocity[z][k]-s.angular_velocity[a][k] for k in range(3)]
-            b.torsion=_norm(relang); local=min(1.,abs(ext)/max(b.rest,1e-6))
+            b.torsion=2.0*math.atan2(_norm(rotvec),max(1e-9,abs(rw)))
+            local=min(1.,abs(ext)/max(b.rest,1e-6))
             strain[a]=max(strain[a],local); strain[z]=max(strain[z],local)
             phase=math.sin(s.phase[z]-s.phase[a]); pd[a]+=phase*b.weight; pd[z]-=phase*b.weight
             for q,arr in enumerate((s.energy,s.stress,s.memory,s.cohesion)):
