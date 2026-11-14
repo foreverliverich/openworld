@@ -92,6 +92,7 @@ class AutonomousWorldAgent:
     def step(
         self, dt: float | None = None,
         cognitive_feedback: Mapping[str, float] | None = None,
+        environmental_feedback: Mapping[str, float] | None = None,
     ) -> AgentStep:
         """Perform one autonomous cycle, incorporating prior-cycle sensory evidence."""
         dt = self.world.config.fixed_dt if dt is None else float(dt)
@@ -114,6 +115,7 @@ class AutonomousWorldAgent:
                 prediction_error=max(0.25, prediction_error), novelty=max(0.9, novelty_feedback),
                 outcome="shelter_committed",
                 expected_revision=result.revision,
+                environmental_feedback=environmental_feedback,
             )
             return AgentStep(goal, "construct_structure",
                              self.world.revision(), result.details)
@@ -129,6 +131,7 @@ class AutonomousWorldAgent:
                 prediction_error=max(0.2, prediction_error), novelty=max(0.65, novelty_feedback),
                 outcome="workbench_committed",
                 expected_revision=result.revision,
+                environmental_feedback=environmental_feedback,
             )
             return AgentStep(goal, "construct_structure",
                              self.world.revision(), result.details)
@@ -139,6 +142,7 @@ class AutonomousWorldAgent:
                 prediction_error=max(0.05, prediction_error), novelty=novelty_feedback,
                 outcome="rest_regulation", resting=True,
                 expected_revision=self.world.revision(),
+                environmental_feedback=environmental_feedback,
             )
             return AgentStep(goal, "rest_regulation",
                              result.revision, result.details)
@@ -156,6 +160,7 @@ class AutonomousWorldAgent:
             prediction_error=max(0.08, prediction_error), novelty=max(novelty, novelty_feedback),
             outcome=f"observed_entities:{entity_count}",
             expected_revision=observation["revision"],
+            environmental_feedback=environmental_feedback,
         )
         return AgentStep(
             goal, "observe_and_consolidate", result.revision,

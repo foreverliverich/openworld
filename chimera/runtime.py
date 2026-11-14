@@ -23,6 +23,7 @@ class RuntimeFrame:
     agent_result: dict[str, Any]
     observation: dict[str, Any]
     cognition_result: dict[str, Any] | None = None
+    tecq_result: dict[str, Any] | None = None
 
 
 class AutonomousRuntime:
@@ -34,6 +35,7 @@ class AutonomousRuntime:
         observer_radius: float = 24.0,
         cognition: Any | None = None,
         cognition_gateway: Any | None = None,
+        tecq_engine: Any | None = None,
     ):
         if agent.world is not world:
             raise ValueError("Runtime and autonomous agent must share one world")
@@ -48,6 +50,9 @@ class AutonomousRuntime:
         self.observer_radius = observer_radius
         self.cognition = cognition
         self.cognition_gateway = cognition_gateway
+        self.tecq_engine = tecq_engine
+        if tecq_engine is not None and not callable(getattr(tecq_engine, "step", None)):
+            raise ValueError("tecq_engine must expose the TEC-Q step API")
         self._pending_cognition: list[tuple[list[dict[str, Any]], Any]] = []
         self._pending_feedback: dict[str, float] = {}
         self._last_cognition_result: dict[str, Any] | None = None
@@ -95,7 +100,33 @@ class AutonomousRuntime:
             actor_id="reality-runtime",
             expected_revision=self.world.revision(),
         )
-        agent_result = self.agent.step(cognitive_feedback=self._pending_feedback)
+        tecq_result = None
+        tecq_checkpoint = None
+        environmental_feedback = None
+        cognitive_feedback = dict(self._pending_feedback)
+        if self.tecq_engine is not None:
+            tecq_checkpoint = self.tecq_engine.state.checkpoint()
+            try:
+                tecq_result = self.tecq_engine.step()
+                projection = self.tecq_engine.isce_projection()
+                environmental_feedback = {
+                    "energy": projection["environmental_energy"],
+                    "stress": projection["environmental_stress"],
+                    "memory": projection["environmental_memory"],
+                    "cohesion": projection["environmental_cohesion"],
+                }
+                cognitive_feedback["prediction_error"] = projection["prediction_error"]
+                cognitive_feedback["novelty"] = projection["novelty"]
+                agent_result = self.agent.step(
+                    cognitive_feedback=cognitive_feedback,
+                    environmental_feedback=environmental_feedback,
+                )
+            except Exception:
+                from .tecq.engine import TECQState
+                self.tecq_engine.state = TECQState.from_checkpoint(tecq_checkpoint)
+                raise
+        else:
+            agent_result = self.agent.step(cognitive_feedback=cognitive_feedback)
         self._pending_feedback = {}
         self._tick += 1
         organism_position = self.agent.organism.state.position
@@ -149,6 +180,7 @@ class AutonomousRuntime:
             },
             observation=observation,
             cognition_result=cognition_result,
+            tecq_result=tecq_result,
         )
 
     async def run(
@@ -194,6 +226,7 @@ class AutonomousRuntime:
                 self.cognition.workspace.tick if self.cognition is not None else None
             ),
             "pending_cognitive_feedback": dict(self._pending_feedback),
+            "tecq": (self.tecq_engine.metrics() if self.tecq_engine is not None else None),
             "cognition": (
                 {
                     "latent_revision": self.cognition.state.revision,

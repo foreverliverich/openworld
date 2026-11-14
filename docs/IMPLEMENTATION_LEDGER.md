@@ -1,6 +1,6 @@
 # Chimera implementation ledger
 
-Last verified repository branch: `tecq-causal-morphogenesis`
+Last verified repository branch: `tecq-full-runtime` (draft PR #19; pending CI)
 Repository: `foreverliverich/openworld`
 
 This file is the durable engineering handoff. Update it in the same change as every material implementation or verification result. Do not use conversational summaries as the sole source of project status. The uploaded legacy source/transport audit is maintained in [docs/LEGACY_SOURCE_INTEGRATION_AUDIT.md](LEGACY_SOURCE_INTEGRATION_AUDIT.md). The master source reconciliation is [docs/MASTER_SOURCE_RECONCILIATION_2026-11-07.md](MASTER_SOURCE_RECONCILIATION_2026-11-07.md); the adopted ISCE/V-OMEGA standing decisions and corrections are [docs/ISCE_VOMEGA_STANDING_DECISIONS.md](ISCE_VOMEGA_STANDING_DECISIONS.md).
@@ -76,10 +76,10 @@ Implementation detail: [ISCE_KERNEL_IMPLEMENTATION.md](ISCE_KERNEL_IMPLEMENTATIO
 | World authority | `chimera/reality_engine.py` | SQLite WAL, revision checks, atomic structures, AABB collision/support, fixed-step gravity, scalar fields, snapshots, observations, hash-chained events | Articulated/deformable mechanics, fluid/terrain, complete deterministic replay |
 | Physiology / ISCE | `chimera/isce.py`, `chimera/organism_kernel.py`, `chimera/biomechanics.py` | One versioned ISCE state; deterministic fixed-graph transitions; allostasis, interoception, sensorimotor, temporal, self-model, attention, reserve; versioned 16-segment/15-joint articulated body; PD actuators, hinge limits, gravity loading, root integration, foot/ground contact; body-derived work/strain/proprioception; legacy neutral-articulation migration; atomic world-field persistence | Full ICCR/CCPL validation, vascular/metabolic transport, tissue-level mechanics, coupled multibody constraints, 3D multi-axis joints, self-collision/terrain/friction, body-derived multimodal sensing |
 | Agent | `chimera/autonomous_agent.py` | Deterministic shelter/workbench/rest/observe baseline | General goal generation, learned policy, sensory grounding, action selection through executable toolbox |
-| Runtime | `chimera/runtime.py` | One clock, physics tick, agent step and observation | Event bus, continuous runtime service, scheduling/multiple organism lifecycle |
+| Runtime | `chimera/runtime.py`, `chimera/tecq/integration.py` | One clock; optional TEC-Q cell step feeds aggregate energy/stress/memory/cohesion and prediction-error signals into the agent's single ISCE transition; failed agent/ISCE commit restores the TEC-Q checkpoint | Event bus, continuous runtime service, scheduling/multiple organism lifecycle; durable TEC-Q checkpoint persistence |
 | Toolbox | `chimera/toolbox.py` | Six named domains; validated world mutations and inspection | Executable tool drivers, grasp/use/repair/build skills, autonomous capability discovery |
-| TEC-Q contract | `chimera/tecq/contract.py`, `docs/tecq-architecture-contract.json` | Machine-readable architecture constraints and boundary tests | Bonded-cell solver, torsional mechanics, phase dynamics, swarm coupling, GPU/WGSL and 15k-cell execution |
-| Browser/API integration | `chimera/http_server.py`, `web/index.html` | Added local HTTP API, same-process world/runtime/toolbox, revision-aware mutations, live Three.js projection of committed world entities, physiology dashboard, event inspection, five non-body toolbox forms and the separate Somatic Core SDF interface | Anatomical rig, skin/tissue deformation, camera/sensor embodiment, GPU cell visualization, authentication for non-loopback exposure |
+| TEC-Q runtime | `chimera/tecq/contract.py`, `chimera/tecq/engine.py`, `chimera/tecq/integration.py`, `chimera/tecq/experiments.py`, `docs/tecq-architecture-contract.json` | CPU reference for spatial hashing, degree-bounded adaptive bonds, spring mechanics, angular/torsional coupling, quaternion integration, phase, four diffusive fields, leaky integrate-and-fire/refractory dynamics, local swarm intent, prediction error, metabolism, repair, checkpoint/restore; optional AutonomousRuntime-to-ISCE feedback integration; deterministic independent/fixed/adaptive/full swarm ablation harness | Production WebGPU/WGSL backend, CPU/GPU parity, run and analyze the swarm ablation protocol at target scale, full CCPL/ICCR experiments and measured 15k/1M-cell performance |
+| Browser/API integration | `chimera/http_server.py`, `web/index.html` | Added local HTTP API, same-process world/runtime/toolbox, revision-aware mutations, live Three.js projection of committed world entities, physiology and optional TEC-Q dashboard, event inspection, five non-body toolbox forms and the separate Somatic Core SDF interface | Anatomical rig, skin/tissue deformation, camera/sensor embodiment, GPU cell visualization, authentication for non-loopback exposure |
 | Seed/Fold | `docs/TECQ-1KB-SEED-FOLD-BLUEPRINT.md` | Contracts and invariants | Original codec recovery, round-trip implementation, full content-addressed checkpoint/wake |
 
 ## Browser integration added in this change
@@ -132,12 +132,12 @@ The new API integration test file is `tests/test_http_server.py`. The full suite
 - Feed those measurements back to organism physiology and memory.
 - Keep renderer as a projection of body state; no display-only motion that disagrees with physics.
 
-### E. Implement TEC-Q without violating the original contract
-- Recover the original 48-byte ABI field map from source/history before defining offsets.
-- Keep extensions in versioned sidecar/SoA buffers.
-- Build a deterministic CPU reference implementation for the 15,000-cell experiment first, including bonds, neighborhoods/spatial hashing, quaternion orientation, angular velocity/torque, energy/stress/memory/cohesion, nervous activation/refractory state and swarm intent.
-- Verify conservation/stability bounds, deterministic replay, finite values and causality before adding GPU execution.
-- Implement WGSL and explicit CPU-to-GPU staging; do not claim SharedArrayBuffer-to-WebGPU zero-copy.
+### E. Complete TEC-Q without violating the original contract
+- Recover the original 48-byte ABI field map from source/history before defining offsets; current engine correctly treats the ABI as opaque.
+- Keep extensions in versioned sidecar/SoA buffers; current engine stores them separately.
+- CPU reference mechanisms now exist for spatial hashing, bounded adaptive bonds, spring/torsion dynamics, quaternion orientation, morphogenetic fields, nervous/refractory state, swarm intent, metabolism, repair and exact checkpoint verification.
+- Optional AutonomousRuntime integration now routes TEC-Q aggregate feedback into the existing ISCE transition; RealityEngine remains the sole persistent world authority.
+- Next: prove numerical stability/conservation and deterministic replay at 15,000 cells, then implement WGSL with explicit CPU-to-GPU staging and CPU/GPU parity. Do not claim SharedArrayBuffer-to-WebGPU zero-copy.
 - Profile memory honestly: 1M cells at 144 bytes/cell is 144,000,000 bytes, above a 128 MiB budget before scratch buffers.
 
 ### E. Connect learning and multi-agent cognition
