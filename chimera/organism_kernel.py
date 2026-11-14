@@ -142,9 +142,9 @@ class OrganismKernel:
         allowed_feedback = {"energy", "stress", "memory", "cohesion"}
         if set(feedback) - allowed_feedback:
             raise ValueError("environmental_feedback contains an unknown field")
-        env = {key: _unit(feedback.get(key, local[key])) for key in allowed_feedback}
-        if not all(math.isfinite(float(value)) for value in env.values()):
+        if not all(math.isfinite(float(value)) for value in feedback.values()):
             raise ValueError("environmental_feedback values must be finite")
+        env = {key: _unit(feedback.get(key, local[key])) for key in allowed_feedback}
         transition_input = TransitionInput(
             dt=dt,
             action_energy_cost=action_energy_cost,
