@@ -3,6 +3,7 @@ The 48-byte SomaticCell ABI remains opaque; evolving state is in versioned sidec
 """
 from __future__ import annotations
 from dataclasses import asdict, dataclass
+from copy import deepcopy
 import hashlib, json, math
 from typing import Iterable, Optional
 
@@ -60,7 +61,7 @@ class TECQState:
         return hashlib.sha256(json.dumps(p,sort_keys=True,separators=(",",":")).encode()).hexdigest()
     def checkpoint(self):
         return {"format":"tecq-checkpoint","version":1,"tick":self.tick,"time":self.time,
-                "arrays":{k:getattr(self,k) for k in self.DOMAINS},
+                "arrays":{k:deepcopy(getattr(self,k)) for k in self.DOMAINS},
                 "bonds":[asdict(b) for _,b in sorted(self.bonds.items())],"digest":self.digest()}
     @classmethod
     def from_checkpoint(cls,data):
