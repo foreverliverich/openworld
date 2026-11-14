@@ -134,19 +134,27 @@ class OrganismKernel:
         measured_work_units: float = 0.0,
         motor_commands: tuple[tuple[str, object], ...] = (),
         root_acceleration: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        environmental_feedback: Optional[dict[str, float]] = None,
     ) -> WorldResult:
         position = self.state.position
         local = self.world.field_at(position)
+        feedback = environmental_feedback or {}
+        allowed_feedback = {"energy", "stress", "memory", "cohesion"}
+        if set(feedback) - allowed_feedback:
+            raise ValueError("environmental_feedback contains an unknown field")
+        env = {key: _unit(feedback.get(key, local[key])) for key in allowed_feedback}
+        if not all(math.isfinite(float(value)) for value in env.values()):
+            raise ValueError("environmental_feedback values must be finite")
         transition_input = TransitionInput(
             dt=dt,
             action_energy_cost=action_energy_cost,
             mechanical_strain=mechanical_strain,
             prediction_error=prediction_error,
             novelty=novelty,
-            environmental_energy=_unit(local["energy"]),
-            environmental_stress=_unit(local["stress"]),
-            environmental_memory=_unit(local["memory"]),
-            environmental_cohesion=_unit(local["cohesion"]),
+            environmental_energy=env["energy"],
+            environmental_stress=env["stress"],
+            environmental_memory=env["memory"],
+            environmental_cohesion=env["cohesion"],
             resting=resting,
             outcome=outcome,
             measured_work_units=measured_work_units,
